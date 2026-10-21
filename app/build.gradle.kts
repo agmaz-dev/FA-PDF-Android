@@ -18,6 +18,17 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    // Fester Test-Schlüssel: Nur so lassen sich neue Test-APKs als Update über die alte installieren.
+    // Nur für Testversionen! Für eine Veröffentlichung einen eigenen, geheimen Schlüssel verwenden.
+    signingConfigs {
+        getByName("debug") {
+            storeFile = file("test-signing.keystore")
+            storePassword = "android"
+            keyAlias = "fapdftest"
+            keyPassword = "android"
+        }
+    }
+
     buildTypes {
         release {
             // Minify ist bewusst aus: PDFBox nutzt Reflection; erst nach Tests mit
