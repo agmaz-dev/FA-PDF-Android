@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <!-- Dokument -->
+    <path android:fillColor="#FFFFFFFF"
+        android:pathData="M36,26 L62,26 L74,38 L74,82 L36,82 Z" />
+    <path android:fillColor="#FFB9D2FA"
+        android:pathData="M62,26 L74,38 L62,38 Z" />
+    <!-- Linien -->
+    <path android:fillColor="#FF0A5BD6" android:pathData="M42,48 L68,48 L68,51 L42,51 Z" />
+    <path android:fillColor="#FF0A5BD6" android:pathData="M42,56 L68,56 L68,59 L42,59 Z" />
+    <path android:fillColor="#FF0A5BD6" android:pathData="M42,64 L60,64 L60,67 L42,67 Z" />
+</vector>

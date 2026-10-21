@@ -1,0 +1,43 @@
+name: Android-APK bauen
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Gradle-Wrapper ausführbar machen
+        run: chmod +x gradlew
+
+      - name: Unit-Tests
+        run: ./gradlew --no-daemon --stacktrace testDebugUnitTest
+
+      - name: APK bauen
+        run: ./gradlew --no-daemon assembleDebug
+
+      - name: APK umbenennen
+        run: cp app/build/outputs/apk/debug/app-debug.apk FA-PDF-Test.apk
+
+      - name: APK bereitstellen
+        uses: actions/upload-artifact@v4
+        with:
+          name: FA-PDF-Test
+          path: FA-PDF-Test.apk
+
+      - name: Testberichte bereitstellen
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Testberichte
+          path: app/build/reports/tests/
