@@ -7,6 +7,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
@@ -34,6 +36,17 @@ jobs:
         with:
           name: FA-PDF-Test
           path: FA-PDF-Test.apk
+
+      - name: Als Release mit direktem Download-Link veröffentlichen
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete test-apk --yes --cleanup-tag || true
+          gh release create test-apk FA-PDF-Test.apk \
+            --title "FA PDF – Test-APK" \
+            --notes "Automatisch gebaut aus Commit ${GITHUB_SHA::7}. Debug-signiert, nur zum Testen." \
+            --prerelease
 
       - name: Testberichte bereitstellen
         if: always()
