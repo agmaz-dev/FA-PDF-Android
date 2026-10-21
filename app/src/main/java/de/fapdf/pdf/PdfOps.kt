@@ -145,6 +145,21 @@ object PdfOps {
         }
     }
 
+    /**
+     * Zuschneiden mit Anteilen der sichtbaren Seite (0…1: links, oben, rechts, unten).
+     * So passt derselbe Rahmen auch bei unterschiedlich großen Seiten.
+     */
+    fun cropFractions(doc: PDDocument, pages: Collection<Int>, frame: Box) {
+        pages.forEach { i ->
+            val g = PdfIo.geometry(doc.getPage(i))
+            crop(
+                doc, listOf(i),
+                top = frame.top * g.viewHeight, right = (1f - frame.right) * g.viewWidth,
+                bottom = (1f - frame.bottom) * g.viewHeight, left = frame.left * g.viewWidth,
+            )
+        }
+    }
+
     fun watermark(doc: PDDocument, fonts: FontLibrary, spec: WatermarkSpec) {
         val cache = DocFontCache(doc, fonts)
         val font = cache.get(FontFamily.SANS, true, false)

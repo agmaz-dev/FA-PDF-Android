@@ -59,6 +59,9 @@ import de.fapdf.ui.Tool
 import de.fapdf.ui.components.BusyDialog
 import de.fapdf.ui.components.FileActions
 import de.fapdf.ui.components.GroupCard
+import de.fapdf.ui.components.PagePreviewStrip
+import de.fapdf.ui.components.PageThumb
+import de.fapdf.ui.components.rememberDocSource
 import de.fapdf.ui.components.MessageDialog
 import de.fapdf.ui.components.PasswordDialog
 import de.fapdf.ui.components.ScreenScaffold
@@ -189,8 +192,18 @@ private fun ResultCard(runner: ToolRunner, onOpenDoc: (Long) -> Unit, replaceTar
     }
 }
 
+/**
+ * Dokumentkopf mit einheitlicher Seitenvorschau. [showPages] = false, wenn das Werkzeug
+ * bereits ein eigenes Seitenraster zeigt.
+ */
 @Composable
-fun DocHeader(doc: DocumentEntity?, onChange: (() -> Unit)? = null) {
+fun DocHeader(
+    doc: DocumentEntity?,
+    onChange: (() -> Unit)? = null,
+    showPages: Boolean = true,
+    password: String? = null,
+    onNeedPassword: () -> Unit = {},
+) {
     if (doc == null) return
     GroupCard(Modifier.padding(vertical = 6.dp)) {
         Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -202,6 +215,7 @@ fun DocHeader(doc: DocumentEntity?, onChange: (() -> Unit)? = null) {
             }
             if (onChange != null) TextButton(onClick = onChange) { Text("Ändern") }
         }
+        if (showPages) PagePreviewStrip(doc, password, onNeedPassword)
     }
 }
 
@@ -209,7 +223,8 @@ fun outName(doc: DocumentEntity, suffix: String) = "${DocumentRepository.baseNam
 
 /**
  * Seitenminiaturen zum Auswählen. [order] = Anzeigereihenfolge (Originalindizes),
- * [rotations] = zusätzliche Drehung pro Originalseite (nur Vorschau).
+ * [rotations] = geplante zusätzliche Drehung pro Originalseite (wird in der Vorschau gezeigt),
+ * [accentFor]/[labelFor] = optionale Farbe und Beschriftung (z. B. Teile beim Teilen).
  */
 @Composable
 fun PageThumbGrid(
@@ -221,49 +236,29 @@ fun PageThumbGrid(
     onToggle: (Int) -> Unit,
     onNeedPassword: () -> Unit,
     modifier: Modifier = Modifier,
+    accentFor: (Int) -> Color? = { null },
+    labelFor: ((pos: Int, page: Int) -> String)? = null,
 ) {
-    val context = LocalContext.current
-    val source by produceState<PdfPageSource?>(null, doc.id, doc.modifiedAt, password) {
-        value = withContext(Dispatchers.IO) {
-            try {
-                val preview = PreviewFactory.prepare(doc.file(), File(context.cacheDir, "thumbs_${doc.id}.pdf"), password)
-                PdfPageSource.open(preview)
-            } catch (e: PasswordRequiredException) {
-                withContext(Dispatchers.Main) { onNeedPassword() }; null
-            } catch (e: Exception) { null }
-        }
-    }
-    DisposableEffect(source) { onDispose { source?.close() } }
-    val src = source
+    val src = rememberDocSource(doc, password, onNeedPassword)
     if (src == null) {
         Text("Seiten werden geladen …", modifier = Modifier.padding(20.dp), color = FaColors.SecondaryLabel)
         return
     }
     val pages = order ?: (0 until src.pageCount).toList()
-    // Grid mit fester Höhe, da es in einer scrollbaren Spalte liegt
+    // Raster mit fester Höhe, da es in einer scrollbaren Spalte liegt
     val rows = (pages.size + 2) / 3
     LazyVerticalGrid(
         columns = GridCells.Fixed(3),
-        modifier = modifier.padding(horizontal = 12.dp).fillMaxWidth().height((rows * 190).coerceAtMost(4000).dp),
+        modifier = modifier.padding(horizontal = 12.dp).fillMaxWidth().height((rows * 178).coerceAtMost(6000).dp),
         userScrollEnabled = false,
     ) {
         itemsIndexed(pages, key = { _, p -> p }) { pos, p ->
-            val bmp by produceState<Bitmap?>(null, src, p) { value = withContext(Dispatchers.IO) { runCatching { src.render(p, 260) }.getOrNull() } }
-            val isSel = p in selected
-            Column(Modifier.padding(6.dp).clickable { onToggle(p) }, horizontalAlignment = Alignment.CenterHorizontally) {
-                Box(
-                    Modifier.fillMaxWidth().aspectRatio(0.75f).clip(RoundedCornerShape(6.dp)).background(Color.White)
-                        .border(if (isSel) 3.dp else 1.dp, if (isSel) FaColors.Accent else FaColors.Separator, RoundedCornerShape(6.dp)),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    val b = bmp
-                    if (b != null) Image(b.asImageBitmap(), null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize().padding(4.dp).rotate((rotations[p] ?: 0).toFloat()))
-                    if (isSel) Box(Modifier.align(Alignment.TopEnd).padding(4.dp).size(22.dp).clip(CircleShape).background(FaColors.Accent), contentAlignment = Alignment.Center) {
-                        Text("✓", color = Color.White)
-                    }
-                }
-                Text(if (order != null) "${pos + 1} (S. ${p + 1})" else "${p + 1}", style = MaterialTheme.typography.labelSmall)
-            }
+            PageThumb(
+                src, p, Modifier.padding(6.dp), extraRotation = rotations[p] ?: 0, selected = p in selected,
+                accent = accentFor(p),
+                label = labelFor?.invoke(pos, p) ?: (if (order != null) "${pos + 1} (S. ${p + 1})" else "Seite ${p + 1}"),
+                onClick = { onToggle(p) },
+            )
         }
     }
 }

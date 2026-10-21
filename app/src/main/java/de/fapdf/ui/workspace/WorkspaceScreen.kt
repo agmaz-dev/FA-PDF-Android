@@ -25,7 +25,9 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -53,11 +55,13 @@ import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.StickyNote2
 import androidx.compose.material.icons.outlined.TextFields
+import androidx.compose.material.icons.outlined.ViewCarousel
 import androidx.compose.material.icons.outlined.CropFree
 import androidx.compose.material.icons.outlined.DocumentScanner
 import androidx.compose.material.icons.outlined.ManageSearch
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -107,6 +111,7 @@ import de.fapdf.ui.components.FileActions
 import de.fapdf.ui.components.InfoBanner
 import de.fapdf.ui.components.MessageDialog
 import de.fapdf.ui.components.PageGestures
+import de.fapdf.ui.components.PageThumb
 import de.fapdf.ui.components.PasswordDialog
 import de.fapdf.ui.components.PdfPagesView
 import de.fapdf.ui.components.PlacementLayer
@@ -142,6 +147,7 @@ fun WorkspaceScreen(
     var showSave by remember { mutableStateOf(false) }
     var sheet by remember { mutableStateOf<String?>(null) } // "ocr", "font", "more", "sign", "bookmarks", "profiles"
     var searchOpen by remember { mutableStateOf(false) }
+    var pagesOpen by remember { mutableStateOf(true) }
     var searchText by remember { mutableStateOf("") }
     var signatureTarget by remember { mutableStateOf<Pair<Int, Box>?>(null) }
     val exporter = rememberExportLauncher()
@@ -187,6 +193,9 @@ fun WorkspaceScreen(
                     if (vm.mode == WorkspaceMode.READ) {
                         IconButton(onClick = { searchOpen = !searchOpen; if (!searchOpen) vm.clearSearch() }) { Icon(Icons.Outlined.Search, "Suchen") }
                     }
+                    IconButton(onClick = { pagesOpen = !pagesOpen }) {
+                        Icon(Icons.Outlined.ViewCarousel, "Seitenübersicht", tint = if (pagesOpen) FaColors.Accent else FaColors.SecondaryLabel)
+                    }
                     IconButton(onClick = vm::undo, enabled = vm.canUndo) { Icon(Icons.AutoMirrored.Outlined.Undo, "Rückgängig") }
                     IconButton(onClick = vm::redo, enabled = vm.canRedo) { Icon(Icons.AutoMirrored.Outlined.Redo, "Wiederherstellen") }
                     IconButton(onClick = { showSave = true }) { Icon(Icons.Outlined.Save, "Speichern", tint = if (vm.dirty) FaColors.Accent else FaColors.SecondaryLabel) }
@@ -222,6 +231,23 @@ fun WorkspaceScreen(
                             scope.launch { listState.animateScrollToItem(vm.searchHits[vm.searchIndex].page) }
                         }
                     })
+            }
+            if (pagesOpen && source != null && source.pageCount > 0) {
+                val stripState = rememberLazyListState()
+                LaunchedEffect(currentPage) { runCatching { stripState.animateScrollToItem((currentPage - 2).coerceAtLeast(0)) } }
+                LazyRow(
+                    state = stripState,
+                    modifier = Modifier.fillMaxWidth().background(Color.White).padding(vertical = 6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    contentPadding = PaddingValues(horizontal = 12.dp),
+                ) {
+                    items(source.pageCount, key = { "${vm.versionKey}-$it" }) { p ->
+                        PageThumb(
+                            source, p, Modifier.width(52.dp), selected = p == currentPage, label = "${p + 1}", renderWidth = 160,
+                            onClick = { scope.launch { listState.animateScrollToItem(p) } },
+                        )
+                    }
+                }
             }
             ModeBanners(vm, onSignatureField = { f ->
                 val w = f.widgets.first()
@@ -425,7 +451,7 @@ private fun DrawScope.drawFieldText(text: String, b: Box, s: Float) {
 private fun ModeBanners(vm: WorkspaceViewModel, onSignatureField: (de.fapdf.pdf.FormFieldInfo) -> Unit) {
     when (vm.mode) {
         WorkspaceMode.EDIT -> when {
-            vm.placement != null -> InfoBanner("Mit zwei Fingern verschieben, vergrößern und drehen. Danach unten „Übernehmen“ tippen.")
+            vm.placement != null -> InfoBanner("Mit dem Finger verschieben, mit zwei Fingern drehen. Größe unten mit dem Regler, „−“/„+“ oder Klein/Mittel/Groß ändern, dann „Übernehmen“.")
             vm.moveState != null -> InfoBanner("Ziehen Sie den Text an die neue Position.")
             vm.editTool == EditTool.HIGHLIGHT -> InfoBanner("Ziehen Sie über den Text, den Sie markieren möchten.")
             else -> InfoBanner("Tippen Sie auf einen Text, um ihn zu ändern, oder auf eine freie Stelle, um Text hinzuzufügen.")
@@ -437,7 +463,7 @@ private fun ModeBanners(vm: WorkspaceViewModel, onSignatureField: (de.fapdf.pdf.
         }
         WorkspaceMode.SIGN -> {
             val sig = vm.formInfo?.signatureFields?.firstOrNull()
-            if (vm.placement != null) InfoBanner("Unterschrift mit zwei Fingern positionieren, dann „Übernehmen“.")
+            if (vm.placement != null) InfoBanner("Unterschrift verschieben und unten in der Größe anpassen, dann „Übernehmen“.")
             else if (sig != null) InfoBanner("Unterschriftsfeld erkannt.", FaColors.Sign, "Einfügen" to { onSignatureField(sig) })
             else InfoBanner("Wählen Sie unten eine Unterschrift. Hinweis: Dies ist eine einfache elektronische Unterschrift (Bild), keine kryptografische Signatur.")
         }
@@ -490,6 +516,25 @@ private fun BottomTools(
     val p = vm.placement
     if (p != null) {
         Column {
+            // Größe: Regler in Prozent der Seitenbreite, dazu feine Schritte und Stufen
+            val pageW = vm.source?.pageSizes?.getOrNull(p.page)?.first ?: 595f
+            val percent = (p.w / pageW * 100f)
+            Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("Größe", style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(start = 8.dp))
+                IconButton(onClick = { p.resizeTo(p.w * 0.9f) }) { Text("−", fontSize = 20.sp) }
+                Slider(
+                    value = percent.coerceIn(5f, 100f), onValueChange = { p.resizeTo(pageW * it / 100f) },
+                    valueRange = 5f..100f, modifier = Modifier.weight(1f),
+                )
+                IconButton(onClick = { p.resizeTo(p.w * 1.1f) }) { Text("+", fontSize = 20.sp) }
+                Text("${percent.toInt()} %", style = MaterialTheme.typography.bodySmall, modifier = Modifier.width(44.dp))
+            }
+            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                val presets = if (vm.placementIsSignature) listOf("Klein" to 18f, "Mittel" to 28f, "Groß" to 40f) else listOf("Klein" to 25f, "Mittel" to 45f, "Groß" to 70f)
+                presets.forEach { (label, pct) ->
+                    FilterChip(selected = kotlin.math.abs(percent - pct) < 1f, onClick = { p.resizeTo(pageW * pct / 100f) }, label = { Text(label) })
+                }
+            }
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("Drehung", style = MaterialTheme.typography.bodySmall)
                 Slider(value = p.rotation, onValueChange = { p.rotation = it }, valueRange = -180f..180f, modifier = Modifier.weight(1f).padding(horizontal = 8.dp))

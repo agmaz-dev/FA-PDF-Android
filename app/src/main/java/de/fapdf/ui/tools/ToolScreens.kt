@@ -44,7 +44,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
@@ -52,6 +54,7 @@ import com.google.mlkit.vision.documentscanner.GmsDocumentScannerOptions
 import com.google.mlkit.vision.documentscanner.GmsDocumentScanning
 import com.google.mlkit.vision.documentscanner.GmsDocumentScanningResult
 import de.fapdf.data.DocumentEntity
+import de.fapdf.pdf.Box
 import de.fapdf.pdf.DocFontCache
 import de.fapdf.pdf.NumberFormat
 import de.fapdf.pdf.NumberPosition
@@ -72,6 +75,8 @@ import de.fapdf.ui.components.FileActions
 import de.fapdf.ui.components.GroupCard
 import de.fapdf.ui.components.GroupRow
 import de.fapdf.ui.components.InfoBanner
+import de.fapdf.ui.components.PagePreviewStrip
+import de.fapdf.ui.components.rememberDocSource
 import de.fapdf.ui.components.PrimaryButton
 import de.fapdf.ui.components.SectionTitle
 import de.fapdf.ui.components.file
@@ -131,21 +136,24 @@ private fun MergeTool(appVm: AppViewModel, runner: ToolRunner, docs: List<Docume
     val selected = remember { mutableStateListOf<Long>().apply { initial?.let { add(it) } } }
     var choose by remember { mutableStateOf(false) }
     var name by remember { mutableStateOf("Zusammengefügt") }
-    SectionTitle("Reihenfolge")
-    GroupCard {
-        if (selected.isEmpty()) Text("Noch keine Dateien gewählt.", Modifier.padding(16.dp), color = FaColors.SecondaryLabel)
-        selected.forEachIndexed { i, id ->
-            val d = docs.firstOrNull { it.id == id } ?: return@forEachIndexed
-            GroupRow("${i + 1}. ${d.displayName}", "${d.pageCount} Seiten", trailing = {
+    val total = selected.sumOf { id -> docs.firstOrNull { it.id == id }?.pageCount ?: 0 }
+    SectionTitle(if (selected.isEmpty()) "Reihenfolge" else "Reihenfolge · insgesamt $total Seiten")
+    if (selected.isEmpty()) GroupCard { Text("Noch keine Dateien gewählt.", Modifier.padding(16.dp), color = FaColors.SecondaryLabel) }
+    selected.forEachIndexed { i, id ->
+        val d = docs.firstOrNull { it.id == id } ?: return@forEachIndexed
+        GroupCard(Modifier.padding(bottom = 8.dp)) {
+            GroupRow("${i + 1}. ${d.displayName}", "${d.pageCount} Seiten", showDivider = false, trailing = {
                 Row {
                     IconButton(onClick = { if (i > 0) { selected.removeAt(i); selected.add(i - 1, id) } }, enabled = i > 0) { Icon(Icons.Outlined.ArrowUpward, "Nach oben") }
                     IconButton(onClick = { if (i < selected.size - 1) { selected.removeAt(i); selected.add(i + 1, id) } }, enabled = i < selected.size - 1) { Icon(Icons.Outlined.ArrowDownward, "Nach unten") }
                     IconButton(onClick = { selected.removeAt(i) }) { Icon(Icons.Outlined.Close, "Entfernen") }
                 }
             })
+            // Vorschaukacheln aller Seiten dieser Datei
+            PagePreviewStrip(d, thumbWidth = 64.dp, labelFor = { p -> "${i + 1}.${p + 1}" })
         }
-        GroupRow("Datei hinzufügen", icon = Icons.Outlined.Add, showDivider = false) { choose = true }
     }
+    GroupCard { GroupRow("Datei hinzufügen", icon = Icons.Outlined.Add, showDivider = false) { choose = true } }
     SectionTitle("Name der neuen PDF")
     OutlinedTextField(name, { name = it }, Modifier.padding(horizontal = 16.dp).fillMaxWidth(), singleLine = true)
     PrimaryButton("${selected.size} Dateien zusammenfügen", Modifier.padding(16.dp), enabled = selected.size >= 2) {
@@ -163,30 +171,45 @@ private fun MergeTool(appVm: AppViewModel, runner: ToolRunner, docs: List<Docume
     ) { d -> choose = false; selected.add(d.id) }
 }
 
+private val partColors = listOf(
+    Color(0xFF7465F2), Color(0xFF1FBFB2), Color(0xFFF4566B), Color(0xFFFF9500), Color(0xFF0D52D9), Color(0xFFE364E8),
+)
+
 @Composable
 private fun SplitTool(doc: DocumentEntity, runner: ToolRunner, onChange: () -> Unit) {
     var eachPage by remember { mutableStateOf(false) }
     var ranges by remember { mutableStateOf("1-${(doc.pageCount / 2).coerceAtLeast(1)}, ${(doc.pageCount / 2 + 1).coerceAtMost(doc.pageCount)}-${doc.pageCount}") }
-    DocHeader(doc, onChange)
+    DocHeader(doc, onChange, showPages = false)
     SectionTitle("Aufteilen")
     GroupCard {
         GroupRow("Nach Seitenbereichen", trailing = { Checkbox(!eachPage, { eachPage = !it }) }) { eachPage = false }
         GroupRow("Jede Seite als eigene PDF", trailing = { Checkbox(eachPage, { eachPage = it }) }, showDivider = false) { eachPage = true }
     }
+    // Vorschau der Aufteilung: jede neue PDF erhält eine eigene Farbe
+    val parts: List<List<Int>>? = if (eachPage) (0 until doc.pageCount).map { listOf(it) }
+    else runCatching { PageRangeParser.parse(ranges, doc.pageCount) }.getOrNull()
     if (!eachPage) {
         SectionTitle("Bereiche (jeder Bereich wird eine eigene PDF)")
         OutlinedTextField(ranges, { ranges = it }, Modifier.padding(horizontal = 16.dp).fillMaxWidth(), singleLine = true,
-            supportingText = { Text("z. B. 1-3, 4, 5-${doc.pageCount}") })
+            isError = parts == null,
+            supportingText = { Text(if (parts == null) "Ungültige Angabe – z. B. 1-3, 4, 5-${doc.pageCount}" else "${parts.size} neue PDF-Datei(en)") })
     }
-    PrimaryButton("PDF teilen", Modifier.padding(16.dp)) {
+    SectionTitle("Vorschau")
+    val partOf: (Int) -> Int = { p -> parts?.indexOfFirst { p in it } ?: -1 }
+    PageThumbGrid(
+        doc, runner.password, null, emptySet(), onToggle = {}, onNeedPassword = { runner.askPassword = {} },
+        accentFor = { p -> partOf(p).takeIf { it >= 0 }?.let { partColors[it % partColors.size] } },
+        labelFor = { _, p -> partOf(p).let { k -> if (k >= 0) "S. ${p + 1} · Teil ${k + 1}" else "S. ${p + 1} · –" } },
+    )
+    PrimaryButton("PDF teilen", Modifier.padding(16.dp), enabled = parts != null) {
         runner.run("PDF wird geteilt …") {
             val pageCount = PdfIo.load(doc.file(), runner.password).use { it.numberOfPages }
-            val parts = if (eachPage) (0 until pageCount).map { listOf(it) }
+            val ps = if (eachPage) (0 until pageCount).map { listOf(it) }
             else try { PageRangeParser.parse(ranges, pageCount) } catch (e: IllegalArgumentException) { throw PdfUserException(e.message ?: "Ungültige Bereiche") }
-            val outs = parts.map { runner.tmp("split") }
-            PdfOps.split(doc.file(), parts, outs, runner.password)
+            val outs = ps.map { runner.tmp("split") }
+            PdfOps.split(doc.file(), ps, outs, runner.password)
             outs.mapIndexed { i, f ->
-                val p = parts[i]
+                val p = ps[i]
                 f to outName(doc, if (p.size == 1) "Seite ${p.first() + 1}" else "Seiten ${p.first() + 1}-${p.last() + 1}")
             }
         }
@@ -198,7 +221,7 @@ private fun RotateTool(doc: DocumentEntity, runner: ToolRunner, onChange: () -> 
     val selected = remember { mutableStateListOf<Int>() }
     var angle by remember { mutableStateOf(90) }
     var pw by remember { mutableStateOf(false) }
-    DocHeader(doc, onChange)
+    DocHeader(doc, onChange, showPages = false)
     SectionTitle("Drehung")
     Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         listOf(90 to "90° rechts", 270 to "90° links", 180 to "180°").forEach { (a, t) -> FilterChip(angle == a, { angle = a }, { Text(t) }) }
@@ -224,7 +247,7 @@ private fun RotateTool(doc: DocumentEntity, runner: ToolRunner, onChange: () -> 
 @Composable
 private fun PageSelectTool(doc: DocumentEntity, runner: ToolRunner, onChange: () -> Unit, delete: Boolean) {
     val selected = remember { mutableStateListOf<Int>() }
-    DocHeader(doc, onChange)
+    DocHeader(doc, onChange, showPages = false)
     InfoBanner(if (delete) "Tippen Sie auf die Seiten, die entfernt werden sollen." else "Tippen Sie auf die Seiten, die in eine neue PDF übernommen werden sollen.")
     PageThumbGrid(doc, runner.password, null, selected.toSet(), onToggle = { p -> if (p in selected) selected.remove(p) else selected.add(p) },
         onNeedPassword = { runner.askPassword = {} })
@@ -250,7 +273,7 @@ private fun OrganizeTool(doc: DocumentEntity, runner: ToolRunner, onChange: () -
     val order = remember(doc.id) { mutableStateListOf<Int>().apply { addAll(0 until doc.pageCount) } }
     val rotations = remember(doc.id) { mutableStateMapOf<Int, Int>() }
     var sel by remember { mutableStateOf<Int?>(null) }
-    DocHeader(doc, onChange)
+    DocHeader(doc, onChange, showPages = false)
     InfoBanner("Seite antippen, dann verschieben, drehen oder entfernen.")
     val s = sel
     Row(Modifier.padding(horizontal = 12.dp).fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
@@ -281,7 +304,7 @@ private fun PageNumberTool(doc: DocumentEntity, runner: ToolRunner, onChange: ()
     var size by remember { mutableStateOf(10f) }
     var margin by remember { mutableStateOf(28f) }
     var skipFirst by remember { mutableStateOf(false) }
-    DocHeader(doc, onChange)
+    DocHeader(doc, onChange, password = runner.password, onNeedPassword = { runner.askPassword = {} })
     SectionTitle("Position")
     ChipRows(NumberPosition.entries, pos, { it.title }) { pos = it }
     SectionTitle("Format")
@@ -310,27 +333,43 @@ private fun PageNumberTool(doc: DocumentEntity, runner: ToolRunner, onChange: ()
 
 @Composable
 private fun CropTool(doc: DocumentEntity, runner: ToolRunner, onChange: () -> Unit) {
-    var top by remember { mutableStateOf(10f) }
-    var bottom by remember { mutableStateOf(10f) }
-    var left by remember { mutableStateOf(10f) }
-    var right by remember { mutableStateOf(10f) }
-    DocHeader(doc, onChange)
-    InfoBanner("Die Ränder werden auf allen Seiten ausgeblendet (CropBox). Inhalte außerhalb bleiben in der Datei erhalten – für vertrauliche Inhalte bitte „PDF schwärzen“ verwenden.")
-    SectionTitle("Ränder in Millimetern")
-    GroupCard {
-        SliderRow("Oben", top, 0f..80f, "${top.toInt()} mm") { top = it }
-        SliderRow("Unten", bottom, 0f..80f, "${bottom.toInt()} mm") { bottom = it }
-        SliderRow("Links", left, 0f..80f, "${left.toInt()} mm") { left = it }
-        SliderRow("Rechts", right, 0f..80f, "${right.toInt()} mm") { right = it }
-    }
-    PrimaryButton("Zuschneiden", Modifier.padding(16.dp)) {
-        val mm = 72f / 25.4f
-        runner.run("Seiten werden zugeschnitten …") {
-            val out = runner.tmp("crop")
-            PdfIo.transform(doc.file(), out, runner.password) { d ->
-                PdfOps.crop(d, (0 until d.numberOfPages).toList(), top * mm, right * mm, bottom * mm, left * mm)
+    var frame by remember { mutableStateOf(Box(0.06f, 0.05f, 0.94f, 0.95f)) }
+    var page by remember(doc.id) { mutableStateOf(0) }
+    var allPages by remember { mutableStateOf(true) }
+    DocHeader(doc, onChange, showPages = false)
+    InfoBanner("Ziehen Sie die Ecken oder Kanten des Rahmens. Der abgedunkelte Bereich wird ausgeblendet (CropBox); Inhalte bleiben in der Datei – für Vertrauliches „PDF schwärzen“ verwenden.")
+    val src = rememberDocSource(doc, runner.password) { runner.askPassword = {} }
+    if (src == null) {
+        Text("Seite wird geladen …", Modifier.padding(20.dp), color = FaColors.SecondaryLabel)
+    } else {
+        val p = page.coerceIn(0, src.pageCount - 1)
+        Row(Modifier.padding(horizontal = 16.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            OutlinedButton(onClick = { page = (p - 1).coerceAtLeast(0) }, enabled = p > 0) { Text("‹") }
+            Text("Seite ${p + 1} von ${src.pageCount}", Modifier.weight(1f), textAlign = TextAlign.Center)
+            OutlinedButton(onClick = { page = (p + 1).coerceAtMost(src.pageCount - 1) }, enabled = p < src.pageCount - 1) { Text("›") }
+        }
+        CropSelector(src, p, frame) { frame = it }
+        val (wPt, hPt) = src.pageSizes[p]
+        val mm = 25.4f / 72f
+        Text(
+            "Ränder: oben ${(frame.top * hPt * mm).toInt()} mm · unten ${((1 - frame.bottom) * hPt * mm).toInt()} mm · " +
+                "links ${(frame.left * wPt * mm).toInt()} mm · rechts ${((1 - frame.right) * wPt * mm).toInt()} mm",
+            Modifier.padding(horizontal = 20.dp), style = MaterialTheme.typography.bodySmall, color = FaColors.SecondaryLabel,
+        )
+        Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(allPages, { allPages = true }, { Text("Alle Seiten") })
+            FilterChip(!allPages, { allPages = false }, { Text("Nur Seite ${p + 1}") })
+            OutlinedButton(onClick = { frame = Box(0f, 0f, 1f, 1f) }) { Text("Zurücksetzen") }
+        }
+        PrimaryButton("Zuschneiden", Modifier.padding(16.dp)) {
+            val f = frame; val all = allPages; val only = p
+            runner.run("Seiten werden zugeschnitten …") {
+                val out = runner.tmp("crop")
+                PdfIo.transform(doc.file(), out, runner.password) { d ->
+                    PdfOps.cropFractions(d, if (all) (0 until d.numberOfPages).toList() else listOf(only), f)
+                }
+                listOf(out to outName(doc, "zugeschnitten"))
             }
-            listOf(out to outName(doc, "zugeschnitten"))
         }
     }
 }
@@ -350,7 +389,7 @@ private fun WatermarkTool(doc: DocumentEntity, runner: ToolRunner, onChange: () 
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         if (uri != null) image = decodeBitmap(context, uri)
     }
-    DocHeader(doc, onChange)
+    DocHeader(doc, onChange, password = runner.password, onNeedPassword = { runner.askPassword = {} })
     SectionTitle("Art")
     Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         FilterChip(!useImage, { useImage = false }, { Text("Text") })
@@ -432,7 +471,7 @@ private fun RequestSignaturesTool(doc: DocumentEntity, onChange: () -> Unit) {
 @Composable
 private fun RemovePasswordTool(doc: DocumentEntity, runner: ToolRunner, onChange: () -> Unit) {
     var pw by remember { mutableStateOf("") }
-    DocHeader(doc, onChange)
+    DocHeader(doc, onChange, showPages = false)
     InfoBanner("Der Schutz kann nur mit dem richtigen Passwort entfernt werden. Bei PDFs, die nur Bearbeitungsbeschränkungen haben, genügt ein leeres Feld.")
     OutlinedTextField(pw, { pw = it }, Modifier.padding(16.dp).fillMaxWidth(), singleLine = true, label = { Text("Vorhandenes Passwort") },
         visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password))
@@ -463,7 +502,7 @@ private fun EncryptTool(doc: DocumentEntity, runner: ToolRunner, onChange: () ->
     var print by remember { mutableStateOf(true) }
     var copy by remember { mutableStateOf(false) }
     var modify by remember { mutableStateOf(false) }
-    DocHeader(doc, onChange)
+    DocHeader(doc, onChange, password = runner.password, onNeedPassword = { runner.askPassword = {} })
     InfoBanner("Verschlüsselung mit AES-256. Bewahren Sie das Passwort sicher auf – ohne Passwort lässt sich die Datei nicht mehr öffnen.")
     Column(Modifier.padding(horizontal = 16.dp)) {
         OutlinedTextField(pw, { pw = it }, Modifier.fillMaxWidth(), singleLine = true, label = { Text("Passwort zum Öffnen") },
@@ -495,7 +534,7 @@ private fun EncryptTool(doc: DocumentEntity, runner: ToolRunner, onChange: () ->
 
 @Composable
 private fun FlattenTool(doc: DocumentEntity, runner: ToolRunner, onChange: () -> Unit) {
-    DocHeader(doc, onChange)
+    DocHeader(doc, onChange, password = runner.password, onNeedPassword = { runner.askPassword = {} })
     InfoBanner("Formularfelder, Kommentare, Markierungen und Zeichnungen werden dauerhaft in den Seiteninhalt übernommen. Sie sind danach nicht mehr veränderbar – sehen aber in jedem Programm gleich aus.")
     PrimaryButton("Ebenen reduzieren", Modifier.padding(16.dp)) {
         runner.run("Ebenen werden reduziert …") {

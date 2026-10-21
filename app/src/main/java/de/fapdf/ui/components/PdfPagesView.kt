@@ -187,6 +187,14 @@ class Placement(val page: Int, val bitmap: Bitmap, cx: Float, cy: Float, w: Floa
     var h by mutableFloatStateOf(h)
     var rotation by mutableFloatStateOf(rotation)
     val image: ImageBitmap = bitmap.asImageBitmap()
+    /** Seitenverhältnis bleibt beim Skalieren immer erhalten. */
+    val aspect: Float = if (w > 0f) h / w else 1f
+
+    /** Neue Breite in Punkten (Höhe folgt automatisch), Mittelpunkt bleibt. */
+    fun resizeTo(newWidth: Float) {
+        w = newWidth.coerceIn(8f, 2000f)
+        h = w * aspect
+    }
 }
 
 @Composable
@@ -197,9 +205,7 @@ fun PlacementLayer(p: Placement, pxPerPt: Float) {
             detectTransformGestures { _, pan, zoomChange, rotationChange ->
                 p.cx += pan.x / s
                 p.cy += pan.y / s
-                val nw = (p.w * zoomChange).coerceIn(10f, 2000f)
-                p.h = p.h * nw / p.w
-                p.w = nw
+                p.resizeTo(p.w * zoomChange)
                 p.rotation += rotationChange
             }
         }

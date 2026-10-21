@@ -3,6 +3,13 @@
 Vollständiges Android-Studio-Projekt (Kotlin, Jetpack Compose, Material 3, MVVM, Room, DataStore, Android Keystore).
 Alle 25 Werkzeuge der Referenzgrafik sind programmiert – ohne Platzhalter-Bildschirme.
 
+## Änderungen 1.1 (Oberfläche)
+- Einheitliche Seitenvorschauen mit echter Ausrichtung in allen Werkzeugen; geplante Drehungen werden in der Vorschau angezeigt.
+- „PDFs zusammenfügen“: Vorschaukacheln aller Seiten jeder Datei. „PDF teilen“: farbige Vorschau, welche Seite in welche neue PDF kommt.
+- „PDFs zuschneiden“: sichtbarer Schnittrahmen zum Ziehen statt Millimeter-Eingabe; alle Seiten oder nur eine Seite.
+- „Unterschreibe PDF“ / Bilder: Größe per Regler, „−“/„+“ und Stufen Klein/Mittel/Groß (Seitenverhältnis bleibt erhalten).
+- Arbeitsbereich: einblendbare Seitenleiste zur schnellen Navigation.
+
 ---
 
 ## 1. Ehrlicher Stand
