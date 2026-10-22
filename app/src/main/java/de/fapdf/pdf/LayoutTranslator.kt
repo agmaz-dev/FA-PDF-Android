@@ -146,18 +146,35 @@ object LayoutTranslator {
                 bmp.recycle()
             }
             val cb = ContentBuilder(PdfIo.resourcesOf(pdPage))
+            val minLeft = list.minOf { it.first.box.left }.coerceIn(10f, g.viewWidth / 4f)
             for ((u, translated) in list) {
                 val enc = encoders[u] ?: TextRunEncoder(null, emptyMap()) { cache.get(u.family, u.bold, u.italic) }
-                drawFitted(cb, enc, g, u, translated)
+                drawFitted(cb, enc, g, u, translated, availableRight(u, list.map { it.first }, g.viewWidth - minLeft))
             }
             PdfIo.appendToPage(doc, pdPage, cb.tokens)
         }
     }
 
-    private fun drawFitted(cb: ContentBuilder, enc: TextRunEncoder, g: PageGeometry, u: TransUnit, raw: String) {
+    /**
+     * Rechte Grenze, bis zu der eine linksbündige Übersetzung wachsen darf: bis kurz vor den nächsten
+     * Textblock rechts daneben (gleiche Höhe) bzw. bis zum rechten Seitenrand. So werden längere
+     * Übersetzungen nicht unnötig klein, überdecken aber keine Nachbarspalte.
+     */
+    fun availableRight(u: TransUnit, all: List<TransUnit>, pageRight: Float): Float {
+        if (u.alignment != Alignment.LEFT) return u.box.right
+        var right = pageRight
+        for (o in all) {
+            if (o === u || o.page != u.page) continue
+            val verticalOverlap = o.box.top < u.box.bottom + u.size * 0.3f && u.box.top < o.box.bottom + o.size * 0.3f
+            if (verticalOverlap && o.box.left >= u.box.right - 1f) right = minOf(right, o.box.left - 0.6f * u.size)
+        }
+        return max(right, u.box.right)
+    }
+
+    private fun drawFitted(cb: ContentBuilder, enc: TextRunEncoder, g: PageGeometry, u: TransUnit, raw: String, maxRight: Float) {
         val text = raw.replace('\n', ' ').replace(Regex("\\s+"), " ").trim()
         if (text.isEmpty()) return
-        val width = max(u.box.width, 20f)
+        val width = max(maxRight - u.box.left, 20f)
         val avail = u.box.height + u.size * 0.35f
         var size = u.size
         var lines: List<String> = emptyList()

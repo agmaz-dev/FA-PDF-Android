@@ -94,7 +94,11 @@ object TextLayout {
                     val p = glyphs[seg.last()]
                     val g = glyphs[i]
                     val gap = g.x - (p.x + p.width)
-                    if (gap > 3.0f * max(p.size, g.size)) {
+                    val em = max(p.size, g.size)
+                    // Spalten/Tabellenzellen trennen: große Lücke ohne Leerzeichen-Glyphe (Wortabstand
+                    // ist ≤ ~0,6 em, auch im Blocksatz) oder sehr große Lücke trotz Leerzeichen.
+                    val spaceBetween = p.unicode.isBlank() || g.unicode.isBlank()
+                    if ((!spaceBetween && gap > 1.0f * em) || gap > 3.0f * em) {
                         lines.add(makeLine(lines.size, seg, glyphs)); seg = mutableListOf()
                     }
                 }

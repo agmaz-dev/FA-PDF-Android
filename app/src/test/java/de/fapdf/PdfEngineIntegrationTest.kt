@@ -59,6 +59,15 @@ class PdfEngineIntegrationTest {
         assertAllFontsEmbedded(target)
     }
 
+    @Test fun tableCellsAreSeparateLines() {
+        PDDocument.load(fixture("chrome_boarding.pdf")).use { doc ->
+            val lines = PageAnalyzer.analyze(doc, 0).lines.map { it.text.trim() }
+            assertTrue(lines.toString(), "Brandenburg" in lines)
+            assertTrue(lines.toString(), "Adana/Mersin" in lines)
+            assertTrue(lines.toString(), "XQ 1775" in lines)
+        }
+    }
+
     @Test fun editChromeTicket() {
         editFirstMatching("chrome_boarding.pdf", "SunValue", "SunPremium", "edit_same_glyphs")
         editFirstMatching("chrome_boarding.pdf", "Boarding pass", "Bordkarte Ünal ğış", "edit_new_glyphs")
