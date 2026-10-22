@@ -48,7 +48,33 @@ data class WatermarkSpec(
     val imageScalePercent: Float = 40f,
 )
 
+/** Eine Seite aus einem (beliebigen) Quelldokument, z. B. beim Organisieren mit hinzugefügten Seiten. */
+data class PageRef(val source: Long, val page: Int, val extraRotation: Int = 0)
+
 object PdfOps {
+    /** Baut eine neue PDF aus Seiten mehrerer Dokumente in beliebiger Reihenfolge. */
+    fun compose(sources: Map<Long, File>, refs: List<PageRef>, output: File, passwords: Map<Long, String?> = emptyMap()) {
+        if (refs.isEmpty()) throw PdfUserException("Es muss mindestens eine Seite erhalten bleiben.")
+        val opened = HashMap<Long, PDDocument>()
+        try {
+            sources.forEach { (k, f) ->
+                val d = PdfIo.load(f, passwords[k])
+                if (d.isEncrypted) d.isAllSecurityToBeRemoved = true
+                opened[k] = d
+            }
+            PDDocument().use { out ->
+                refs.forEach { r ->
+                    val src = opened[r.source] ?: throw PdfUserException("Quelldokument fehlt.")
+                    val p = out.importPage(src.getPage(r.page))
+                    p.rotation = (((p.rotation + r.extraRotation) % 360) + 360) % 360
+                }
+                PdfIo.save(out, output)
+            }
+        } finally {
+            opened.values.forEach { runCatching { it.close() } }
+        }
+    }
+
 
     fun merge(inputs: List<File>, output: File) {
         val util = PDFMergerUtility()

@@ -104,6 +104,7 @@ fun PageThumb(
     modifier: Modifier = Modifier,
     extraRotation: Int = 0,
     selected: Boolean = false,
+    selectable: Boolean = false,
     accent: Color? = null,
     label: String? = null,
     renderWidth: Int = 300,
@@ -125,7 +126,7 @@ fun PageThumb(
     Column(modifier.let { if (onClick != null) it.clickable(onClick = onClick) else it }, horizontalAlignment = Alignment.CenterHorizontally) {
         Box(
             Modifier.fillMaxWidth().aspectRatio(0.78f).clip(RoundedCornerShape(6.dp))
-                .background(Color(0xFFEDEDF0))
+                .background(if (selected) FaColors.AccentLight else Color(0xFFEDEDF0))
                 .border(if (selected || accent != null) 3.dp else 1.dp, border, RoundedCornerShape(6.dp)),
             contentAlignment = Alignment.Center,
         ) {
@@ -155,11 +156,8 @@ fun PageThumb(
                         .background(FaColors.Accent).padding(horizontal = 5.dp, vertical = 1.dp),
                 )
             }
-            if (selected) {
-                Box(Modifier.align(Alignment.TopEnd).padding(4.dp).size(22.dp).clip(RoundedCornerShape(11.dp)).background(FaColors.Accent), contentAlignment = Alignment.Center) {
-                    Text("✓", color = Color.White)
-                }
-            }
+            if (selectable) CheckMark(selected, Modifier.align(Alignment.TopEnd).padding(5.dp))
+            else if (selected) CheckMark(true, Modifier.align(Alignment.TopEnd).padding(5.dp))
         }
         if (label != null) Text(label, style = MaterialTheme.typography.labelSmall, color = accent ?: FaColors.Label, maxLines = 1, modifier = Modifier.padding(top = 2.dp))
     }

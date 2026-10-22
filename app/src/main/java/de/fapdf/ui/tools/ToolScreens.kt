@@ -104,12 +104,12 @@ fun ToolScreen(tool: Tool, docId: Long?, appVm: AppViewModel, onBack: () -> Unit
         ToolScaffold(tool, runner, onBack, onOpenDoc, replaceTarget) {
             val change = { choose = true }
             when (tool) {
-                Tool.MERGE -> MergeTool(appVm, runner, docs, docId)
-                Tool.SPLIT -> SplitTool(doc!!, runner, change)
-                Tool.ROTATE -> RotateTool(doc!!, runner, change)
-                Tool.DELETE_PAGES -> PageSelectTool(doc!!, runner, change, delete = true)
-                Tool.EXTRACT_PAGES -> PageSelectTool(doc!!, runner, change, delete = false)
-                Tool.ORGANIZE -> OrganizeTool(doc!!, runner, change)
+                Tool.MERGE -> MergeToolV2(appVm, runner, docs, docId)
+                Tool.SPLIT -> SplitToolV2(doc!!, runner, change)
+                Tool.ROTATE -> RotateToolV2(doc!!, runner, change)
+                Tool.DELETE_PAGES -> DeletePagesTool(doc!!, runner, change)
+                Tool.EXTRACT_PAGES -> ExtractPagesTool(doc!!, runner, change)
+                Tool.ORGANIZE -> OrganizeToolV2(appVm, doc!!, runner, docs, change)
                 Tool.PAGE_NUMBERS -> PageNumberTool(doc!!, runner, change)
                 Tool.CROP -> CropTool(doc!!, runner, change)
                 Tool.WATERMARK -> WatermarkTool(doc!!, runner, change)
@@ -130,177 +130,6 @@ fun ToolScreen(tool: Tool, docId: Long?, appVm: AppViewModel, onBack: () -> Unit
 }
 
 // ---------------- Organisieren ----------------
-
-@Composable
-private fun MergeTool(appVm: AppViewModel, runner: ToolRunner, docs: List<DocumentEntity>, initial: Long?) {
-    val selected = remember { mutableStateListOf<Long>().apply { initial?.let { add(it) } } }
-    var choose by remember { mutableStateOf(false) }
-    var name by remember { mutableStateOf("Zusammengefügt") }
-    val total = selected.sumOf { id -> docs.firstOrNull { it.id == id }?.pageCount ?: 0 }
-    SectionTitle(if (selected.isEmpty()) "Reihenfolge" else "Reihenfolge · insgesamt $total Seiten")
-    if (selected.isEmpty()) GroupCard { Text("Noch keine Dateien gewählt.", Modifier.padding(16.dp), color = FaColors.SecondaryLabel) }
-    selected.forEachIndexed { i, id ->
-        val d = docs.firstOrNull { it.id == id } ?: return@forEachIndexed
-        GroupCard(Modifier.padding(bottom = 8.dp)) {
-            GroupRow("${i + 1}. ${d.displayName}", "${d.pageCount} Seiten", showDivider = false, trailing = {
-                Row {
-                    IconButton(onClick = { if (i > 0) { selected.removeAt(i); selected.add(i - 1, id) } }, enabled = i > 0) { Icon(Icons.Outlined.ArrowUpward, "Nach oben") }
-                    IconButton(onClick = { if (i < selected.size - 1) { selected.removeAt(i); selected.add(i + 1, id) } }, enabled = i < selected.size - 1) { Icon(Icons.Outlined.ArrowDownward, "Nach unten") }
-                    IconButton(onClick = { selected.removeAt(i) }) { Icon(Icons.Outlined.Close, "Entfernen") }
-                }
-            })
-            // Vorschaukacheln aller Seiten dieser Datei
-            PagePreviewStrip(d, thumbWidth = 64.dp, labelFor = { p -> "${i + 1}.${p + 1}" })
-        }
-    }
-    GroupCard { GroupRow("Datei hinzufügen", icon = Icons.Outlined.Add, showDivider = false) { choose = true } }
-    SectionTitle("Name der neuen PDF")
-    OutlinedTextField(name, { name = it }, Modifier.padding(horizontal = 16.dp).fillMaxWidth(), singleLine = true)
-    PrimaryButton("${selected.size} Dateien zusammenfügen", Modifier.padding(16.dp), enabled = selected.size >= 2) {
-        val files = selected.mapNotNull { id -> docs.firstOrNull { it.id == id }?.file() }
-        runner.run("PDFs werden zusammengefügt …") {
-            val out = runner.tmp("merge")
-            PdfOps.merge(files, out)
-            listOf(out to "${name.ifBlank { "Zusammengefügt" }}.pdf")
-        }
-    }
-    if (choose) DocChooserSheet(
-        documents = docs.filter { it.id !in selected }, title = "Datei hinzufügen",
-        onImport = { uri -> choose = false; appVm.import(uri, persist = false) { selected.add(it) } },
-        onDismiss = { choose = false },
-    ) { d -> choose = false; selected.add(d.id) }
-}
-
-private val partColors = listOf(
-    Color(0xFF7465F2), Color(0xFF1FBFB2), Color(0xFFF4566B), Color(0xFFFF9500), Color(0xFF0D52D9), Color(0xFFE364E8),
-)
-
-@Composable
-private fun SplitTool(doc: DocumentEntity, runner: ToolRunner, onChange: () -> Unit) {
-    var eachPage by remember { mutableStateOf(false) }
-    var ranges by remember { mutableStateOf("1-${(doc.pageCount / 2).coerceAtLeast(1)}, ${(doc.pageCount / 2 + 1).coerceAtMost(doc.pageCount)}-${doc.pageCount}") }
-    DocHeader(doc, onChange, showPages = false)
-    SectionTitle("Aufteilen")
-    GroupCard {
-        GroupRow("Nach Seitenbereichen", trailing = { Checkbox(!eachPage, { eachPage = !it }) }) { eachPage = false }
-        GroupRow("Jede Seite als eigene PDF", trailing = { Checkbox(eachPage, { eachPage = it }) }, showDivider = false) { eachPage = true }
-    }
-    // Vorschau der Aufteilung: jede neue PDF erhält eine eigene Farbe
-    val parts: List<List<Int>>? = if (eachPage) (0 until doc.pageCount).map { listOf(it) }
-    else runCatching { PageRangeParser.parse(ranges, doc.pageCount) }.getOrNull()
-    if (!eachPage) {
-        SectionTitle("Bereiche (jeder Bereich wird eine eigene PDF)")
-        OutlinedTextField(ranges, { ranges = it }, Modifier.padding(horizontal = 16.dp).fillMaxWidth(), singleLine = true,
-            isError = parts == null,
-            supportingText = { Text(if (parts == null) "Ungültige Angabe – z. B. 1-3, 4, 5-${doc.pageCount}" else "${parts.size} neue PDF-Datei(en)") })
-    }
-    SectionTitle("Vorschau")
-    val partOf: (Int) -> Int = { p -> parts?.indexOfFirst { p in it } ?: -1 }
-    PageThumbGrid(
-        doc, runner.password, null, emptySet(), onToggle = {}, onNeedPassword = { runner.askPassword = {} },
-        accentFor = { p -> partOf(p).takeIf { it >= 0 }?.let { partColors[it % partColors.size] } },
-        labelFor = { _, p -> partOf(p).let { k -> if (k >= 0) "S. ${p + 1} · Teil ${k + 1}" else "S. ${p + 1} · –" } },
-    )
-    PrimaryButton("PDF teilen", Modifier.padding(16.dp), enabled = parts != null) {
-        runner.run("PDF wird geteilt …") {
-            val pageCount = PdfIo.load(doc.file(), runner.password).use { it.numberOfPages }
-            val ps = if (eachPage) (0 until pageCount).map { listOf(it) }
-            else try { PageRangeParser.parse(ranges, pageCount) } catch (e: IllegalArgumentException) { throw PdfUserException(e.message ?: "Ungültige Bereiche") }
-            val outs = ps.map { runner.tmp("split") }
-            PdfOps.split(doc.file(), ps, outs, runner.password)
-            outs.mapIndexed { i, f ->
-                val p = ps[i]
-                f to outName(doc, if (p.size == 1) "Seite ${p.first() + 1}" else "Seiten ${p.first() + 1}-${p.last() + 1}")
-            }
-        }
-    }
-}
-
-@Composable
-private fun RotateTool(doc: DocumentEntity, runner: ToolRunner, onChange: () -> Unit) {
-    val selected = remember { mutableStateListOf<Int>() }
-    var angle by remember { mutableStateOf(90) }
-    var pw by remember { mutableStateOf(false) }
-    DocHeader(doc, onChange, showPages = false)
-    SectionTitle("Drehung")
-    Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        listOf(90 to "90° rechts", 270 to "90° links", 180 to "180°").forEach { (a, t) -> FilterChip(angle == a, { angle = a }, { Text(t) }) }
-    }
-    Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(if (selected.isEmpty()) "Keine Auswahl = alle Seiten" else "${selected.size} Seite(n) ausgewählt", Modifier.weight(1f), color = FaColors.SecondaryLabel)
-        OutlinedButton(onClick = { selected.clear() }) { Text("Auswahl aufheben") }
-    }
-    PageThumbGrid(doc, runner.password, null, selected.toSet(), selected.associateWith { angle }, onToggle = { p ->
-        if (p in selected) selected.remove(p) else selected.add(p)
-    }, onNeedPassword = { pw = true; runner.askPassword = { pw = false } })
-    PrimaryButton("Drehen und speichern", Modifier.padding(16.dp)) {
-        runner.run("Seiten werden gedreht …") {
-            val out = runner.tmp("rotate")
-            PdfIo.transform(doc.file(), out, runner.password) { d ->
-                PdfOps.rotate(d, if (selected.isEmpty()) (0 until d.numberOfPages).toList() else selected.toList(), angle)
-            }
-            listOf(out to outName(doc, "gedreht"))
-        }
-    }
-}
-
-@Composable
-private fun PageSelectTool(doc: DocumentEntity, runner: ToolRunner, onChange: () -> Unit, delete: Boolean) {
-    val selected = remember { mutableStateListOf<Int>() }
-    DocHeader(doc, onChange, showPages = false)
-    InfoBanner(if (delete) "Tippen Sie auf die Seiten, die entfernt werden sollen." else "Tippen Sie auf die Seiten, die in eine neue PDF übernommen werden sollen.")
-    Row(Modifier.padding(horizontal = 16.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Text("${selected.size} von ${doc.pageCount} ausgewählt", Modifier.weight(1f), color = FaColors.SecondaryLabel)
-        OutlinedButton(onClick = { selected.clear(); selected.addAll(0 until doc.pageCount) }) { Text("Alle") }
-        Spacer(Modifier.width(6.dp))
-        OutlinedButton(onClick = { selected.clear() }, enabled = selected.isNotEmpty()) { Text("Keine") }
-    }
-    PageThumbGrid(doc, runner.password, null, selected.toSet(), onToggle = { p -> if (p in selected) selected.remove(p) else selected.add(p) },
-        onNeedPassword = { runner.askPassword = {} })
-    PrimaryButton(
-        if (delete) "${selected.size} Seite(n) löschen" else "${selected.size} Seite(n) extrahieren",
-        Modifier.padding(16.dp), enabled = selected.isNotEmpty(), color = if (delete) FaColors.Destructive else FaColors.Accent,
-    ) {
-        runner.run(if (delete) "Seiten werden gelöscht …" else "Seiten werden extrahiert …") {
-            val out = runner.tmp("pages")
-            if (delete) {
-                PdfIo.transform(doc.file(), out, runner.password) { d -> PdfOps.deletePages(d, selected.toList()) }
-                listOf(out to outName(doc, "bearbeitet"))
-            } else {
-                PdfOps.extract(doc.file(), selected.sorted(), out, runner.password)
-                listOf(out to outName(doc, "Auszug"))
-            }
-        }
-    }
-}
-
-@Composable
-private fun OrganizeTool(doc: DocumentEntity, runner: ToolRunner, onChange: () -> Unit) {
-    val order = remember(doc.id) { mutableStateListOf<Int>().apply { addAll(0 until doc.pageCount) } }
-    val rotations = remember(doc.id) { mutableStateMapOf<Int, Int>() }
-    var sel by remember { mutableStateOf<Int?>(null) }
-    DocHeader(doc, onChange, showPages = false)
-    InfoBanner("Seite antippen, dann verschieben, drehen oder entfernen.")
-    val s = sel
-    Row(Modifier.padding(horizontal = 12.dp).fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-        OutlinedButton(enabled = s != null && order.indexOf(s) > 0, onClick = { val i = order.indexOf(s!!); order.removeAt(i); order.add(i - 1, s) }) { Text("◀ Vor") }
-        OutlinedButton(enabled = s != null && order.indexOf(s) in 0 until order.size - 1, onClick = { val i = order.indexOf(s!!); order.removeAt(i); order.add(i + 1, s) }) { Text("Zurück ▶") }
-        OutlinedButton(enabled = s != null, onClick = { rotations[s!!] = ((rotations[s] ?: 0) + 90) % 360 }) { Text("↻") }
-        OutlinedButton(enabled = s != null && order.size > 1, onClick = { order.remove(s!!); sel = null }) { Text("✕") }
-    }
-    PageThumbGrid(doc, runner.password, order.toList(), setOfNotNull(sel), rotations.toMap(), onToggle = { p -> sel = if (sel == p) null else p },
-        onNeedPassword = { runner.askPassword = {} })
-    PrimaryButton("Neue Reihenfolge speichern", Modifier.padding(16.dp)) {
-        val o = order.toList(); val r = rotations.toMap()
-        runner.run("Seiten werden neu angeordnet …") {
-            val out = runner.tmp("organize")
-            PdfIo.transform(doc.file(), out, runner.password) { d -> PdfOps.reorganize(d, o, r) }
-            listOf(out to outName(doc, "organisiert"))
-        }
-    }
-}
-
-// ---------------- Bearbeiten ----------------
 
 @Composable
 private fun PageNumberTool(doc: DocumentEntity, runner: ToolRunner, onChange: () -> Unit) {

@@ -123,18 +123,15 @@ fun ToolScaffold(
     onBack: () -> Unit,
     onOpenDoc: (Long) -> Unit,
     replaceTarget: DocumentEntity? = null,
+    actionText: String? = null,
+    actionEnabled: Boolean = true,
+    onAction: () -> Unit = {},
+    title: String = tool.title,
     content: @Composable () -> Unit,
 ) {
-    ScreenScaffold(tool.title, onBack) { mod ->
+    ScreenScaffold(title, onBack, actionText = actionText, actionEnabled = actionEnabled, onAction = onAction) { mod ->
         Column(mod.fillMaxSize().verticalScroll(rememberScrollState())) {
-            Row(Modifier.padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                ToolIconBox(tool.icon, tool.iconColor, tool.iconTint, size = 44.dp)
-                Spacer(Modifier.width(12.dp))
-                Column {
-                    Text(tool.title, style = MaterialTheme.typography.titleLarge)
-                    tool.limitedNote?.let { Text("Eingeschränkt: $it", style = MaterialTheme.typography.bodySmall, color = FaColors.SecondaryLabel) }
-                }
-            }
+            tool.limitedNote?.let { de.fapdf.ui.components.InfoCard("Hinweis: $it") }
             if (runner.results.isNotEmpty()) ResultCard(runner, onOpenDoc, replaceTarget)
             content()
             Spacer(Modifier.height(40.dp))
@@ -238,6 +235,7 @@ fun PageThumbGrid(
     modifier: Modifier = Modifier,
     accentFor: (Int) -> Color? = { null },
     labelFor: ((pos: Int, page: Int) -> String)? = null,
+    selectable: Boolean = false,
 ) {
     val src = rememberDocSource(doc, password, onNeedPassword)
     if (src == null) {
@@ -255,6 +253,7 @@ fun PageThumbGrid(
                     androidx.compose.runtime.key(p) {
                         PageThumb(
                             src, p, Modifier.weight(1f).padding(6.dp), extraRotation = rotations[p] ?: 0, selected = p in selected,
+                            selectable = selectable,
                             accent = accentFor(p),
                             label = labelFor?.invoke(pos, p) ?: (if (order != null) "${pos + 1} (S. ${p + 1})" else "Seite ${p + 1}"),
                             renderWidth = 200,
