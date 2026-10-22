@@ -83,6 +83,19 @@ class TextEditEngine(private val fontLibrary: FontLibrary) {
         return TextRunEncoder(f, docMap + pageMap, substitute)
     }
 
+    /** Ersetzt Zeichen, die selbst die Ersatzschrift nicht darstellen kann (z. B. Emojis), durch „?“. */
+    private fun sanitizeFor(font: PDType0Font, text: String): String {
+        val sb = StringBuilder()
+        var i = 0
+        while (i < text.length) {
+            val cp = text.codePointAt(i)
+            val s = String(Character.toChars(cp))
+            sb.append(if (runCatching { font.encode(s); true }.getOrDefault(false)) s else "?")
+            i += Character.charCount(cp)
+        }
+        return sb.toString()
+    }
+
     private fun substituteNote(pt: PageText, fontId: Int, style: TextStyle, runs: List<TextRun>): String? {
         if (!style.useOriginalFont || runs.all { it.original }) return null
         val meta = pt.fontMeta(fontId)
