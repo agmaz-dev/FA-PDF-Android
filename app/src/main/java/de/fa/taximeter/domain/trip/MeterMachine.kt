@@ -237,14 +237,17 @@ object MeterMachine {
         return maxOf(run.fareFloor, estimatedFare(run, nowMs)).setScale(2)
     }
 
-    /** Betrag der großen Anzeige: Fahrpreis, nach dem ersten STOPP die Summe inkl. Zuschlägen. */
+    /**
+     * Betrag der großen Anzeige: in STOPP die Summe inkl. Zuschlägen (KASSE), sonst nur der Fahrpreis.
+     * Bei BESETZT wandert der Zuschlag wieder nach oben in die ZUSCHLAG-Anzeige.
+     */
     fun displayAmount(s: MeterMachineState, nowMs: Long): BigDecimal {
         val fare = liveFare(s, nowMs)
         val run = s.run ?: return fare
-        return if (run.showTotal) Money.cents(fare.add(run.surcharges.total)) else fare
+        return if (showsTotal(s)) Money.cents(fare.add(run.surcharges.total)) else fare
     }
 
-    fun showsTotal(s: MeterMachineState): Boolean = s.run?.showTotal ?: false
+    fun showsTotal(s: MeterMachineState): Boolean = s.phase == Phase.STOPP && s.run != null
 
     /** Läuft gerade eine Schätzung, weil kein GPS empfangen wird (z. B. Tunnel)? */
     fun isEstimating(s: MeterMachineState, nowMs: Long): Boolean =

@@ -93,22 +93,26 @@ class TunnelAndCashTest {
         s = MeterMachine.pressStopp(s, 60_000, 60_000, cfg).state
         assertTrue(MeterMachine.showsTotal(s))
         assertEquals(fareBefore.add(eur("1.50")), MeterMachine.displayAmount(s, 60_000))
-        // Kunde fährt weiter: BESETZT -> Anzeige läuft ab der Summe weiter
+        // Kunde fährt weiter: BESETZT -> Zuschlag wandert wieder nach oben, unten nur Fahrpreis
         s = MeterMachine.pressBesetzt(s, fix(1_332.0, 61_000), 61_000, 61_000, cfg, false) { "x" }.state
         assertEquals(Phase.BESETZT, s.phase)
-        assertTrue(MeterMachine.showsTotal(s))
+        assertFalse(MeterMachine.showsTotal(s))
+        assertEquals(fareBefore, MeterMachine.displayAmount(s, 61_000))
+        assertEquals(eur("1.50"), s.activeSurcharges.total)
         for (i in 1..30) s = MeterMachine.onFix(s, fix(1_332.0 + i * 22.2, 61_000 + i * 1000L), 61_000 + i * 1000L, cfg).state
-        val shown = MeterMachine.displayAmount(s, 91_000)
-        assertEquals(MeterMachine.liveFare(s, 91_000).add(eur("1.50")), shown)
-        assertTrue(shown > fareBefore.add(eur("1.50")))
+        val fareNow = MeterMachine.displayAmount(s, 91_000)
+        assertEquals(MeterMachine.liveFare(s, 91_000), fareNow)
+        assertTrue(fareNow > fareBefore)
         // STOPP, dann FREI: Fahrt gespeichert, Zähler leer
         s = MeterMachine.pressStopp(s, 91_000, 91_000, cfg).state
+        val shown = MeterMachine.displayAmount(s, 91_000)
+        assertEquals(fareNow.add(eur("1.50")), shown)
         val (r, rec) = MeterMachine.pressFrei(s, 92_000)
         assertNotNull(rec)
         assertEquals(Phase.FREI, r.state.phase)
         assertEquals(eur("0.00"), r.state.activeSurcharges.total)
         assertEquals(rec!!.fare.add(eur("1.50")), rec.total)
-        assertEquals(shown.compareTo(rec.total) <= 0, true)
+        assertEquals(shown, rec.total)
         // FREI während BESETZT beendet nichts
         val running = drive80()
         assertFalse(MeterMachine.pressFrei(running, 1).first.changed)

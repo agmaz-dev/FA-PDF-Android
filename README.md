@@ -43,8 +43,8 @@ Der Workflow führt vorher alle Unit-Tests aus (`testDebugUnitTest`); Testberich
 |---|---|
 | **TARIF** (oben links, antippbar) | Im Zustand FREI Tarif 3 – BER oder 4 – Berlin wählen. Während der Fahrt gesperrt. |
 | **ZUSCHLAG** (oben rechts) | Jedes Antippen: **+0,50 €**. Langes Drücken: Zuschlag auf 0,00 €. Funktioniert in FREI (für die nächste Fahrt), BESETZT und STOPP. |
-| **BESETZT** | Startet genau eine Fahrt (nur mit brauchbarem GPS-Fix), Grundpreis einmalig. Mehrfaches Tippen ohne Wirkung. Aus STOPP: dieselbe Fahrt läuft weiter – die Anzeige zeigt dann weiter die Summe inkl. Zuschlägen. |
-| **STOPP** | Friert die Berechnung ein. Die große Anzeige zeigt die **Summe aus Fahrpreis und Zuschlägen**, „KASSE“ leuchtet rot. |
+| **BESETZT** | Startet genau eine Fahrt (nur mit brauchbarem GPS-Fix), Grundpreis einmalig. Mehrfaches Tippen ohne Wirkung. Aus STOPP: dieselbe Fahrt läuft weiter – der Zuschlag wandert wieder nach oben, unten läuft nur der Fahrpreis weiter. |
+| **STOPP** | Friert die Berechnung ein. Die große Anzeige zeigt die **Summe aus Fahrpreis und Zuschlägen**, „KASSE“ leuchtet rot, die ZUSCHLAG-Anzeige oben ist leer. |
 | **FREI** | Aus STOPP: Fahrt wird gespeichert (Historie unter FAHRTEN), der Zähler ist leer. Während BESETZT ohne Wirkung. |
 | **G ••••** (unten rechts) | Empfang: 4 Punkte gut, 3 mäßig, 1 unzuverlässig, 0 kein Empfang bzw. Tunnel-Schätzung. |
 

@@ -140,6 +140,7 @@ fun MeterScreen(ui: MeterUi, actions: MeterActions) {
                 ) {
                     Text("ZUSCHLAG", color = MeterColors.Label, fontSize = labelSize, fontWeight = FontWeight.Bold, maxLines = 1)
                     val zText = when {
+                        ui.showsTotal -> "" // in STOPP steckt der Zuschlag unten in der Summe
                         ui.surchargeTotal.signum() > 0 -> Money.formatDe(ui.surchargeTotal)
                         ui.phase == Phase.FREI -> ""
                         else -> "0,00"
