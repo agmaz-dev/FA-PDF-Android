@@ -13,8 +13,8 @@ android {
         applicationId = "de.fapdf"
         minSdk = 26
         targetSdk = 35
-        versionCode = 3
-        versionName = "1.2.0"
+        versionCode = 4
+        versionName = "1.3.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -95,6 +95,7 @@ dependencies {
     // Google ML Kit – kostenlos, läuft auf dem Gerät
     implementation("com.google.mlkit:text-recognition:16.0.1")          // OCR (lateinische Schrift: DE/EN/TR)
     implementation("com.google.mlkit:translate:17.0.3")                 // Offline-Übersetzung
+    implementation("com.google.mlkit:language-id:17.0.6")               // Spracherkennung (auf dem Gerät)
     implementation("com.google.android.gms:play-services-mlkit-document-scanner:16.0.0-beta1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.9.0")
