@@ -16,6 +16,17 @@ android {
         versionName = "1.0.0"
     }
 
+    // Fester Debug-Schlüssel: Jeder Build hat dieselbe Signatur, damit Updates ohne Deinstallation klappen.
+    // Nur für Test-APKs, kein Geheimnis.
+    signingConfigs {
+        getByName("debug") {
+            storeFile = file("keystore/fa-debug.jks")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
