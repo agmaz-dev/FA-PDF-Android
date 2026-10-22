@@ -59,7 +59,29 @@ import androidx.compose.material.icons.outlined.ViewCarousel
 import androidx.compose.material.icons.outlined.CropFree
 import androidx.compose.material.icons.outlined.DocumentScanner
 import androidx.compose.material.icons.outlined.ManageSearch
-import androidx.compose.material3.CenterAlignedTopAppBar
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.automirrored.outlined.ArrowForward
+import androidx.compose.material.icons.automirrored.outlined.Send
+import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.AutoFixNormal
+import androidx.compose.material.icons.outlined.BookmarkBorder
+import androidx.compose.material.icons.outlined.ChatBubbleOutline
+import androidx.compose.material.icons.outlined.DeleteOutline
+import androidx.compose.material.icons.outlined.Forum
+import androidx.compose.material.icons.outlined.Fullscreen
+import androidx.compose.material.icons.outlined.FullscreenExit
+import androidx.compose.material.icons.outlined.Gesture
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.MoreVert
+import androidx.compose.material.icons.outlined.Remove
+import de.fapdf.ui.components.DocCard
+import kotlin.math.roundToInt
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -120,8 +142,8 @@ import de.fapdf.ui.theme.FaColors
 import kotlinx.coroutines.launch
 
 private fun modeTitle(m: WorkspaceMode) = when (m) {
-    WorkspaceMode.READ -> "Lesen"
-    WorkspaceMode.EDIT -> "Bearbeiten"
+    WorkspaceMode.READ -> "PDF lesen"
+    WorkspaceMode.EDIT -> "PDF bearbeiten"
     WorkspaceMode.ANNOTATE -> "Kommentieren"
     WorkspaceMode.FORM -> "Formular ausfüllen"
     WorkspaceMode.SIGN -> "Unterschreiben"
@@ -147,7 +169,8 @@ fun WorkspaceScreen(
     var showSave by remember { mutableStateOf(false) }
     var sheet by remember { mutableStateOf<String?>(null) } // "ocr", "font", "more", "sign", "bookmarks", "profiles"
     var searchOpen by remember { mutableStateOf(false) }
-    var pagesOpen by remember { mutableStateOf(true) }
+    var fullscreen by remember { mutableStateOf(false) }
+    var commentsOpen by remember { mutableStateOf(false) }
     var searchText by remember { mutableStateOf("") }
     var signatureTarget by remember { mutableStateOf<Pair<Int, Box>?>(null) }
     val exporter = rememberExportLauncher()
@@ -162,7 +185,7 @@ fun WorkspaceScreen(
     }
 
     fun leave() { if (vm.dirty) showDiscard = true else onBack() }
-    BackHandler { leave() }
+    BackHandler { if (fullscreen) fullscreen = false else leave() }
 
     val doc = vm.doc
     val source = vm.source
@@ -175,49 +198,65 @@ fun WorkspaceScreen(
     Scaffold(
         containerColor = FaColors.Background,
         topBar = {
-            CenterAlignedTopAppBar(
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = FaColors.Background),
+            if (!fullscreen) TopAppBar(
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = FaColors.Background),
                 navigationIcon = {
-                    IconButton(onClick = { leave() }) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Zurück", tint = FaColors.Accent) }
+                    IconButton(onClick = { leave() }) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Zurück") }
                 },
                 title = {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(
-                            DocumentRepository.baseName(doc?.displayName ?: ""), maxLines = 1, overflow = TextOverflow.Ellipsis,
-                            style = MaterialTheme.typography.titleMedium,
-                        )
-                        Text(modeTitle(vm.mode) + if (vm.dirty) " • nicht gespeichert" else "", style = MaterialTheme.typography.labelSmall, color = FaColors.SecondaryLabel)
-                    }
+                    Text(
+                        if (vm.mode == WorkspaceMode.READ) DocumentRepository.baseName(doc?.displayName ?: "") else modeTitle(vm.mode),
+                        maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleLarge,
+                    )
                 },
                 actions = {
                     if (vm.mode == WorkspaceMode.READ) {
-                        IconButton(onClick = { searchOpen = !searchOpen; if (!searchOpen) vm.clearSearch() }) { Icon(Icons.Outlined.Search, "Suchen") }
+                        IconButton(onClick = { searchOpen = !searchOpen; if (!searchOpen) vm.clearSearch() }) {
+                            Icon(Icons.Outlined.Search, "Suchen", tint = if (searchOpen) FaColors.Accent else FaColors.Label)
+                        }
+                        IconButton(onClick = { sheet = "bookmarks" }) { Icon(Icons.Outlined.BookmarkBorder, "Lesezeichen") }
+                        IconButton(onClick = { sheet = "more" }) { Icon(Icons.Outlined.MoreVert, "Weitere") }
+                    } else {
+                        IconButton(onClick = vm::undo, enabled = vm.canUndo) { Icon(Icons.AutoMirrored.Outlined.Undo, "Rückgängig") }
+                        IconButton(onClick = vm::redo, enabled = vm.canRedo) { Icon(Icons.AutoMirrored.Outlined.Redo, "Wiederherstellen") }
+                        Button(
+                            onClick = {
+                                if (vm.mode == WorkspaceMode.FORM && vm.pendingValues.isNotEmpty()) vm.applyPendingValues { showSave = true }
+                                else showSave = true
+                            },
+                            shape = RoundedCornerShape(10.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = FaColors.Accent),
+                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
+                            modifier = Modifier.padding(end = 8.dp).height(38.dp),
+                        ) { Text("Speichern", style = MaterialTheme.typography.labelLarge) }
                     }
-                    IconButton(onClick = { pagesOpen = !pagesOpen }) {
-                        Icon(Icons.Outlined.ViewCarousel, "Seitenübersicht", tint = if (pagesOpen) FaColors.Accent else FaColors.SecondaryLabel)
-                    }
-                    IconButton(onClick = vm::undo, enabled = vm.canUndo) { Icon(Icons.AutoMirrored.Outlined.Undo, "Rückgängig") }
-                    IconButton(onClick = vm::redo, enabled = vm.canRedo) { Icon(Icons.AutoMirrored.Outlined.Redo, "Wiederherstellen") }
-                    IconButton(onClick = { showSave = true }) { Icon(Icons.Outlined.Save, "Speichern", tint = if (vm.dirty) FaColors.Accent else FaColors.SecondaryLabel) }
                 },
             )
         },
         bottomBar = {
-            Surface(color = Color.White, shadowElevation = 8.dp) {
+            if (!fullscreen) Surface(color = Color.White, shadowElevation = 8.dp) {
                 Column(Modifier.navigationBarsPadding()) {
-                    BottomTools(vm, currentPage, onSheet = { sheet = it }, onPickImage = {
+                    if (vm.mode == WorkspaceMode.READ && source != null && source.pageCount > 0 && vm.placement == null) {
+                        ThumbStrip(vm, source, currentPage) { p -> scope.launch { listState.animateScrollToItem(p) } }
+                        ZoomRow(zoom, onZoom = { zoom = it }, onFullscreen = { fullscreen = true })
+                    }
+                    if (vm.mode == WorkspaceMode.ANNOTATE && commentsOpen && vm.placement == null) {
+                        CommentsPanel(vm, onGo = { p -> scope.launch { listState.animateScrollToItem(p) } })
+                    }
+                    if (vm.mode == WorkspaceMode.FORM && vm.placement == null) {
+                        FormNavigator(vm, onGo = { p -> scope.launch { listState.animateScrollToItem(p) } })
+                    }
+                    BottomTools(vm, currentPage, commentsOpen = commentsOpen, onToggleComments = { commentsOpen = !commentsOpen }, onSheet = { sheet = it }, onPickImage = {
                         imagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-                    }, onPrint = {
-                        vm.current?.let { FileActions.print(context, it, doc?.displayName ?: "Dokument.pdf") }
-                    }, onShare = {
-                        vm.current?.let { FileActions.share(context, it, doc?.displayName ?: "Dokument.pdf") }
+                    }, onDraw = {
+                        vm.switchMode(WorkspaceMode.ANNOTATE); vm.annotTool = AnnotTool.INK
                     })
                 }
             }
         },
     ) { padding ->
         Column(Modifier.padding(padding).fillMaxSize()) {
-            if (searchOpen && vm.mode == WorkspaceMode.READ) {
+            if (searchOpen && vm.mode == WorkspaceMode.READ && !fullscreen) {
                 SearchRow(searchText, { searchText = it }, onSearch = { vm.search(searchText) }, hits = vm.searchHits.size, index = vm.searchIndex,
                     onPrev = {
                         if (vm.searchHits.isNotEmpty()) {
@@ -232,30 +271,16 @@ fun WorkspaceScreen(
                         }
                     })
             }
-            if (pagesOpen && source != null && source.pageCount > 0) {
-                val stripState = rememberLazyListState()
-                LaunchedEffect(currentPage) { runCatching { stripState.animateScrollToItem((currentPage - 2).coerceAtLeast(0)) } }
-                LazyRow(
-                    state = stripState,
-                    modifier = Modifier.fillMaxWidth().background(Color.White).padding(vertical = 6.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    contentPadding = PaddingValues(horizontal = 12.dp),
-                ) {
-                    items(source.pageCount, key = { "${vm.versionKey}-$it" }) { p ->
-                        PageThumb(
-                            source, p, Modifier.width(52.dp), selected = p == currentPage, label = "${p + 1}", renderWidth = 160,
-                            onClick = { scope.launch { listState.animateScrollToItem(p) } },
-                        )
-                    }
-                }
+            if (vm.mode != WorkspaceMode.READ && doc != null) {
+                DocCard(doc, subtitle = "Seite ${currentPage + 1} von ${source?.pageCount ?: doc.pageCount}" + if (vm.dirty) " · nicht gespeichert" else "")
             }
-            ModeBanners(vm, onSignatureField = { f ->
+            if (!fullscreen) ModeBanners(vm, onSignatureField = { f ->
                 val w = f.widgets.first()
                 signatureTarget = w.pageIndex to w.viewBox
                 scope.launch { listState.animateScrollToItem(w.pageIndex) }
                 sheet = "sign"
             })
-            Box(Modifier.weight(1f).fillMaxWidth()) {
+            Box(Modifier.weight(1f).fillMaxWidth().background(Color(0xFFF1F2F5))) {
                 if (source != null) {
                     val gestures = gesturesFor(vm)
                     PdfPagesView(
@@ -264,13 +289,16 @@ fun WorkspaceScreen(
                         scrollEnabled = !gestures.dragEnabled && vm.placement == null,
                         gestures = gestures,
                     ) { page, pxPerPt -> PageOverlay(vm, page, pxPerPt) }
-                    // Seitenanzeige
                     Text(
                         "${currentPage + 1} / ${source.pageCount}",
                         color = Color.White, style = MaterialTheme.typography.labelMedium,
                         modifier = Modifier.align(Alignment.BottomCenter).padding(10.dp)
                             .clip(RoundedCornerShape(12.dp)).background(Color(0x99000000)).padding(horizontal = 10.dp, vertical = 4.dp),
                     )
+                    if (fullscreen) IconButton(
+                        onClick = { fullscreen = false },
+                        modifier = Modifier.align(Alignment.TopEnd).padding(12.dp).clip(CircleShape).background(Color(0x99000000)),
+                    ) { Icon(Icons.Outlined.FullscreenExit, "Vollbild beenden", tint = Color.White) }
                 }
             }
         }
@@ -345,6 +373,15 @@ fun WorkspaceScreen(
 
     when (sheet) {
         "ocr" -> OcrSheet(onDismiss = { sheet = null }, onPage = { sheet = null; vm.runOcr(currentPage) }, onDocument = { sheet = null; vm.makeSearchable() })
+        "editmore" -> EditMoreSheet(
+            highlightActive = vm.editTool == EditTool.HIGHLIGHT,
+            onDismiss = { sheet = null },
+            onOcr = { sheet = "ocr" },
+            onFont = { sheet = "font" },
+            onHighlight = { sheet = null; vm.editTool = if (vm.editTool == EditTool.HIGHLIGHT) EditTool.TEXT else EditTool.HIGHLIGHT },
+            onSign = { sheet = "sign" },
+            onMore = { sheet = "more" },
+        )
         "font" -> StyleDialog(vm.newTextStyle, onDismiss = { sheet = null }) { vm.newTextStyle = it; sheet = null }
         "more" -> MoreSheet(vm, currentPage, onDismiss = { sheet = null }, onPrint = {
             vm.current?.let { FileActions.print(context, it, doc?.displayName ?: "Dokument.pdf") }
@@ -379,6 +416,7 @@ private fun gesturesFor(vm: WorkspaceViewModel): PageGestures = when (vm.mode) {
     WorkspaceMode.ANNOTATE -> when (vm.annotTool) {
         AnnotTool.SCROLL -> PageGestures()
         AnnotTool.NOTE -> PageGestures(onTap = { p, u, v -> vm.noteAt = Triple(p, u, v) })
+        AnnotTool.ERASER -> PageGestures(onTap = vm::eraseAt)
         else -> PageGestures(dragEnabled = true, onDragStart = vm::onDragStart, onDrag = vm::onDrag, onDragEnd = vm::onDragEnd)
     }
     WorkspaceMode.REDACT -> if (vm.redactScroll) PageGestures()
@@ -434,6 +472,7 @@ private fun PageOverlay(vm: WorkspaceViewModel, page: Int, s: Float) {
                 if (vm.mode == WorkspaceMode.SIGN && !isSig) return@forEach
                 rect(w.viewBox, (if (isSig) Color(0xFFE364E8) else accent).copy(alpha = 0.10f), fill = true)
                 rect(w.viewBox, (if (isSig) Color(0xFFE364E8) else accent).copy(alpha = 0.55f), width = 1.dp.toPx())
+                if (f.id == vm.focusedFieldId) rect(w.viewBox.inset(2f), accent, width = 2.5f.dp.toPx())
                 val text = vm.pendingValues[f.id]?.let { vm.displayValue(f) }
                 if (!text.isNullOrEmpty()) drawFieldText(text, w.viewBox, s)
             }
@@ -481,12 +520,12 @@ private fun ModeBanners(vm: WorkspaceViewModel, onSignatureField: (de.fapdf.pdf.
             else if (sig != null) InfoBanner("Unterschriftsfeld erkannt.", FaColors.Sign, "Einfügen" to { onSignatureField(sig) })
             else InfoBanner("Wählen Sie unten eine Unterschrift. Eine eingefügte Unterschrift können Sie antippen, um sie zu verschieben, zu skalieren oder zu entfernen. (Einfache elektronische Unterschrift, keine kryptografische Signatur.)")
         }
-        WorkspaceMode.REDACT -> InfoBanner(
-            if (vm.redactScroll) "Blättern aktiv – zum Auswählen unten „Bereich“ wählen."
-            else "Ziehen Sie Rechtecke über vertrauliche Inhalte. Sie werden beim Anwenden dauerhaft entfernt.",
-            Color.Black,
-        )
-        WorkspaceMode.ANNOTATE -> if (vm.annotTool == AnnotTool.SCROLL) InfoBanner("Blättern aktiv – wählen Sie unten ein Werkzeug.")
+        WorkspaceMode.REDACT -> if (vm.redactScroll) InfoBanner("Blättern aktiv – tippen Sie unten auf „Bereich markieren“, um Inhalte auszuwählen.")
+        WorkspaceMode.ANNOTATE -> when (vm.annotTool) {
+            AnnotTool.SCROLL -> InfoBanner("Blättern aktiv – wählen Sie unten ein Werkzeug.")
+            AnnotTool.ERASER -> InfoBanner("Radierer: Tippen Sie auf einen Kommentar, um ihn zu entfernen.", FaColors.Destructive)
+            else -> {}
+        }
         WorkspaceMode.READ -> {}
     }
 }
@@ -496,7 +535,7 @@ private fun ToolButton(icon: ImageVector, label: String, selected: Boolean = fal
     Column(
         Modifier.clip(RoundedCornerShape(10.dp)).clickable(enabled = enabled, onClick = onClick)
             .background(if (selected) FaColors.Accent.copy(alpha = 0.12f) else Color.Transparent)
-            .padding(horizontal = 6.dp, vertical = 6.dp).width(48.dp),
+            .padding(horizontal = 4.dp, vertical = 6.dp).width(66.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Icon(icon, label, tint = if (!enabled) FaColors.SecondaryLabel else if (selected) FaColors.Accent else tint, modifier = Modifier.size(22.dp))
@@ -525,7 +564,8 @@ private val annotColors = listOf(0xFFFFD60A.toInt(), 0xFF34C759.toInt(), 0xFF0A8
 
 @Composable
 private fun BottomTools(
-    vm: WorkspaceViewModel, currentPage: Int, onSheet: (String) -> Unit, onPickImage: () -> Unit, onPrint: () -> Unit, onShare: () -> Unit,
+    vm: WorkspaceViewModel, currentPage: Int, commentsOpen: Boolean, onToggleComments: () -> Unit,
+    onSheet: (String) -> Unit, onPickImage: () -> Unit, onDraw: () -> Unit,
 ) {
     val p = vm.placement
     if (p != null) {
@@ -562,63 +602,224 @@ private fun BottomTools(
     when (vm.mode) {
         WorkspaceMode.EDIT -> ToolRow {
             ToolButton(Icons.Outlined.TextFields, "Text", selected = vm.editTool == EditTool.TEXT) { vm.editTool = EditTool.TEXT }
-            ToolButton(Icons.Outlined.DocumentScanner, "OCR") { onSheet("ocr") }
-            ToolButton(Icons.Outlined.FontDownload, "Schrift") { onSheet("font") }
-            ToolButton(Icons.Outlined.Image, "Bilder", onClick = onPickImage)
-            ToolButton(Icons.Outlined.BorderColor, "Markieren", selected = vm.editTool == EditTool.HIGHLIGHT) {
-                vm.editTool = if (vm.editTool == EditTool.HIGHLIGHT) EditTool.TEXT else EditTool.HIGHLIGHT
-            }
-            ToolButton(Icons.Outlined.Draw, "Unterschr.") { onSheet("sign") }
-            ToolButton(Icons.Outlined.MoreHoriz, "Weitere") { onSheet("more") }
+            ToolButton(Icons.Outlined.Image, "Bild", onClick = onPickImage)
+            ToolButton(Icons.Outlined.Gesture, "Zeichnen", onClick = onDraw)
+            ToolButton(Icons.Outlined.MoreHoriz, "Mehr") { onSheet("editmore") }
         }
         WorkspaceMode.ANNOTATE -> Column {
             if (vm.inkStrokes.isNotEmpty()) ConfirmBar("${vm.inkStrokes.size} Strich(e) gezeichnet", onCancel = { vm.inkStrokes.clear() }, onConfirm = vm::commitInk)
-            ToolRow {
-                ToolButton(Icons.Outlined.PanTool, "Blättern", vm.annotTool == AnnotTool.SCROLL) { vm.annotTool = AnnotTool.SCROLL }
-                ToolButton(Icons.Outlined.BorderColor, "Markieren", vm.annotTool == AnnotTool.HIGHLIGHT) { vm.annotTool = AnnotTool.HIGHLIGHT }
-                ToolButton(Icons.Outlined.FormatUnderlined, "Unterstr.", vm.annotTool == AnnotTool.UNDERLINE) { vm.annotTool = AnnotTool.UNDERLINE }
-                ToolButton(Icons.Outlined.FormatStrikethrough, "Durchstr.", vm.annotTool == AnnotTool.STRIKE) { vm.annotTool = AnnotTool.STRIKE }
-                ToolButton(Icons.Outlined.StickyNote2, "Notiz", vm.annotTool == AnnotTool.NOTE) { vm.annotTool = AnnotTool.NOTE }
-                ToolButton(Icons.Outlined.Brush, "Zeichnen", vm.annotTool == AnnotTool.INK) { vm.annotTool = AnnotTool.INK }
-            }
-            Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), horizontalArrangement = Arrangement.Center) {
+            val markup = vm.annotTool in setOf(AnnotTool.HIGHLIGHT, AnnotTool.UNDERLINE, AnnotTool.STRIKE)
+            if (markup || vm.annotTool == AnnotTool.INK) Row(
+                Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (markup) {
+                    MiniChip("Markieren", vm.annotTool == AnnotTool.HIGHLIGHT) { vm.annotTool = AnnotTool.HIGHLIGHT }
+                    MiniChip("Unterstr.", vm.annotTool == AnnotTool.UNDERLINE) { vm.annotTool = AnnotTool.UNDERLINE }
+                    MiniChip("Durchstr.", vm.annotTool == AnnotTool.STRIKE) { vm.annotTool = AnnotTool.STRIKE }
+                }
+                Spacer(Modifier.weight(1f))
                 annotColors.forEach { c ->
                     Box(
-                        Modifier.padding(horizontal = 8.dp).size(if (vm.annotColor == c) 30.dp else 24.dp).clip(CircleShape).background(Color(c))
+                        Modifier.padding(horizontal = 4.dp).size(if (vm.annotColor == c) 26.dp else 20.dp).clip(CircleShape).background(Color(c))
                             .clickable { vm.annotColor = c }
                     )
                 }
             }
+            ToolRow {
+                val t = vm.annotTool
+                fun pick(x: AnnotTool) { vm.annotTool = if (vm.annotTool == x) AnnotTool.SCROLL else x }
+                ToolButton(Icons.Outlined.BorderColor, "Hervorheben", t == AnnotTool.HIGHLIGHT || t == AnnotTool.UNDERLINE || t == AnnotTool.STRIKE) { pick(AnnotTool.HIGHLIGHT) }
+                ToolButton(Icons.Outlined.ChatBubbleOutline, "Notiz", t == AnnotTool.NOTE) { pick(AnnotTool.NOTE) }
+                ToolButton(Icons.Outlined.Gesture, "Zeichnen", t == AnnotTool.INK) { pick(AnnotTool.INK) }
+                ToolButton(Icons.Outlined.AutoFixNormal, "Radierer", t == AnnotTool.ERASER) { pick(AnnotTool.ERASER) }
+                ToolButton(Icons.Outlined.Forum, "Liste (${vm.comments.size})", commentsOpen, onClick = onToggleComments)
+            }
         }
-        WorkspaceMode.REDACT -> ToolRow {
-            ToolButton(Icons.Outlined.PanTool, "Blättern", vm.redactScroll) { vm.redactScroll = true }
-            ToolButton(Icons.Outlined.CropFree, "Bereich", !vm.redactScroll) { vm.redactScroll = false }
-            ToolButton(Icons.Outlined.ManageSearch, "Begriff") { onSheet("redactsearch") }
-            ToolButton(Icons.Outlined.Delete, "Entfernen", enabled = vm.redactRects.isNotEmpty()) { vm.redactRects.removeAt(vm.redactRects.size - 1) }
-            ToolButton(Icons.Outlined.Check, "Anwenden (${vm.redactRects.size})", enabled = vm.redactRects.isNotEmpty(), tint = FaColors.Destructive) { onSheet("redact") }
+        WorkspaceMode.REDACT -> Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                SoftAction(Icons.Outlined.CropFree, "Bereich markieren", selected = !vm.redactScroll, modifier = Modifier.weight(1f)) {
+                    vm.redactScroll = !vm.redactScroll
+                }
+                SoftAction(Icons.Outlined.ManageSearch, "Text suchen", selected = false, modifier = Modifier.weight(1f)) { onSheet("redactsearch") }
+            }
+            Row(Modifier.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Outlined.Info, null, tint = FaColors.SecondaryLabel, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("Markierte Inhalte werden dauerhaft entfernt.", style = MaterialTheme.typography.bodySmall, color = FaColors.SecondaryLabel, modifier = Modifier.weight(1f))
+                if (vm.redactRects.isNotEmpty()) TextButton(onClick = { vm.redactRects.removeAt(vm.redactRects.size - 1) }) { Text("Letzte entfernen") }
+            }
+            Button(
+                onClick = { onSheet("redact") }, enabled = vm.redactRects.isNotEmpty(),
+                modifier = Modifier.fillMaxWidth().height(50.dp), shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF16181D)),
+            ) { Text(if (vm.redactRects.isEmpty()) "Schwärzen" else "Schwärzen (${vm.redactRects.size})") }
         }
         WorkspaceMode.FORM -> Column {
             val n = vm.pendingValues.size
-            if (n > 0) ConfirmBar("$n Wert(e) geprüft?", onCancel = { vm.pendingValues.clear() }, onConfirm = vm::applyPendingValues)
+            if (n > 0) ConfirmBar("$n Wert(e) geprüft?", onCancel = { vm.pendingValues.clear() }, onConfirm = { vm.applyPendingValues() })
             ToolRow {
                 ToolButton(Icons.Outlined.People, "Profil") { onSheet("profiles") }
-                ToolButton(Icons.Outlined.Draw, "Unterschr.") { onSheet("sign") }
+                ToolButton(Icons.Outlined.Gesture, "Unterschrift") { onSheet("sign") }
                 ToolButton(Icons.Outlined.TextFields, "Freitext") { vm.addTextAt = Triple(currentPage, 60f, 100f) }
-                ToolButton(Icons.Outlined.Share, "Teilen", onClick = onShare)
+                ToolButton(Icons.Outlined.MoreHoriz, "Mehr") { onSheet("more") }
             }
         }
-        WorkspaceMode.SIGN -> ToolRow {
-            ToolButton(Icons.Outlined.Draw, "Unterschrift") { onSheet("sign") }
-            ToolButton(Icons.Outlined.Print, "Drucken", onClick = onPrint)
-            ToolButton(Icons.Outlined.Share, "Teilen", onClick = onShare)
+        WorkspaceMode.SIGN -> Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+            Button(
+                onClick = { onSheet("sign") }, modifier = Modifier.fillMaxWidth().height(50.dp), shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = FaColors.Accent),
+            ) { Icon(Icons.Outlined.Gesture, null); Spacer(Modifier.width(8.dp)); Text("Unterschrift hinzufügen") }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                TextButton(onClick = { onSheet("more") }) { Text("Weitere Optionen") }
+            }
         }
-        WorkspaceMode.READ -> ToolRow {
-            ToolButton(Icons.Outlined.Description, "Seite …") { onSheet("jump") }
-            ToolButton(Icons.Outlined.Bookmarks, "Lesezeichen") { onSheet("bookmarks") }
-            ToolButton(Icons.Outlined.Print, "Drucken", onClick = onPrint)
-            ToolButton(Icons.Outlined.Share, "Teilen", onClick = onShare)
-            ToolButton(Icons.Outlined.MoreHoriz, "Weitere") { onSheet("more") }
+        WorkspaceMode.READ -> {}
+    }
+}
+
+@Composable
+private fun MiniChip(text: String, selected: Boolean, onClick: () -> Unit) {
+    Text(
+        text, style = MaterialTheme.typography.labelMedium, color = if (selected) FaColors.Accent else FaColors.SecondaryLabel,
+        modifier = Modifier.padding(end = 6.dp).clip(RoundedCornerShape(8.dp))
+            .background(if (selected) FaColors.AccentLight else Color.Transparent).clickable(onClick = onClick)
+            .padding(horizontal = 8.dp, vertical = 5.dp),
+    )
+}
+
+@Composable
+private fun SoftAction(icon: ImageVector, text: String, selected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    Row(
+        modifier.height(46.dp).clip(RoundedCornerShape(12.dp))
+            .background(if (selected) FaColors.AccentLight else FaColors.Card)
+            .border(1.dp, if (selected) FaColors.Accent else FaColors.CardBorder, RoundedCornerShape(12.dp))
+            .clickable(onClick = onClick).padding(horizontal = 10.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center,
+    ) {
+        Icon(icon, null, tint = if (selected) FaColors.Accent else FaColors.Label, modifier = Modifier.size(20.dp))
+        Spacer(Modifier.width(6.dp))
+        Text(text, style = MaterialTheme.typography.labelLarge, color = if (selected) FaColors.Accent else FaColors.Label, maxLines = 1)
+    }
+}
+
+@Composable
+private fun ThumbStrip(vm: WorkspaceViewModel, source: de.fapdf.pdf.PdfPageSource, currentPage: Int, onGo: (Int) -> Unit) {
+    val stripState = rememberLazyListState()
+    LaunchedEffect(currentPage) { runCatching { stripState.animateScrollToItem((currentPage - 2).coerceAtLeast(0)) } }
+    LazyRow(
+        state = stripState,
+        modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 2.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        contentPadding = PaddingValues(horizontal = 12.dp),
+    ) {
+        items(source.pageCount, key = { "${vm.versionKey}-$it" }) { p ->
+            PageThumb(
+                source, p, Modifier.width(48.dp), selected = p == currentPage, label = "${p + 1}", renderWidth = 160,
+                onClick = { onGo(p) },
+            )
         }
+    }
+}
+
+@Composable
+private fun ZoomRow(zoom: Float, onZoom: (Float) -> Unit, onFullscreen: () -> Unit) {
+    Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+        IconButton(onClick = { onZoom((zoom - 0.25f).coerceIn(1f, 4f)) }, enabled = zoom > 1.01f) { Icon(Icons.Outlined.Remove, "Verkleinern") }
+        Text("${(zoom * 100).roundToInt()} %", style = MaterialTheme.typography.labelLarge, modifier = Modifier.width(56.dp), textAlign = TextAlign.Center)
+        IconButton(onClick = { onZoom((zoom + 0.25f).coerceIn(1f, 4f)) }, enabled = zoom < 3.99f) { Icon(Icons.Outlined.Add, "Vergrößern") }
+        Spacer(Modifier.weight(1f))
+        IconButton(onClick = onFullscreen) { Icon(Icons.Outlined.Fullscreen, "Vollbild") }
+    }
+}
+
+private val timeFmt = java.text.SimpleDateFormat("dd.MM.yyyy, HH:mm", java.util.Locale.GERMANY)
+
+@Composable
+private fun CommentsPanel(vm: WorkspaceViewModel, onGo: (Int) -> Unit) {
+    var openKey by remember { mutableStateOf<String?>(null) }
+    var reply by remember { mutableStateOf("") }
+    Column(Modifier.fillMaxWidth().heightIn(max = 300.dp)) {
+        Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("Kommentare", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+            Text("${vm.comments.size}", style = MaterialTheme.typography.labelMedium, color = FaColors.SecondaryLabel)
+        }
+        if (vm.comments.isEmpty()) {
+            Text("Noch keine Kommentare. Wählen Sie unten „Hervorheben“, „Notiz“ oder „Zeichnen“.", Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                style = MaterialTheme.typography.bodySmall, color = FaColors.SecondaryLabel)
+        }
+        LazyColumn(contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            items(vm.comments, key = { "${it.page}/${it.index}/${vm.versionKey}" }) { c ->
+                val key = "${c.page}/${c.index}"
+                Column(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(FaColors.Card)
+                        .border(1.dp, FaColors.CardBorder, RoundedCornerShape(12.dp))
+                        .clickable { onGo(c.page); openKey = if (openKey == key) null else key; reply = "" }
+                        .padding(10.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.size(28.dp).clip(CircleShape).background(FaColors.AccentLight), contentAlignment = Alignment.Center) {
+                            Text(c.author.firstOrNull()?.uppercase() ?: "?", color = FaColors.Accent, style = MaterialTheme.typography.labelMedium)
+                        }
+                        Spacer(Modifier.width(8.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(c.author.ifBlank { "Unbekannt" }, style = MaterialTheme.typography.labelLarge, maxLines = 1)
+                            Text(
+                                c.typeTitle + " · Seite ${c.page + 1}" + (c.modified?.let { " · " + timeFmt.format(java.util.Date(it)) } ?: ""),
+                                style = MaterialTheme.typography.bodySmall, color = FaColors.SecondaryLabel, maxLines = 1,
+                            )
+                        }
+                        IconButton(onClick = { vm.deleteComment(c) }) { Icon(Icons.Outlined.DeleteOutline, "Löschen", tint = FaColors.SecondaryLabel) }
+                    }
+                    if (c.text.isNotBlank()) Text(c.text, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 4.dp))
+                    c.replies.forEach { r ->
+                        Column(Modifier.padding(start = 16.dp, top = 6.dp)) {
+                            Text(
+                                r.author.ifBlank { "Unbekannt" } + (r.modified?.let { " · " + timeFmt.format(java.util.Date(it)) } ?: ""),
+                                style = MaterialTheme.typography.labelSmall, color = FaColors.SecondaryLabel,
+                            )
+                            Text(r.text, style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                    if (openKey == key) Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                        OutlinedTextField(
+                            reply, { reply = it }, Modifier.weight(1f), singleLine = true, placeholder = { Text("Antworten …") },
+                            shape = RoundedCornerShape(10.dp),
+                        )
+                        IconButton(onClick = { vm.replyTo(c, reply); reply = ""; openKey = null }, enabled = reply.isNotBlank()) {
+                            Icon(Icons.AutoMirrored.Outlined.Send, "Senden", tint = FaColors.Accent)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun FormNavigator(vm: WorkspaceViewModel, onGo: (Int) -> Unit) {
+    val fields = vm.formInfo?.fields.orEmpty().filter { !it.readOnly && it.widgets.isNotEmpty() }
+    if (fields.isEmpty()) return
+    var i by remember(vm.formInfo) { mutableStateOf(0) }
+    val idx = i.coerceIn(0, fields.size - 1)
+    val f = fields[idx]
+    fun go(n: Int) { i = n.coerceIn(0, fields.size - 1); onGo(fields[i].widgets.first().pageIndex); vm.focusedFieldId = fields[i].id }
+    Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+        IconButton(onClick = { go(idx - 1) }, enabled = idx > 0) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Vorheriges Feld") }
+        Column(
+            Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).background(FaColors.Card).clickable {
+                go(idx)
+                if (f.kind == FieldKind.SIGNATURE) vm.signatureFieldPrompt = f else vm.editingField = f
+            }.padding(horizontal = 12.dp, vertical = 6.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text("Feld ${idx + 1} von ${fields.size}", style = MaterialTheme.typography.labelLarge)
+            Text(
+                f.label.ifBlank { f.id } + vm.displayValue(f).takeIf { it.isNotBlank() }?.let { ": $it" }.orEmpty(),
+                style = MaterialTheme.typography.bodySmall, color = FaColors.SecondaryLabel, maxLines = 1, overflow = TextOverflow.Ellipsis,
+            )
+        }
+        IconButton(onClick = { go(idx + 1) }, enabled = idx < fields.size - 1) { Icon(Icons.AutoMirrored.Outlined.ArrowForward, "Nächstes Feld") }
     }
 }
 

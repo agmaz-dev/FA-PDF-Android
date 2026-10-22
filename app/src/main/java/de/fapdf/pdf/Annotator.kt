@@ -142,6 +142,111 @@ object Annotator {
         addAnnotation(page, dict, ap)
     }
 
+    // ---------------- Kommentarliste ----------------
+
+    private val listed = setOf("Text", "Highlight", "Underline", "StrikeOut", "Ink", "FreeText", "Squiggly", "Square", "Circle", "Line", "Stamp", "Polygon", "PolyLine", "Caret", "FileAttachment")
+
+    /** Alle Kommentare des Dokuments (ohne Formularfelder, Links und Antwort-Notizen), mit ihren Antworten. */
+    fun listComments(doc: PDDocument): List<CommentInfo> {
+        val out = ArrayList<CommentInfo>()
+        for (p in 0 until doc.numberOfPages) {
+            val page = doc.getPage(p)
+            val annots = runCatching { page.annotations }.getOrNull() ?: continue
+            val g = PdfIo.geometry(page)
+            val replies = HashMap<COSDictionary, MutableList<CommentReply>>()
+            annots.forEach { a ->
+                val d = a.cosObject
+                val parent = d.getDictionaryObject(COSName.getPDFName("IRT")) as? COSDictionary ?: return@forEach
+                replies.getOrPut(parent) { ArrayList() }.add(
+                    CommentReply(d.getString(COSName.T) ?: "", d.getString(COSName.CONTENTS) ?: "", parseDate(d.getString(COSName.M)))
+                )
+            }
+            annots.forEachIndexed { i, a ->
+                val d = a.cosObject
+                val sub = d.getNameAsString(COSName.SUBTYPE) ?: return@forEachIndexed
+                if (sub !in listed || d.containsKey(COSName.getPDFName("IRT"))) return@forEachIndexed
+                val r = a.rectangle ?: return@forEachIndexed
+                val view = g.userBoxToView(Box(r.lowerLeftX, r.lowerLeftY, r.upperRightX, r.upperRightY))
+                out.add(
+                    CommentInfo(
+                        page = p, index = i, subtype = sub,
+                        author = d.getString(COSName.T) ?: "",
+                        text = d.getString(COSName.CONTENTS) ?: "",
+                        modified = parseDate(d.getString(COSName.M)),
+                        viewBox = view,
+                        replies = replies[d].orEmpty().sortedBy { it.modified ?: 0L },
+                    )
+                )
+            }
+        }
+        return out
+    }
+
+    /** Entfernt einen Kommentar samt Antworten und zugehörigem Popup. */
+    fun deleteComment(doc: PDDocument, pageIndex: Int, index: Int) {
+        val page = doc.getPage(pageIndex)
+        val list = page.annotations.toMutableList()
+        val target = list.getOrNull(index)?.cosObject ?: throw PdfUserException("Kommentar nicht gefunden.")
+        val popup = target.getDictionaryObject(COSName.getPDFName("Popup")) as? COSDictionary
+        list.removeAll { a ->
+            val d = a.cosObject
+            d === target || d === popup || d.getDictionaryObject(COSName.getPDFName("IRT")) === target ||
+                d.getDictionaryObject(COSName.PARENT) === target
+        }
+        page.annotations = list
+    }
+
+    /** Antwort auf einen Kommentar (PDF-Standard: Text-Anmerkung mit /IRT und /RT /R). */
+    fun addReply(doc: PDDocument, pageIndex: Int, index: Int, text: String) {
+        val page = doc.getPage(pageIndex)
+        val parent = page.annotations.getOrNull(index)?.cosObject ?: throw PdfUserException("Kommentar nicht gefunden.")
+        val dict = COSDictionary()
+        dict.setName(COSName.TYPE, "Annot")
+        dict.setName(COSName.SUBTYPE, "Text")
+        dict.setName(COSName.NAME, "Comment")
+        dict.setString(COSName.CONTENTS, text)
+        dict.setItem(COSName.getPDFName("IRT"), parent)
+        dict.setName(COSName.getPDFName("RT"), "R")
+        dict.setItem(COSName.RECT, parent.getDictionaryObject(COSName.RECT))
+        dict.setString(COSName.T, AUTHOR)
+        dict.setString(COSName.M, pdfDate(System.currentTimeMillis()))
+        dict.setInt(COSName.F, 4 or 2) // Drucken, versteckt (Antworten haben kein eigenes Symbol)
+        val list = page.annotations.toMutableList()
+        list.add(PDAnnotation.createAnnotation(dict))
+        page.annotations = list
+    }
+
+    fun pdfDate(millis: Long): String {
+        val f = java.text.SimpleDateFormat("yyyyMMddHHmmss", java.util.Locale.US)
+        val tz = java.util.TimeZone.getDefault()
+        val off = tz.getOffset(millis) / 60000
+        val sign = if (off >= 0) "+" else "-"
+        val a = kotlin.math.abs(off)
+        return "D:" + f.format(java.util.Date(millis)) + sign + "%02d'%02d'".format(a / 60, a % 60)
+    }
+
+    /** Liest ein PDF-Datum (D:YYYYMMDDHHmmSS±HH'mm'); null bei unbekanntem Format. */
+    fun parseDate(s: String?): Long? {
+        if (s == null) return null
+        val t = s.removePrefix("D:")
+        if (t.length < 8 || !t.take(8).all { it.isDigit() }) return null
+        val digits = t.takeWhile { it.isDigit() }.padEnd(14, '0').take(14)
+        val cal = java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC"))
+        cal.clear()
+        cal.set(digits.substring(0, 4).toInt(), digits.substring(4, 6).toInt().coerceIn(1, 12) - 1, digits.substring(6, 8).toInt().coerceIn(1, 31),
+            digits.substring(8, 10).toInt(), digits.substring(10, 12).toInt(), digits.substring(12, 14).toInt())
+        val rest = t.drop(t.takeWhile { it.isDigit() }.length)
+        var offsetMin = 0
+        if (rest.isNotEmpty() && (rest[0] == '+' || rest[0] == '-')) {
+            val nums = rest.drop(1).split('\'').filter { it.isNotBlank() }.mapNotNull { it.toIntOrNull() }
+            offsetMin = (nums.getOrElse(0) { 0 } * 60 + nums.getOrElse(1) { 0 }) * if (rest[0] == '-') -1 else 1
+            return cal.timeInMillis - offsetMin * 60000L
+        }
+        if (rest.startsWith("Z")) return cal.timeInMillis
+        // ohne Zeitzone: als Ortszeit deuten
+        return cal.timeInMillis - java.util.TimeZone.getDefault().getOffset(cal.timeInMillis)
+    }
+
     private fun floatArray(values: FloatArray): COSArray {
         val a = COSArray()
         values.forEach { a.add(COSFloat(it)) }
@@ -154,6 +259,7 @@ object Annotator {
             ((colorArgb shr 16) and 0xFF) / 255f, ((colorArgb shr 8) and 0xFF) / 255f, (colorArgb and 0xFF) / 255f,
         )))
         dict.setString(COSName.T, AUTHOR)
+        dict.setString(COSName.M, pdfDate(System.currentTimeMillis()))
         dict.setInt(COSName.F, 4) // Drucken
         if (opacity < 1f) dict.setFloat(COSName.CA, opacity)
     }
@@ -177,6 +283,18 @@ object Annotator {
         val list = page.annotations.toMutableList()
         list.add(annotation)
         page.annotations = list
+    }
+}
+
+data class CommentReply(val author: String, val text: String, val modified: Long?)
+
+data class CommentInfo(
+    val page: Int, val index: Int, val subtype: String, val author: String, val text: String,
+    val modified: Long?, val viewBox: Box, val replies: List<CommentReply>,
+) {
+    val typeTitle: String get() = when (subtype) {
+        "Text" -> "Notiz"; "Highlight" -> "Hervorhebung"; "Underline" -> "Unterstreichung"; "StrikeOut" -> "Durchstreichung"
+        "Ink" -> "Zeichnung"; "FreeText" -> "Textfeld"; "Stamp" -> "Stempel"; else -> "Kommentar"
     }
 }
 

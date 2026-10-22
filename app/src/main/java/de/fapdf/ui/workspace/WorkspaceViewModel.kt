@@ -78,7 +78,7 @@ data class TextSelection(
 data class SearchHit(val page: Int, val viewBox: Box)
 data class DragRect(val page: Int, val box: Box)
 enum class EditTool { TEXT, HIGHLIGHT }
-enum class AnnotTool { SCROLL, HIGHLIGHT, UNDERLINE, STRIKE, NOTE, INK }
+enum class AnnotTool { SCROLL, HIGHLIGHT, UNDERLINE, STRIKE, NOTE, INK, ERASER }
 data class LabelSuggestion(val page: Int, val u: Float, val v: Float, val label: String, val value: String, val size: Float)
 
 class WorkspaceViewModel(app: Application, val docId: Long, initialMode: WorkspaceMode) : AndroidViewModel(app) {
@@ -132,12 +132,14 @@ class WorkspaceViewModel(app: Application, val docId: Long, initialMode: Workspa
     var currentStroke by mutableStateOf<Pair<Int, List<Pair<Float, Float>>>?>(null)
     var noteAt by mutableStateOf<Triple<Int, Float, Float>?>(null)
     val redactRects = mutableStateListOf<DragRect>()
+    var comments by mutableStateOf<List<de.fapdf.pdf.CommentInfo>>(emptyList()); private set
     var redactScroll by mutableStateOf(false)
 
     // Formulare
     var formInfo by mutableStateOf<FormInfo?>(null); private set
     val pendingValues = mutableStateMapOf<String, FieldValue>()
     var editingField by mutableStateOf<FormFieldInfo?>(null)
+    var focusedFieldId by mutableStateOf<String?>(null)
     var formPrompt by mutableStateOf(false)
     var profilePrompt by mutableStateOf(false)
     var autofillPreview by mutableStateOf<Pair<PersonProfile, List<AutofillSuggestion>>?>(null)
@@ -195,6 +197,7 @@ class WorkspaceViewModel(app: Application, val docId: Long, initialMode: Workspa
             PdfPageSource.open(preview) to form
         }
         formInfo = fi
+        comments = withContext(PdfIo.pdfDispatcher) { runCatching { PdfIo.load(file).use { de.fapdf.pdf.Annotator.listComments(it) } }.getOrDefault(emptyList()) }
         pageTexts.clear()
         bitmapCache.clear()
         source = newSource
@@ -543,6 +546,7 @@ class WorkspaceViewModel(app: Application, val docId: Long, initialMode: Workspa
     }
 
     suspend fun loadSignatureBitmap(s: SignatureEntity): Bitmap? = c.signatures.loadBitmap(s)
+    fun saveSignature(bmp: Bitmap, name: String) = viewModelScope.launch { runCatching { c.signatures.save(bmp, name, null) } }
 
     // ---------- Kommentieren & Schwärzen: Ziehen ----------
     fun onDragStart(page: Int, u: Float, v: Float) {
@@ -607,6 +611,25 @@ class WorkspaceViewModel(app: Application, val docId: Long, initialMode: Workspa
         })
     }
 
+    fun deleteComment(ci: de.fapdf.pdf.CommentInfo) {
+        runEdit("Kommentar wird entfernt …", op = { input, out ->
+            PdfIo.transform(input, out) { d -> de.fapdf.pdf.Annotator.deleteComment(d, ci.page, ci.index) }; null
+        })
+    }
+
+    fun replyTo(ci: de.fapdf.pdf.CommentInfo, text: String) {
+        if (text.isBlank()) return
+        runEdit("Antwort wird gespeichert …", op = { input, out ->
+            PdfIo.transform(input, out) { d -> de.fapdf.pdf.Annotator.addReply(d, ci.page, ci.index, text.trim()) }; null
+        })
+    }
+
+    /** Radierer: entfernt den obersten Kommentar an der angetippten Stelle. */
+    fun eraseAt(page: Int, u: Float, v: Float) {
+        val hit = comments.lastOrNull { it.page == page && it.viewBox.inset(6f).contains(u, v) }
+        if (hit == null) message = "Radierer" to "An dieser Stelle befindet sich kein Kommentar." else deleteComment(hit)
+    }
+
     fun redactSearch(term: String) {
         viewModelScope.launch {
             val hits = findAll(term)
@@ -637,14 +660,14 @@ class WorkspaceViewModel(app: Application, val docId: Long, initialMode: Workspa
     // ---------- Formulare ----------
     fun setPending(id: String, v: FieldValue) { pendingValues[id] = v }
 
-    fun applyPendingValues() {
-        if (pendingValues.isEmpty()) return
+    fun applyPendingValues(then: () -> Unit = {}) {
+        if (pendingValues.isEmpty()) { then(); return }
         val values = HashMap(pendingValues)
         var errors: List<String> = emptyList()
         runEdit("Formular wird ausgefüllt …", op = { input, out ->
             PdfIo.transform(input, out) { d -> errors = FormEngine.apply(d, values, c.fonts) }
             if (errors.isEmpty()) null else "Einige Felder konnten nicht gesetzt werden:\n" + errors.joinToString("\n")
-        }, onSuccess = { pendingValues.clear() })
+        }, onSuccess = { pendingValues.clear(); then() })
     }
 
     fun displayValue(f: FormFieldInfo): String = when (val p = pendingValues[f.id]) {

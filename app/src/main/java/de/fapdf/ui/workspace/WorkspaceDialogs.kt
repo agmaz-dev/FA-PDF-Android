@@ -73,6 +73,7 @@ import de.fapdf.pdf.FormFieldInfo
 import de.fapdf.pdf.TextStyle
 import de.fapdf.ui.WorkspaceMode
 import de.fapdf.ui.components.Biometric
+import de.fapdf.ui.components.FileActions
 import de.fapdf.ui.components.PrimaryButton
 import de.fapdf.ui.theme.FaColors
 import kotlinx.coroutines.launch
@@ -403,6 +404,26 @@ fun MoreSheet(vm: WorkspaceViewModel, currentPage: Int, onDismiss: () -> Unit, o
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
+fun EditMoreSheet(
+    highlightActive: Boolean, onDismiss: () -> Unit, onOcr: () -> Unit, onFont: () -> Unit,
+    onHighlight: () -> Unit, onSign: () -> Unit, onMore: () -> Unit,
+) {
+    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = Color.White) {
+        Column(Modifier.padding(horizontal = 20.dp).navigationBarsPadding()) {
+            Text("Weitere Bearbeitungswerkzeuge", style = MaterialTheme.typography.titleMedium)
+            Spacer(Modifier.height(8.dp))
+            SheetItem("Texterkennung (OCR)", "Gescannte Seiten bearbeitbar machen – Deutsch, Englisch, Türkisch") { onOcr() }
+            SheetItem("Schrift für neuen Text", "Schriftart, Größe, Farbe, Fett/Kursiv und Ausrichtung") { onFont() }
+            SheetItem(if (highlightActive) "Text markieren beenden" else "Text markieren", "Über Text ziehen, um ihn farbig hervorzuheben") { onHighlight() }
+            SheetItem("Unterschrift einfügen") { onSign() }
+            SheetItem("Seite, Lesezeichen, Drucken, Export …") { onMore() }
+            Spacer(Modifier.height(16.dp))
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
 fun SaveSheet(hasSource: Boolean, onSave: (Boolean) -> Unit, onExport: () -> Unit, onPrint: () -> Unit, onShare: () -> Unit, onDismiss: () -> Unit) {
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(Modifier.padding(horizontal = 20.dp).navigationBarsPadding()) {
@@ -423,27 +444,122 @@ fun SaveSheet(hasSource: Boolean, onSave: (Boolean) -> Unit, onExport: () -> Uni
 fun SignatureSheet(vm: WorkspaceViewModel, onDismiss: () -> Unit, onNew: () -> Unit, onPick: (Bitmap) -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val density = androidx.compose.ui.platform.LocalDensity.current.density
     val sigs by vm.signatures().collectAsState(initial = emptyList())
     var locked by remember { mutableStateOf<Boolean?>(null) }
     LaunchedEffect(Unit) { locked = vm.settings().biometricLock }
-    ModalBottomSheet(onDismissRequest = onDismiss) {
-        Column(Modifier.padding(horizontal = 20.dp).navigationBarsPadding()) {
-            Text("Unterschrift wählen", style = MaterialTheme.typography.titleMedium)
-            Text("Die Unterschrift wird erst eingesetzt, wenn Sie die Position bestätigen. Es handelt sich um eine einfache elektronische Unterschrift (Bild), nicht um eine qualifizierte Signatur.", style = MaterialTheme.typography.bodySmall, color = FaColors.SecondaryLabel)
+    val tabs = listOf("Gespeichert", "Zeichnen", "Tippen", "Bild")
+    var tab by remember { mutableStateOf(-1) }
+    LaunchedEffect(sigs.isEmpty()) { if (tab == -1) tab = if (sigs.isEmpty()) 1 else 0 }
+    val pad = remember { de.fapdf.ui.components.SignaturePadState() }
+    var typed by remember { mutableStateOf("") }
+    var photo by remember { mutableStateOf<Bitmap?>(null) }
+    var color by remember { mutableStateOf(0xFF111111.toInt()) }
+    var keep by remember { mutableStateOf(true) }
+    val photoPicker = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        if (uri != null) {
+            val raw = decodeBitmap(context, uri)
+            photo = raw?.let { de.fapdf.ui.components.SignatureRender.fromPhoto(it) }
+            if (raw == null) FileActions.toast(context, "Bild konnte nicht geladen werden")
+        }
+    }
+    val sheetState = androidx.compose.material3.rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState, containerColor = Color.White) {
+        Column(Modifier.padding(horizontal = 4.dp).navigationBarsPadding()) {
+            Text("Unterschrift erstellen", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(horizontal = 16.dp))
             Spacer(Modifier.height(8.dp))
-            if (sigs.isEmpty()) Text("Noch keine Unterschrift gespeichert.", modifier = Modifier.padding(vertical = 12.dp))
-            LazyColumn(Modifier.heightIn(max = 360.dp)) {
-                items(sigs, key = { it.id }) { s ->
-                    SignatureRow(vm, s, showThumb = locked == false) {
-                        val load: () -> Unit = { scope.launch { vm.loadSignatureBitmap(s)?.let(onPick) } }
-                        if (locked == true) Biometric.authenticate(context, "Unterschrift freigeben") { ok -> if (ok) load() } else load()
+            de.fapdf.ui.components.UnderlineTabs(tabs, tab.coerceAtLeast(0)) { tab = it }
+            Spacer(Modifier.height(12.dp))
+            when (tab) {
+                0 -> {
+                    if (sigs.isEmpty()) Text("Noch keine Unterschrift gespeichert.", Modifier.padding(16.dp), color = FaColors.SecondaryLabel)
+                    LazyColumn(Modifier.heightIn(max = 320.dp).padding(horizontal = 16.dp)) {
+                        items(sigs, key = { it.id }) { s ->
+                            SignatureRow(vm, s, showThumb = locked == false) {
+                                val load: () -> Unit = { scope.launch { vm.loadSignatureBitmap(s)?.let(onPick) } }
+                                if (locked == true) Biometric.authenticate(context, "Unterschrift freigeben") { ok -> if (ok) load() } else load()
+                            }
+                        }
+                    }
+                    TextButton(onClick = onNew, modifier = Modifier.padding(horizontal = 8.dp)) { Text("Unterschriften verwalten") }
+                }
+                1 -> {
+                    Box(Modifier.padding(horizontal = 16.dp)) { de.fapdf.ui.components.SignaturePad(pad) }
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(onClick = { pad.clear() }) { Icon(Icons.Outlined.Delete, "Löschen", tint = FaColors.Destructive) }
+                        TextButton(onClick = { pad.undo() }, enabled = !pad.isEmpty) { Text("Rückgängig") }
+                        Spacer(Modifier.weight(1f))
+                        InkColors(color) { color = it; pad.colorArgb = it }
+                    }
+                }
+                2 -> {
+                    de.fapdf.ui.components.LabeledField("Name", typed, { typed = it }, hint = "Wird in Schreibschrift gesetzt.")
+                    val preview = remember(typed, color) { de.fapdf.ui.components.SignatureRender.typed(typed, color) }
+                    Box(
+                        Modifier.padding(16.dp).fillMaxWidth().height(110.dp).clip(RoundedCornerShape(14.dp))
+                            .background(Color(0xFFF7F8FA)),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        if (preview != null) Image(preview.asImageBitmap(), "Vorschau", Modifier.padding(12.dp))
+                        else Text("Vorschau", color = FaColors.SecondaryLabel)
+                    }
+                    Row(Modifier.padding(horizontal = 16.dp)) { Spacer(Modifier.weight(1f)); InkColors(color) { color = it } }
+                }
+                3 -> {
+                    Box(
+                        Modifier.padding(horizontal = 16.dp).fillMaxWidth().height(150.dp).clip(RoundedCornerShape(14.dp))
+                            .background(Color(0xFFF7F8FA)).clickable {
+                                photoPicker.launch(androidx.activity.result.PickVisualMediaRequest(androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly))
+                            },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        val ph = photo
+                        if (ph != null) Image(ph.asImageBitmap(), "Unterschrift", Modifier.padding(12.dp))
+                        else Text("Foto einer Unterschrift auswählen", color = FaColors.Accent)
+                    }
+                    Text(
+                        "Der helle Papierhintergrund wird automatisch entfernt.",
+                        Modifier.padding(horizontal = 16.dp, vertical = 6.dp), style = MaterialTheme.typography.bodySmall, color = FaColors.SecondaryLabel,
+                    )
+                }
+            }
+            if (tab in 1..3) {
+                Row(Modifier.padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(keep, { keep = it }); Text("Für später speichern", style = MaterialTheme.typography.bodyMedium)
+                }
+                val bmp: () -> Bitmap? = {
+                    when (tab) {
+                        1 -> pad.render(density)
+                        2 -> de.fapdf.ui.components.SignatureRender.typed(typed, color)
+                        else -> photo
+                    }
+                }
+                val ready = when (tab) { 1 -> !pad.isEmpty; 2 -> typed.isNotBlank(); else -> photo != null }
+                de.fapdf.ui.components.FaButton("Unterschrift einfügen", enabled = ready) {
+                    val b = bmp()
+                    if (b != null) {
+                        if (keep) vm.saveSignature(b, if (tab == 2) typed.trim() else "Unterschrift ${sigs.size + 1}")
+                        onPick(b)
                     }
                 }
             }
-            Spacer(Modifier.height(8.dp))
-            OutlinedButton(onClick = onNew, modifier = Modifier.fillMaxWidth()) { Text("Neue Unterschrift zeichnen") }
-            Spacer(Modifier.height(16.dp))
+            Text(
+                "Einfache elektronische Unterschrift (Bild), keine qualifizierte Signatur. Sie wird erst nach Ihrer Bestätigung eingesetzt.",
+                Modifier.padding(horizontal = 16.dp, vertical = 8.dp), style = MaterialTheme.typography.bodySmall, color = FaColors.SecondaryLabel,
+            )
         }
+    }
+}
+
+@Composable
+private fun InkColors(selected: Int, onSelect: (Int) -> Unit) {
+    listOf(0xFF111111.toInt(), 0xFF1F3FB0.toInt(), 0xFFB3261E.toInt()).forEach { c ->
+        Box(
+            Modifier.padding(horizontal = 5.dp).size(if (c == selected) 28.dp else 22.dp).clip(androidx.compose.foundation.shape.CircleShape)
+                .background(Color(c)).clickable { onSelect(c) }
+        )
     }
 }
 
