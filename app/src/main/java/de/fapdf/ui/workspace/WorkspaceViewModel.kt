@@ -306,7 +306,19 @@ class WorkspaceViewModel(app: Application, val docId: Long, initialMode: Workspa
         }
     }
 
-    fun save(alsoOriginal: Boolean, onDone: () -> Unit = {}) {
+    /** Kurze Rückmeldung ohne Dialog (wird als Toast angezeigt). */
+    var toast by mutableStateOf<String?>(null)
+
+    /**
+     * Speichern mit einem Tipp: offene Formularwerte übernehmen und im Dokument speichern –
+     * ohne Auswahlfenster und ohne Bestätigungsdialog. Weitere Optionen (Export, Original
+     * überschreiben) bleiben über das ⋮-Menü erreichbar.
+     */
+    fun quickSave() {
+        applyPendingValues { save(alsoOriginal = false, quiet = true) }
+    }
+
+    fun save(alsoOriginal: Boolean, quiet: Boolean = false, onDone: () -> Unit = {}) {
         val f = current ?: return
         viewModelScope.launch {
             busy = "Speichern …"
@@ -317,7 +329,8 @@ class WorkspaceViewModel(app: Application, val docId: Long, initialMode: Workspa
                 savedIndex = index; dirty = false
                 doc = c.documents.get(docId)
                 if (wasEncrypted) extra += "\nHinweis: Das Dokument war verschlüsselt und wurde ohne Passwortschutz gespeichert. Über „PDF verschlüsseln“ können Sie es erneut schützen."
-                message = "Gespeichert" to ("Die Änderungen wurden gespeichert.$extra")
+                if (quiet && !wasEncrypted) toast = "Gespeichert"
+                else message = "Gespeichert" to ("Die Änderungen wurden gespeichert.$extra")
                 onDone()
             } catch (e: Exception) {
                 message = "Fehler" to (e.message ?: "Speichern fehlgeschlagen")

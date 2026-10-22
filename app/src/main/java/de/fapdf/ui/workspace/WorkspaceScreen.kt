@@ -27,6 +27,8 @@ import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -235,7 +237,7 @@ fun WorkspaceScreen(
                         IconButton(onClick = vm::undo, enabled = vm.canUndo) { Icon(Icons.AutoMirrored.Outlined.Undo, "Rückgängig") }
                         IconButton(onClick = vm::redo, enabled = vm.canRedo) { Icon(Icons.AutoMirrored.Outlined.Redo, "Wiederherstellen") }
                         Button(
-                            onClick = { showSave = true },
+                            onClick = { vm.quickSave() },
                             shape = RoundedCornerShape(10.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = FaColors.Accent),
                             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
@@ -249,7 +251,7 @@ fun WorkspaceScreen(
                                     leadingIcon = { Icon(Icons.AutoMirrored.Outlined.Undo, null) })
                                 DropdownMenuItem(text = { Text("Wiederherstellen") }, enabled = vm.canRedo, onClick = { overflow = false; vm.redo() },
                                     leadingIcon = { Icon(Icons.AutoMirrored.Outlined.Redo, null) })
-                                DropdownMenuItem(text = { Text("Speichern") }, onClick = {
+                                DropdownMenuItem(text = { Text("Speichern unter / Optionen …") }, onClick = {
                                     overflow = false
                                     if (vm.mode == WorkspaceMode.FORM && vm.pendingValues.isNotEmpty()) vm.applyPendingValues { showSave = true } else showSave = true
                                 }, leadingIcon = { Icon(Icons.Outlined.Save, null) })
@@ -284,7 +286,7 @@ fun WorkspaceScreen(
                         imagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
                     }, onDraw = {
                         vm.switchMode(WorkspaceMode.ANNOTATE); vm.annotTool = AnnotTool.INK
-                    }, onSave = { showSave = true })
+                    }, onSave = { vm.quickSave() })
                 }
             }
         },
@@ -339,7 +341,11 @@ fun WorkspaceScreen(
     }
 
     // ---------- Dialoge ----------
-    vm.busy?.let { BusyDialog(it) }
+    // Kurze Arbeitsschritte ohne Pop-up: dezente Fortschrittsanzeige über der Seite
+    vm.busy?.let { BusyOverlay(it) }
+    LaunchedEffect(vm.toast) {
+        vm.toast?.let { FileActions.toast(context, it); vm.toast = null }
+    }
     vm.message?.let { (t, m) -> MessageDialog(t, m) { vm.message = null } }
     vm.loadError?.let { MessageDialog("Fehler beim Öffnen", it) { onBack() } }
     if (vm.needsPassword) PasswordDialog(
@@ -436,7 +442,7 @@ fun WorkspaceScreen(
             if (vm.formInfo?.hasFields == true) vm.prepareAutofill(profile) else vm.detectFlatFormLabels(profile)
         }
         "jump" -> PageJumpDialog(source?.pageCount ?: 1, onDismiss = { sheet = null }) { p -> sheet = null; scope.launch { listState.scrollToItem(p) } }
-        "redact" -> RedactOptionsDialog(vm.redactRects.size, onDismiss = { sheet = null }) { raster, meta -> sheet = null; vm.applyRedaction(raster, meta) { showSave = true } }
+        "redact" -> RedactOptionsDialog(vm.redactRects.size, onDismiss = { sheet = null }) { raster, meta -> sheet = null; vm.applyRedaction(raster, meta) { vm.quickSave() } }
         "grid" -> source?.let { src -> PageGridSheet(src, currentPage, onDismiss = { sheet = null }) { p -> sheet = null; scope.launch { listState.scrollToItem(p) } } }
         "redactsearch" -> TextInputDialog("Begriff schwärzen", "Alle Fundstellen des Begriffs im Dokument werden zum Schwärzen markiert.", "Suchbegriff", onDismiss = { sheet = null }) { sheet = null; vm.redactSearch(it) }
     }
@@ -927,3 +933,23 @@ fun decodeBitmap(context: android.content.Context, uri: Uri): Bitmap? = runCatch
         context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, BitmapFactory.Options().apply { inSampleSize = sample }) }
     }
 }.getOrNull()
+
+
+/** Nicht-modale Fortschrittsanzeige (statt eines Dialogfensters); blockiert nur Eingaben. */
+@Composable
+private fun BusyOverlay(text: String) {
+    Box(
+        Modifier.fillMaxSize().pointerInput(Unit) { awaitPointerEventScope { while (true) awaitPointerEvent().changes.forEach { it.consume() } } },
+        contentAlignment = Alignment.TopCenter,
+    ) {
+        Row(
+            Modifier.statusBarsPadding().padding(top = 64.dp).clip(RoundedCornerShape(20.dp)).background(FaColors.Label.copy(alpha = 0.88f))
+                .padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            androidx.compose.material3.CircularProgressIndicator(Modifier.size(18.dp), color = FaColors.Background, strokeWidth = 2.dp)
+            Spacer(Modifier.width(10.dp))
+            Text(text, color = FaColors.Background, style = MaterialTheme.typography.labelLarge)
+        }
+    }
+}
