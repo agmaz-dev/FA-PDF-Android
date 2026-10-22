@@ -19,6 +19,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -39,6 +40,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CenterAlignedTopAppBar
+import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -94,21 +96,34 @@ fun ScreenScaffold(
     title: String,
     onBack: (() -> Unit)?,
     actions: @Composable () -> Unit = {},
+    actionText: String? = null,
+    actionEnabled: Boolean = true,
+    onAction: () -> Unit = {},
     bottomBar: @Composable () -> Unit = {},
     content: @Composable (Modifier) -> Unit,
 ) {
     Scaffold(
         containerColor = FaColors.Background,
         topBar = {
-            CenterAlignedTopAppBar(
+            TopAppBar(
                 title = { Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleMedium) },
                 navigationIcon = {
                     if (onBack != null) IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Zurück", tint = FaColors.Accent)
+                        Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Zurück", tint = FaColors.Label)
                     }
                 },
-                actions = { actions() },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = FaColors.Background),
+                actions = {
+                    actions()
+                    if (actionText != null) {
+                        Button(
+                            onClick = onAction, enabled = actionEnabled, shape = RoundedCornerShape(8.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = FaColors.Accent),
+                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 14.dp, vertical = 6.dp),
+                            modifier = Modifier.padding(end = 8.dp),
+                        ) { Text(actionText, style = MaterialTheme.typography.labelMedium) }
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = FaColors.Background),
             )
         },
         bottomBar = bottomBar,
@@ -127,7 +142,8 @@ fun SectionTitle(text: String, modifier: Modifier = Modifier) {
 @Composable
 fun GroupCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
     Column(
-        modifier.padding(horizontal = 16.dp).fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Color.White),
+        modifier.padding(horizontal = 16.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(FaColors.Card)
+            .border(1.dp, FaColors.CardBorder, RoundedCornerShape(12.dp)),
         content = content,
     )
 }
@@ -164,8 +180,8 @@ fun GroupRow(
 fun PrimaryButton(text: String, modifier: Modifier = Modifier, enabled: Boolean = true, color: Color = FaColors.Accent, onClick: () -> Unit) {
     Button(
         onClick = onClick, enabled = enabled,
-        modifier = modifier.fillMaxWidth().height(50.dp),
-        shape = RoundedCornerShape(13.dp),
+        modifier = modifier.fillMaxWidth().height(52.dp),
+        shape = RoundedCornerShape(12.dp),
         colors = ButtonDefaults.buttonColors(containerColor = color),
     ) { Text(text, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold) }
 }
@@ -237,7 +253,7 @@ fun PasswordDialog(title: String, message: String, onConfirm: (String) -> Unit, 
 fun InfoBanner(text: String, color: Color = FaColors.Accent, action: Pair<String, () -> Unit>? = null) {
     Row(
         Modifier.padding(horizontal = 16.dp, vertical = 6.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp))
-            .background(color.copy(alpha = 0.12f)).padding(12.dp),
+            .background(color.copy(alpha = 0.09f)).padding(12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {

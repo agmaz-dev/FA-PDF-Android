@@ -8,6 +8,27 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.GridView
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.outlined.CropFree
+import androidx.compose.material.icons.outlined.Description
+import androidx.compose.material.icons.outlined.GridView
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Scaffold
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.text.style.TextAlign
+import de.fapdf.ui.settings.SettingsScreen
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -93,9 +114,13 @@ interface HomeNav {
     fun settings()
 }
 
+/**
+ * Startseite nach Designvorlage: drei Bereiche (Dokumente | Werkzeuge | Einstellungen)
+ * über die untere Leiste – oder per Wischen (nach rechts → Dokumente).
+ */
 @Composable
 fun HomeScreen(vm: AppViewModel, nav: HomeNav) {
-    val pager = rememberPagerState(initialPage = 1) { 2 }
+    val pager = rememberPagerState(initialPage = 1) { 3 }
     val scope = rememberCoroutineScope()
     val docs by vm.documents.collectAsState()
     var chooserFor by remember { mutableStateOf<Tool?>(null) }
@@ -103,35 +128,42 @@ fun HomeScreen(vm: AppViewModel, nav: HomeNav) {
         if (uri != null) vm.import(uri, persist = true)
     }
 
-    Column(Modifier.fillMaxSize().background(FaColors.Background).statusBarsPadding()) {
-        Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 8.dp, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("FA PDF", style = MaterialTheme.typography.displaySmall, modifier = Modifier.weight(1f))
-            IconButton(onClick = { opener.launch(arrayOf("application/pdf")) }) { Icon(Icons.Outlined.FolderOpen, "PDF öffnen", tint = FaColors.Accent) }
-            IconButton(onClick = nav::profiles) { Icon(Icons.Outlined.People, "Profile", tint = FaColors.Accent) }
-            IconButton(onClick = nav::signatures) { Icon(Icons.Outlined.Draw, "Unterschriften", tint = FaColors.Accent) }
-            IconButton(onClick = nav::settings) { Icon(Icons.Outlined.Settings, "Einstellungen", tint = FaColors.Accent) }
-        }
-        // Segment-Umschalter wie in iOS; Wischen nach rechts öffnet „Letzte Dokumente“
-        Row(
-            Modifier.padding(horizontal = 20.dp, vertical = 8.dp).fillMaxWidth().clip(RoundedCornerShape(9.dp))
-                .background(Color(0xFFE3E3E8)).padding(2.dp)
-        ) {
-            listOf("Letzte Dokumente", "Werkzeuge").forEachIndexed { i, t ->
-                val selected = pager.currentPage == i
-                val bg by animateColorAsState(if (selected) Color.White else Color.Transparent, label = "seg")
-                Box(
-                    Modifier.weight(1f).clip(RoundedCornerShape(7.dp)).background(bg)
-                        .clickable { scope.launch { pager.animateScrollToPage(i) } }.padding(vertical = 7.dp),
-                    contentAlignment = Alignment.Center,
-                ) { Text(t, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal, fontSize = 14.sp) }
-            }
-        }
-        HorizontalPager(state = pager, modifier = Modifier.weight(1f), beyondViewportPageCount = 1) { page ->
-            if (page == 0) RecentDocuments(vm, docs) else ToolsGrid { tool ->
-                when {
-                    !tool.needsDocument -> nav.tool(tool, null)
-                    else -> chooserFor = tool
+    Scaffold(
+        containerColor = FaColors.Background,
+        bottomBar = {
+            NavigationBar(containerColor = Color.White, tonalElevation = 0.dp, modifier = Modifier.shadow(8.dp)) {
+                listOf(
+                    Triple("Dokumente", Icons.Outlined.Description, Icons.Filled.Description),
+                    Triple("Werkzeuge", Icons.Outlined.GridView, Icons.Filled.GridView),
+                    Triple("Einstellungen", Icons.Outlined.Settings, Icons.Filled.Settings),
+                ).forEachIndexed { i, (label, icon, iconSel) ->
+                    val sel = pager.currentPage == i
+                    NavigationBarItem(
+                        selected = sel, onClick = { scope.launch { pager.animateScrollToPage(i) } },
+                        icon = { Icon(if (sel) iconSel else icon, label) },
+                        label = { Text(label, style = MaterialTheme.typography.labelMedium) },
+                        colors = NavigationBarItemDefaults.colors(
+                            selectedIconColor = FaColors.Accent, selectedTextColor = FaColors.Accent,
+                            indicatorColor = Color.Transparent, unselectedIconColor = FaColors.SecondaryLabel,
+                            unselectedTextColor = FaColors.SecondaryLabel,
+                        ),
+                    )
                 }
+            }
+        },
+    ) { padding ->
+        HorizontalPager(state = pager, modifier = Modifier.padding(padding).fillMaxSize(), beyondViewportPageCount = 1) { page ->
+            when (page) {
+                0 -> Column(Modifier.fillMaxSize().statusBarsPadding()) {
+                    Text("Dokumente", style = MaterialTheme.typography.headlineMedium, modifier = Modifier.padding(start = 20.dp, top = 16.dp, bottom = 8.dp))
+                    RecentDocuments(vm, docs)
+                }
+                1 -> ToolsHome(
+                    onOpen = { opener.launch(arrayOf("application/pdf")) },
+                    onScan = { nav.tool(Tool.SCANNER, null) },
+                    onProfile = nav::profiles,
+                ) { tool -> if (!tool.needsDocument) nav.tool(tool, null) else chooserFor = tool }
+                else -> SettingsScreen(vm, onBack = null, onProfiles = nav::profiles, onSignatures = nav::signatures)
             }
         }
     }
@@ -156,31 +188,107 @@ private fun openTool(nav: HomeNav, tool: Tool, docId: Long) {
 }
 
 @Composable
-private fun ToolsGrid(onTool: (Tool) -> Unit) {
-    Row(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 8.dp).navigationBarsPadding()) {
-        Column(Modifier.weight(1f)) {
-            listOf(ToolCategory.ORGANIZE, ToolCategory.EDIT).forEach { CategoryBlock(it, onTool) }
+private fun ToolsHome(onOpen: () -> Unit, onScan: () -> Unit, onProfile: () -> Unit, onTool: (Tool) -> Unit) {
+    var query by remember { mutableStateOf("") }
+    BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+        // Auf Tablets bleibt der Inhalt lesbar breit und mittig
+        val contentWidth = if (maxWidth > 900.dp) 900.dp else maxWidth
+        val cols = ((contentWidth - 32.dp) / 118.dp).toInt().coerceIn(3, 6)
+        Column(
+            Modifier.width(contentWidth).fillMaxHeight().verticalScroll(rememberScrollState()).statusBarsPadding()
+                .padding(horizontal = 16.dp)
+        ) {
+            Row(Modifier.fillMaxWidth().padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Filled.Description, null, tint = FaColors.Accent, modifier = Modifier.size(34.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("FA PDF", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                Box(
+                    Modifier.size(44.dp).clip(CircleShape).background(FaColors.AccentLight).clickable(onClick = onProfile),
+                    contentAlignment = Alignment.Center,
+                ) { Icon(Icons.Filled.Person, "Profile", tint = FaColors.Accent, modifier = Modifier.size(26.dp)) }
+            }
+            Text("Deine PDF-Werkzeuge", style = MaterialTheme.typography.headlineMedium, modifier = Modifier.padding(top = 18.dp))
+            Text("Alles für deine Dokumente", style = MaterialTheme.typography.bodyLarge, color = FaColors.SecondaryLabel)
+            OutlinedTextField(
+                query, { query = it }, Modifier.fillMaxWidth().padding(top = 14.dp), singleLine = true,
+                leadingIcon = { Icon(Icons.Outlined.Search, null) }, placeholder = { Text("Werkzeug suchen") },
+                shape = RoundedCornerShape(12.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    unfocusedContainerColor = FaColors.Card, focusedContainerColor = Color.White,
+                    unfocusedBorderColor = FaColors.CardBorder,
+                ),
+            )
+            Row(Modifier.fillMaxWidth().padding(top = 14.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Button(
+                    onClick = onOpen, modifier = Modifier.weight(1f).height(54.dp), shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = FaColors.Accent),
+                ) { Icon(Icons.Outlined.FolderOpen, null); Spacer(Modifier.width(10.dp)); Text("PDF öffnen", style = MaterialTheme.typography.labelLarge) }
+                Button(
+                    onClick = onScan, modifier = Modifier.weight(1f).height(54.dp), shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = FaColors.AccentLight, contentColor = FaColors.Accent),
+                ) { Icon(Icons.Outlined.CropFree, null); Spacer(Modifier.width(10.dp)); Text("Scannen", style = MaterialTheme.typography.labelLarge) }
+            }
+            val q = query.trim()
+            if (q.isNotEmpty()) {
+                val hits = Tool.entries.filter { it.title.contains(q, ignoreCase = true) || it.category.title.contains(q, ignoreCase = true) }
+                Spacer(Modifier.height(18.dp))
+                if (hits.isEmpty()) Text("Kein Werkzeug gefunden.", color = FaColors.SecondaryLabel)
+                TileGrid(hits, cols, onTool)
+            } else {
+                ToolCategory.entries.forEach { cat ->
+                    Row(Modifier.padding(top = 22.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(cat.headerIcon, null, tint = cat.color, modifier = Modifier.size(26.dp))
+                        Spacer(Modifier.width(10.dp))
+                        Text(cat.title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    }
+                    val tools = Tool.byCategory(cat)
+                    when (cat) {
+                        ToolCategory.SIGN -> TileGrid(tools, ((cols + 1) / 2).coerceAtLeast(2), onTool)
+                        ToolCategory.SCAN -> TileGrid(tools, cols, onTool, horizontal = true)
+                        else -> TileGrid(tools, cols, onTool)
+                    }
+                }
+            }
+            Spacer(Modifier.height(24.dp))
         }
-        Column(Modifier.weight(1f)) {
-            listOf(ToolCategory.SIGN, ToolCategory.ENCRYPT, ToolCategory.AI, ToolCategory.SCAN).forEach { CategoryBlock(it, onTool) }
+    }
+}
+
+/** Kachelraster: farbiger Hintergrund, Symbol in Kategoriefarbe, Text mittig. */
+@Composable
+private fun TileGrid(tools: List<Tool>, cols: Int, onTool: (Tool) -> Unit, horizontal: Boolean = false) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        tools.chunked(cols).forEach { row ->
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                row.forEach { tool -> ToolTile(tool, Modifier.weight(1f), horizontal) { onTool(tool) } }
+                repeat(cols - row.size) { Spacer(Modifier.weight(1f)) }
+            }
         }
     }
 }
 
 @Composable
-private fun CategoryBlock(cat: ToolCategory, onTool: (Tool) -> Unit) {
-    Text(cat.title, color = FaColors.SecondaryLabel, fontSize = 15.sp, modifier = Modifier.padding(start = 10.dp, top = 18.dp, bottom = 6.dp))
-    Tool.byCategory(cat).forEach { tool ->
-        Row(
-            Modifier.fillMaxWidth().heightIn(min = 52.dp).clip(RoundedCornerShape(12.dp)).clickable { onTool(tool) }.padding(horizontal = 8.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            ToolIconBox(tool.icon, tool.iconColor, tool.iconTint, size = 36.dp)
-            Spacer(Modifier.width(10.dp))
-            Column {
-                Text(tool.title, fontSize = 15.sp, color = FaColors.Label, lineHeight = 18.sp)
-                if (tool.limitedNote != null) Text(tool.limitedNote, fontSize = 10.sp, color = FaColors.SecondaryLabel, lineHeight = 12.sp)
-            }
+private fun ToolTile(tool: Tool, modifier: Modifier, horizontal: Boolean, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(12.dp)
+    val box = modifier.heightIn(min = if (horizontal) 64.dp else 98.dp).clip(shape).background(tool.tileColor).clickable(onClick = onClick)
+    val icon: @Composable () -> Unit = {
+        val t = tool.iconText
+        if (t != null) Text(t, color = tool.iconColor, fontWeight = FontWeight.Bold, fontSize = 22.sp)
+        else Icon(tool.icon, null, tint = tool.iconColor, modifier = Modifier.size(30.dp))
+    }
+    if (horizontal) {
+        Row(box.padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            icon(); Spacer(Modifier.width(12.dp))
+            Text(tool.title, style = MaterialTheme.typography.bodyMedium, color = FaColors.Label)
+        }
+    } else {
+        Column(box.padding(horizontal = 6.dp, vertical = 12.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+            icon()
+            Spacer(Modifier.height(8.dp))
+            Text(
+                tool.title, style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp, lineHeight = 16.sp),
+                color = FaColors.Label, textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis,
+            )
         }
     }
 }

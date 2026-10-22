@@ -68,7 +68,7 @@ fun AppNav(appVm: AppViewModel) {
         }
         composable("signatures") { SignaturesScreen(appVm, onBack = { nav.popBackStack() }) { nav.navigate("signaturePad") } }
         composable("signaturePad") { SignaturePadScreen(appVm) { nav.popBackStack() } }
-        composable("settings") { SettingsScreen(appVm) { nav.popBackStack() } }
+        composable("settings") { SettingsScreen(appVm, onBack = { nav.popBackStack() }, onProfiles = { nav.navigate("profiles") }, onSignatures = { nav.navigate("signatures") }) }
     }
     // Neue Datei aus einer anderen App → zurück zur Startseite, dort erscheint das Aktionsmenü
     val pending = appVm.actionDocId

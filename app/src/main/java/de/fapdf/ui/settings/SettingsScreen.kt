@@ -3,6 +3,9 @@ package de.fapdf.ui.settings
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.layout.Column
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Draw
+import androidx.compose.material.icons.outlined.People
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -41,7 +44,7 @@ import de.fapdf.ui.theme.FaColors
 import kotlinx.coroutines.launch
 
 @Composable
-fun SettingsScreen(appVm: AppViewModel, onBack: () -> Unit) {
+fun SettingsScreen(appVm: AppViewModel, onBack: (() -> Unit)?, onProfiles: () -> Unit = {}, onSignatures: () -> Unit = {}) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val repo = appVm.container.settings
@@ -55,6 +58,11 @@ fun SettingsScreen(appVm: AppViewModel, onBack: () -> Unit) {
     }
     ScreenScaffold("Einstellungen", onBack) { mod ->
         Column(mod.fillMaxSize().verticalScroll(rememberScrollState())) {
+            SectionTitle("Persönliche Daten")
+            GroupCard {
+                GroupRow("Familienprofile", "Daten für das automatische Ausfüllen von Formularen", Icons.Outlined.People, onClick = onProfiles)
+                GroupRow("Unterschriften", "Gespeicherte Unterschriften verwalten", Icons.Outlined.Draw, showDivider = false, onClick = onSignatures)
+            }
             SectionTitle("Datenschutz")
             GroupCard {
                 GroupRow(
