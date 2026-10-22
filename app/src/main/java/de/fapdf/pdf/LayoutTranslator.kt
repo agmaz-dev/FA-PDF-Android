@@ -107,8 +107,12 @@ object LayoutTranslator {
             val digital = list.filter { it.first.lineIds.isNotEmpty() }
             val scanned = list.filter { it.first.ocrBoxes.isNotEmpty() }
             val encoders = HashMap<TransUnit, TextRunEncoder>()
+            // Hindernisse für die Breitenberechnung: alle Textzeilen der Seite (auch nicht übersetzte, z. B. Zahlen)
+            val obstacles = ArrayList<Pair<Box, Set<Int>>>()
+            list.forEach { (u, _) -> obstacles.add(u.box to emptySet()) }
             if (digital.isNotEmpty()) {
                 val pt = PageAnalyzer.analyze(doc, page)
+                pt.lines.forEach { l -> obstacles.add(pt.viewBoxOf(l) to setOf(l.id)) }
                 // Originalschrift je Absatz: so bleibt das Schriftbild erhalten, wo die Glyphen vorhanden sind
                 for ((u, _) in digital) {
                     val fontId = pt.lines.getOrNull(u.lineIds.first())?.fontId ?: continue
@@ -146,35 +150,50 @@ object LayoutTranslator {
                 bmp.recycle()
             }
             val cb = ContentBuilder(PdfIo.resourcesOf(pdPage))
-            val minLeft = list.minOf { it.first.box.left }.coerceIn(10f, g.viewWidth / 4f)
+            val margin = list.minOf { it.first.box.left }.coerceIn(10f, g.viewWidth / 4f)
             for ((u, translated) in list) {
                 val enc = encoders[u] ?: TextRunEncoder(null, emptyMap()) { cache.get(u.family, u.bold, u.italic) }
-                drawFitted(cb, enc, g, u, translated, availableRight(u, list.map { it.first }, g.viewWidth - minLeft))
+                val own = obstacles.filter { (b, ids) -> (ids.isNotEmpty() && ids.all { it in u.lineIds }) || b == u.box }.map { it.first }.toSet()
+                val others = obstacles.map { it.first }.filter { it !in own }
+                val (l, r) = availableSpan(u, others, margin, g.viewWidth - margin)
+                drawFitted(cb, enc, g, u, translated, l, r)
             }
             PdfIo.appendToPage(doc, pdPage, cb.tokens)
         }
     }
 
     /**
-     * Rechte Grenze, bis zu der eine linksbündige Übersetzung wachsen darf: bis kurz vor den nächsten
-     * Textblock rechts daneben (gleiche Höhe) bzw. bis zum rechten Seitenrand. So werden längere
-     * Übersetzungen nicht unnötig klein, überdecken aber keine Nachbarspalte.
+     * Waagerechter Bereich, in dem die Übersetzung stehen darf: Sie darf über die Breite des Originals
+     * hinaus wachsen – bis kurz vor den nächsten Text links/rechts auf gleicher Höhe bzw. bis zum Seitenrand.
+     * So werden längere Übersetzungen nicht unnötig klein, überdecken aber keine Nachbarspalte.
      */
-    fun availableRight(u: TransUnit, all: List<TransUnit>, pageRight: Float): Float {
-        if (u.alignment != Alignment.LEFT) return u.box.right
-        var right = pageRight
-        for (o in all) {
-            if (o === u || o.page != u.page) continue
-            val verticalOverlap = o.box.top < u.box.bottom + u.size * 0.3f && u.box.top < o.box.bottom + o.size * 0.3f
-            if (verticalOverlap && o.box.left >= u.box.right - 1f) right = minOf(right, o.box.left - 0.6f * u.size)
+    fun availableSpan(u: TransUnit, others: List<Box>, pageLeft: Float, pageRight: Float): Pair<Float, Float> {
+        var leftLimit = minOf(pageLeft, u.box.left)
+        var rightLimit = maxOf(pageRight, u.box.right)
+        val gap = 0.6f * u.size
+        for (o in others) {
+            val verticalOverlap = o.top < u.box.bottom + u.size * 0.2f && u.box.top < o.bottom + u.size * 0.2f
+            if (!verticalOverlap) continue
+            if (o.left >= u.box.right - 1f) rightLimit = minOf(rightLimit, o.left - gap)
+            else if (o.right <= u.box.left + 1f) leftLimit = maxOf(leftLimit, o.right + gap)
         }
-        return max(right, u.box.right)
+        rightLimit = max(rightLimit, u.box.right)
+        leftLimit = minOf(leftLimit, u.box.left)
+        return when (u.alignment) {
+            Alignment.LEFT -> u.box.left to rightLimit
+            Alignment.RIGHT -> leftLimit to u.box.right
+            Alignment.CENTER -> {
+                val c = (u.box.left + u.box.right) / 2f
+                val half = max(minOf(c - leftLimit, rightLimit - c), u.box.width / 2f)
+                (c - half) to (c + half)
+            }
+        }
     }
 
-    private fun drawFitted(cb: ContentBuilder, enc: TextRunEncoder, g: PageGeometry, u: TransUnit, raw: String, maxRight: Float) {
+    private fun drawFitted(cb: ContentBuilder, enc: TextRunEncoder, g: PageGeometry, u: TransUnit, raw: String, spanLeft: Float, spanRight: Float) {
         val text = raw.replace('\n', ' ').replace(Regex("\\s+"), " ").trim()
         if (text.isEmpty()) return
-        val width = max(maxRight - u.box.left, 20f)
+        val width = max(spanRight - spanLeft, 20f)
         val avail = u.box.height + u.size * 0.35f
         var size = u.size
         var lines: List<String> = emptyList()
@@ -190,7 +209,7 @@ object LayoutTranslator {
             if (l.isNotEmpty()) {
                 val runs = enc.encode(l)
                 val w = runs.sumOf { it.widthUnits.toDouble() }.toFloat() / 1000f * size
-                var x = TextLayout.alignX(u.alignment, u.box.left, u.box.left + width, w)
+                var x = TextLayout.alignX(u.alignment, spanLeft, spanLeft + width, w)
                 for (r in runs) {
                     cb.text(r.font, size, g.uprightMatrixAt(x, v), r.elements, u.colorArgb)
                     x += r.widthUnits / 1000f * size
