@@ -166,7 +166,6 @@ fun PageNumberToolV2(doc: DocumentEntity, runner: ToolRunner, onChange: () -> Un
     SliderLine("Schriftgröße", "${size.toInt()} pt", size, 6f..24f) { size = it }
     SliderLine("Abstand zum Rand", "${(margin / 72f * 25.4f).toInt()} mm", margin, 10f..80f) { margin = it }
     ToggleRow("Erste Seite auslassen", "z. B. für ein Deckblatt", checked = skipFirst) { skipFirst = it }
-    FaButton("Anwenden", onClick = apply)
 }
 
 @Composable
@@ -263,7 +262,6 @@ fun CropToolV2(doc: DocumentEntity, runner: ToolRunner, onChange: () -> Unit, re
     )
     ToggleRow("Auf alle Seiten anwenden", checked = allPages) { allPages = it }
     InfoCard("Zuschneiden blendet Ränder aus. Für vertrauliche Inhalte bitte „PDF schwärzen“ verwenden.")
-    FaButton("Zuschneiden", onClick = apply)
 }
 
 /** Erkennt den bedruckten Bereich einer Seite (Anteile 0…1) anhand der Pixel. */
