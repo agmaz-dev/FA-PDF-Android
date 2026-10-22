@@ -55,10 +55,17 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release delete test-apk --yes --cleanup-tag || true
+          # Alte (ggf. hängengebliebene) Entwürfe entfernen
+          gh release list --json tagName,isDraft --jq '.[] | select(.isDraft) | .tagName' | while read t; do gh release delete "$t" --yes || true; done
+          sleep 5
           gh release create test-apk FA-PDF-Test.apk \
+            --target "$GITHUB_SHA" \
             --title "FA PDF – Test-APK" \
             --notes "Automatisch gebaut aus Commit ${GITHUB_SHA::7}. Debug-signiert, nur zum Testen." \
             --prerelease
+          # Sicherstellen, dass die Veröffentlichung kein Entwurf bleibt
+          gh release edit test-apk --draft=false --prerelease
+          gh release view test-apk --json isDraft,assets --jq '{draft: .isDraft, assets: [.assets[].name]}'
 
       - name: Testberichte bereitstellen
         if: always()
