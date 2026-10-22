@@ -35,7 +35,7 @@ fun ToolScreen(tool: Tool, docId: Long?, appVm: AppViewModel, onBack: () -> Unit
         val actionHolder = remember { arrayOf<(() -> Unit)?>(null) }
         val register: (() -> Unit) -> Unit = { actionHolder[0] = it }
         val actionText = when (tool) {
-            Tool.PAGE_NUMBERS, Tool.WATERMARK -> "Anwenden"
+            Tool.PAGE_NUMBERS -> "Anwenden"
             Tool.CROP -> "Zuschneiden"
             else -> null
         }

@@ -135,13 +135,13 @@ fun StyleEditor(style: TextStyle, allowOriginal: Boolean, detectedColor: Int?, o
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun EditTextSheet(vm: WorkspaceViewModel, sel: TextSelection) {
+fun EditTextSheet(vm: WorkspaceViewModel, sel: TextSelection, onClose: () -> Unit) {
     var asBlock by remember(sel) { mutableStateOf(false) }
     var text by remember(sel, asBlock) { mutableStateOf(if (asBlock) sel.blockText else sel.text) }
     var style by remember(sel) { mutableStateOf(sel.detected.toTextStyle().copy(useOriginalFont = sel.canUseOriginalFont)) }
     var align by remember(sel) { mutableStateOf(sel.detected.alignment) }
     val d = sel.detected
-    ModalBottomSheet(onDismissRequest = { vm.selection = null }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+    ModalBottomSheet(onDismissRequest = onClose, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
         Column(Modifier.padding(horizontal = 20.dp).verticalScroll(rememberScrollState()).navigationBarsPadding()) {
             Text("Text bearbeiten", style = MaterialTheme.typography.titleMedium)
             Text(

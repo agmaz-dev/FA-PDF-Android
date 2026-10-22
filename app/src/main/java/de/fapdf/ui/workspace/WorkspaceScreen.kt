@@ -80,6 +80,9 @@ import androidx.compose.material.icons.outlined.Gesture
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.Remove
+import androidx.compose.material.icons.outlined.GridView
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import de.fapdf.ui.components.DocCard
 import kotlin.math.roundToInt
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -171,6 +174,13 @@ fun WorkspaceScreen(
     var searchOpen by remember { mutableStateOf(false) }
     var fullscreen by remember { mutableStateOf(false) }
     var commentsOpen by remember { mutableStateOf(false) }
+    var overflow by remember { mutableStateOf(false) }
+    var fullEditor by remember { mutableStateOf(false) }
+    var newTextAlign by remember { mutableStateOf(de.fapdf.pdf.Alignment.LEFT) }
+    // Unterschreiben: Unterschrift-Fenster wie in der Vorlage direkt anbieten
+    LaunchedEffect(vm.mode, vm.source != null) {
+        if (vm.mode == WorkspaceMode.SIGN && vm.source != null && vm.formInfo?.signatureFields.isNullOrEmpty() && vm.placement == null) sheet = "sign"
+    }
     var searchText by remember { mutableStateOf("") }
     var signatureTarget by remember { mutableStateOf<Pair<Int, Box>?>(null) }
     val exporter = rememberExportLauncher()
@@ -216,19 +226,32 @@ fun WorkspaceScreen(
                         }
                         IconButton(onClick = { sheet = "bookmarks" }) { Icon(Icons.Outlined.BookmarkBorder, "Lesezeichen") }
                         IconButton(onClick = { sheet = "more" }) { Icon(Icons.Outlined.MoreVert, "Weitere") }
-                    } else {
+                    } else if (vm.mode == WorkspaceMode.EDIT) {
                         IconButton(onClick = vm::undo, enabled = vm.canUndo) { Icon(Icons.AutoMirrored.Outlined.Undo, "Rückgängig") }
                         IconButton(onClick = vm::redo, enabled = vm.canRedo) { Icon(Icons.AutoMirrored.Outlined.Redo, "Wiederherstellen") }
                         Button(
-                            onClick = {
-                                if (vm.mode == WorkspaceMode.FORM && vm.pendingValues.isNotEmpty()) vm.applyPendingValues { showSave = true }
-                                else showSave = true
-                            },
+                            onClick = { showSave = true },
                             shape = RoundedCornerShape(10.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = FaColors.Accent),
                             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
                             modifier = Modifier.padding(end = 8.dp).height(38.dp),
                         ) { Text("Speichern", style = MaterialTheme.typography.labelLarge) }
+                    } else {
+                        Box {
+                            IconButton(onClick = { overflow = true }) { Icon(Icons.Outlined.MoreVert, "Weitere") }
+                            DropdownMenu(overflow, { overflow = false }) {
+                                DropdownMenuItem(text = { Text("Rückgängig") }, enabled = vm.canUndo, onClick = { overflow = false; vm.undo() },
+                                    leadingIcon = { Icon(Icons.AutoMirrored.Outlined.Undo, null) })
+                                DropdownMenuItem(text = { Text("Wiederherstellen") }, enabled = vm.canRedo, onClick = { overflow = false; vm.redo() },
+                                    leadingIcon = { Icon(Icons.AutoMirrored.Outlined.Redo, null) })
+                                DropdownMenuItem(text = { Text("Speichern") }, onClick = {
+                                    overflow = false
+                                    if (vm.mode == WorkspaceMode.FORM && vm.pendingValues.isNotEmpty()) vm.applyPendingValues { showSave = true } else showSave = true
+                                }, leadingIcon = { Icon(Icons.Outlined.Save, null) })
+                                DropdownMenuItem(text = { Text("Drucken, Teilen, Export …") }, onClick = { overflow = false; sheet = "more" },
+                                    leadingIcon = { Icon(Icons.Outlined.Share, null) })
+                            }
+                        }
                     }
                 },
             )
@@ -238,19 +261,24 @@ fun WorkspaceScreen(
                 Column(Modifier.navigationBarsPadding()) {
                     if (vm.mode == WorkspaceMode.READ && source != null && source.pageCount > 0 && vm.placement == null) {
                         ThumbStrip(vm, source, currentPage) { p -> scope.launch { listState.animateScrollToItem(p) } }
-                        ZoomRow(zoom, onZoom = { zoom = it }, onFullscreen = { fullscreen = true })
+                        ZoomRow(zoom, onZoom = { zoom = it }, onFullscreen = { fullscreen = true }, onGrid = { sheet = "grid" })
                     }
                     if (vm.mode == WorkspaceMode.ANNOTATE && commentsOpen && vm.placement == null) {
-                        CommentsPanel(vm, onGo = { p -> scope.launch { listState.animateScrollToItem(p) } })
+                        CommentsPanel(vm, onGo = { p -> scope.launch { listState.animateScrollToItem(p) } }, onClose = { commentsOpen = false })
                     }
                     if (vm.mode == WorkspaceMode.FORM && vm.placement == null) {
                         FormNavigator(vm, onGo = { p -> scope.launch { listState.animateScrollToItem(p) } })
+                    }
+                    if (vm.mode == WorkspaceMode.EDIT && vm.placement == null && vm.moveState == null) {
+                        val sel = vm.selection
+                        if (sel != null) InlineTextEditor(vm, sel, onMore = { fullEditor = true })
+                        else FormatBar(vm.newTextStyle, newTextAlign, null, null, onStyle = { vm.newTextStyle = it.copy(useOriginalFont = false) }, onAlign = { newTextAlign = it })
                     }
                     BottomTools(vm, currentPage, commentsOpen = commentsOpen, onToggleComments = { commentsOpen = !commentsOpen }, onSheet = { sheet = it }, onPickImage = {
                         imagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
                     }, onDraw = {
                         vm.switchMode(WorkspaceMode.ANNOTATE); vm.annotTool = AnnotTool.INK
-                    })
+                    }, onSave = { showSave = true })
                 }
             }
         },
@@ -338,7 +366,8 @@ fun WorkspaceScreen(
             "Texterkennung starten", onConfirm = { vm.runOcr(p) }, onDismiss = { vm.scanPromptPage = null },
         )
     }
-    vm.selection?.let { sel -> EditTextSheet(vm, sel) }
+    vm.selection?.let { sel -> if (fullEditor) EditTextSheet(vm, sel) { fullEditor = false } }
+    LaunchedEffect(vm.selection) { if (vm.selection == null) fullEditor = false }
     vm.objectMenu?.let { obj ->
         androidx.compose.material3.AlertDialog(
             onDismissRequest = { vm.objectMenu = null },
@@ -400,7 +429,8 @@ fun WorkspaceScreen(
             if (vm.formInfo?.hasFields == true) vm.prepareAutofill(profile) else vm.detectFlatFormLabels(profile)
         }
         "jump" -> PageJumpDialog(source?.pageCount ?: 1, onDismiss = { sheet = null }) { p -> sheet = null; scope.launch { listState.scrollToItem(p) } }
-        "redact" -> RedactOptionsDialog(vm.redactRects.size, onDismiss = { sheet = null }) { raster, meta -> sheet = null; vm.applyRedaction(raster, meta) }
+        "redact" -> RedactOptionsDialog(vm.redactRects.size, onDismiss = { sheet = null }) { raster, meta -> sheet = null; vm.applyRedaction(raster, meta) { showSave = true } }
+        "grid" -> source?.let { src -> PageGridSheet(src, currentPage, onDismiss = { sheet = null }) { p -> sheet = null; scope.launch { listState.scrollToItem(p) } } }
         "redactsearch" -> TextInputDialog("Begriff schwärzen", "Alle Fundstellen des Begriffs im Dokument werden zum Schwärzen markiert.", "Suchbegriff", onDismiss = { sheet = null }) { sheet = null; vm.redactSearch(it) }
     }
 }
@@ -565,7 +595,7 @@ private val annotColors = listOf(0xFFFFD60A.toInt(), 0xFF34C759.toInt(), 0xFF0A8
 @Composable
 private fun BottomTools(
     vm: WorkspaceViewModel, currentPage: Int, commentsOpen: Boolean, onToggleComments: () -> Unit,
-    onSheet: (String) -> Unit, onPickImage: () -> Unit, onDraw: () -> Unit,
+    onSheet: (String) -> Unit, onPickImage: () -> Unit, onDraw: () -> Unit, onSave: () -> Unit,
 ) {
     val p = vm.placement
     if (p != null) {
@@ -637,33 +667,37 @@ private fun BottomTools(
             }
         }
         WorkspaceMode.REDACT -> Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                SoftAction(Icons.Outlined.CropFree, "Bereich markieren", selected = !vm.redactScroll, modifier = Modifier.weight(1f)) {
-                    vm.redactScroll = !vm.redactScroll
-                }
-                SoftAction(Icons.Outlined.ManageSearch, "Text suchen", selected = false, modifier = Modifier.weight(1f)) { onSheet("redactsearch") }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                ToolButton(Icons.Outlined.CropFree, "Bereich markieren", selected = !vm.redactScroll) { vm.redactScroll = !vm.redactScroll }
+                ToolButton(Icons.Outlined.Search, "Text suchen") { onSheet("redactsearch") }
+                if (vm.redactRects.isNotEmpty()) ToolButton(Icons.AutoMirrored.Outlined.Undo, "Letzte entfernen") { vm.redactRects.removeAt(vm.redactRects.size - 1) }
             }
-            Row(Modifier.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Outlined.Info, null, tint = FaColors.SecondaryLabel, modifier = Modifier.size(16.dp))
-                Spacer(Modifier.width(6.dp))
-                Text("Markierte Inhalte werden dauerhaft entfernt.", style = MaterialTheme.typography.bodySmall, color = FaColors.SecondaryLabel, modifier = Modifier.weight(1f))
-                if (vm.redactRects.isNotEmpty()) TextButton(onClick = { vm.redactRects.removeAt(vm.redactRects.size - 1) }) { Text("Letzte entfernen") }
+            Row(
+                Modifier.padding(vertical = 8.dp).fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(FaColors.AccentLight).padding(10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(Icons.Outlined.Info, null, tint = FaColors.Accent, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Markierte Inhalte werden dauerhaft entfernt.", style = MaterialTheme.typography.bodySmall, color = FaColors.Label)
             }
             Button(
                 onClick = { onSheet("redact") }, enabled = vm.redactRects.isNotEmpty(),
                 modifier = Modifier.fillMaxWidth().height(50.dp), shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF16181D)),
+                colors = ButtonDefaults.buttonColors(containerColor = FaColors.Accent),
             ) { Text(if (vm.redactRects.isEmpty()) "Schwärzen" else "Schwärzen (${vm.redactRects.size})") }
         }
         WorkspaceMode.FORM -> Column {
-            val n = vm.pendingValues.size
-            if (n > 0) ConfirmBar("$n Wert(e) geprüft?", onCancel = { vm.pendingValues.clear() }, onConfirm = { vm.applyPendingValues() })
             ToolRow {
                 ToolButton(Icons.Outlined.People, "Profil") { onSheet("profiles") }
                 ToolButton(Icons.Outlined.Gesture, "Unterschrift") { onSheet("sign") }
                 ToolButton(Icons.Outlined.TextFields, "Freitext") { vm.addTextAt = Triple(currentPage, 60f, 100f) }
-                ToolButton(Icons.Outlined.MoreHoriz, "Mehr") { onSheet("more") }
             }
+            val n = vm.pendingValues.size
+            Button(
+                onClick = { vm.applyPendingValues { onSave() } },
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp).fillMaxWidth().height(50.dp), shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = FaColors.Accent),
+            ) { Text(if (n > 0) "Speichern ($n Werte)" else "Speichern") }
         }
         WorkspaceMode.SIGN -> Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
             Button(
@@ -723,11 +757,18 @@ private fun ThumbStrip(vm: WorkspaceViewModel, source: de.fapdf.pdf.PdfPageSourc
 }
 
 @Composable
-private fun ZoomRow(zoom: Float, onZoom: (Float) -> Unit, onFullscreen: () -> Unit) {
-    Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-        IconButton(onClick = { onZoom((zoom - 0.25f).coerceIn(1f, 4f)) }, enabled = zoom > 1.01f) { Icon(Icons.Outlined.Remove, "Verkleinern") }
-        Text("${(zoom * 100).roundToInt()} %", style = MaterialTheme.typography.labelLarge, modifier = Modifier.width(56.dp), textAlign = TextAlign.Center)
-        IconButton(onClick = { onZoom((zoom + 0.25f).coerceIn(1f, 4f)) }, enabled = zoom < 3.99f) { Icon(Icons.Outlined.Add, "Vergrößern") }
+private fun ZoomRow(zoom: Float, onZoom: (Float) -> Unit, onFullscreen: () -> Unit, onGrid: () -> Unit) {
+    Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        IconButton(onClick = onGrid) { Icon(Icons.Outlined.GridView, "Seitenübersicht") }
+        Spacer(Modifier.weight(1f))
+        Row(
+            Modifier.clip(RoundedCornerShape(20.dp)).background(FaColors.Card),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            IconButton(onClick = { onZoom((zoom - 0.25f).coerceIn(1f, 4f)) }, enabled = zoom > 1.01f) { Icon(Icons.Outlined.Remove, "Verkleinern") }
+            Text("${(zoom * 100).roundToInt()} %", style = MaterialTheme.typography.labelLarge, modifier = Modifier.width(56.dp), textAlign = TextAlign.Center)
+            IconButton(onClick = { onZoom((zoom + 0.25f).coerceIn(1f, 4f)) }, enabled = zoom < 3.99f) { Icon(Icons.Outlined.Add, "Vergrößern") }
+        }
         Spacer(Modifier.weight(1f))
         IconButton(onClick = onFullscreen) { Icon(Icons.Outlined.Fullscreen, "Vollbild") }
     }
@@ -736,13 +777,13 @@ private fun ZoomRow(zoom: Float, onZoom: (Float) -> Unit, onFullscreen: () -> Un
 private val timeFmt = java.text.SimpleDateFormat("dd.MM.yyyy, HH:mm", java.util.Locale.GERMANY)
 
 @Composable
-private fun CommentsPanel(vm: WorkspaceViewModel, onGo: (Int) -> Unit) {
+private fun CommentsPanel(vm: WorkspaceViewModel, onGo: (Int) -> Unit, onClose: () -> Unit) {
     var openKey by remember { mutableStateOf<String?>(null) }
     var reply by remember { mutableStateOf("") }
     Column(Modifier.fillMaxWidth().heightIn(max = 300.dp)) {
-        Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("Kommentare", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
-            Text("${vm.comments.size}", style = MaterialTheme.typography.labelMedium, color = FaColors.SecondaryLabel)
+        Row(Modifier.padding(start = 16.dp, end = 4.dp, top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("Kommentare (${vm.comments.size})", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+            IconButton(onClick = onClose) { Icon(Icons.Outlined.Close, "Schließen") }
         }
         if (vm.comments.isEmpty()) {
             Text("Noch keine Kommentare. Wählen Sie unten „Hervorheben“, „Notiz“ oder „Zeichnen“.", Modifier.padding(horizontal = 16.dp, vertical = 8.dp),

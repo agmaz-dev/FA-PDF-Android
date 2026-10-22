@@ -85,6 +85,21 @@ import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Translate
 import androidx.compose.runtime.mutableStateMapOf
 import de.fapdf.ai.LanguageDetector
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.outlined.Description
+import androidx.compose.material.icons.outlined.KeyboardArrowDown
+import androidx.compose.material.icons.outlined.KeyboardArrowUp
+import androidx.compose.material.icons.outlined.Language
+import androidx.compose.material.icons.outlined.Lightbulb
+import androidx.compose.material.icons.outlined.MoreVert
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.RadioButton
+import de.fapdf.ui.components.ThinDivider
 import de.fapdf.ai.QuizParser
 import de.fapdf.ai.QuizQuestion
 import de.fapdf.ui.components.ChoiceBoxes
@@ -122,6 +137,7 @@ fun AiScreen(tool: Tool, docId: Long?, appVm: AppViewModel, onBack: () -> Unit, 
     val settings by appVm.container.settings.settings.collectAsState(initial = AppSettings())
     val chat = remember { mutableStateListOf<ChatMessage>() }
     var from by remember { mutableStateOf<Lang?>(null) } // null = automatisch erkennen
+    var detectedFrom by remember { mutableStateOf<Lang?>(null) }
     var keepLayout by remember { mutableStateOf(true) }
     var summaryKind by remember { mutableStateOf(Prompts.SummaryKind.DETAILED) }
     var summaryLang by remember { mutableStateOf(Lang.DE) }
@@ -184,6 +200,7 @@ fun AiScreen(tool: Tool, docId: Long?, appVm: AppViewModel, onBack: () -> Unit, 
                 busy = "Sprache wird erkannt …"
                 LanguageDetector.detect(texts.joinToString(" ")) ?: throw IllegalStateException("Die Sprache des Dokuments konnte nicht erkannt werden. Bitte wählen Sie die Ausgangssprache aus.")
             }
+            detectedFrom = src
             if (src == to) throw IllegalStateException("Das Dokument ist bereits auf ${to.title} (erkannt: ${src.title}).")
             busy = "Übersetzung …"
             val translated = if (offline) {
@@ -284,7 +301,31 @@ fun AiScreen(tool: Tool, docId: Long?, appVm: AppViewModel, onBack: () -> Unit, 
         }
     }
 
-    ScreenScaffold(mode.title, onBack) { mod ->
+    var menu by remember { mutableStateOf(false) }
+    var pagePicker by remember { mutableStateOf(false) }
+    ScreenScaffold(mode.title, onBack, actions = {
+        Box {
+            IconButton(onClick = { menu = true }) { Icon(Icons.Outlined.MoreVert, "Weitere") }
+            DropdownMenu(menu, { menu = false }) {
+                DropdownMenuItem(text = { Text("Dokument wechseln") }, onClick = { menu = false; choose = true })
+                if (mode == Tool.TRANSLATE) {
+                    DropdownMenuItem(
+                        text = { Text("Übersetzen auf dem Gerät (kostenlos)") },
+                        leadingIcon = { RadioButton(offline, null) }, onClick = { menu = false; offline = true },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Übersetzen mit KI (eigener API-Schlüssel)") },
+                        leadingIcon = { RadioButton(!offline, null) }, onClick = { menu = false; offline = false },
+                    )
+                }
+                if (mode == Tool.AI_CHAT) {
+                    DropdownMenuItem(text = { Text(if (chatPages.isEmpty()) "Seiten auswählen (alle)" else "Seiten auswählen (${chatPages.size})") }, onClick = { menu = false; pagePicker = true })
+                    DropdownMenuItem(text = { Text("Chat leeren") }, enabled = chat.isNotEmpty(), onClick = { menu = false; chat.clear() })
+                }
+                if (needsCloud) DropdownMenuItem(text = { Text("KI-Einstellungen") }, onClick = { menu = false; onSettings() })
+            }
+        }
+    }) { mod ->
         Column(mod.fillMaxSize().imePadding()) {
             if (doc != null) DocCard(doc, subtitle = docSubtitle(doc), onChange = { choose = true })
             else FaSoftButton("Dokument auswählen") { choose = true }
@@ -300,32 +341,43 @@ fun AiScreen(tool: Tool, docId: Long?, appVm: AppViewModel, onBack: () -> Unit, 
                 )
             }
             if (mode == Tool.AI_CHAT) {
-                if (doc != null && doc.pageCount > 1) PageChips(doc.pageCount, chatPages) { chatPages = it }
+                if (chatPages.isNotEmpty()) Text(
+                    "Fragen beziehen sich auf Seite ${chatPages.sorted().joinToString(", ")}",
+                    Modifier.padding(horizontal = 20.dp, vertical = 2.dp), style = MaterialTheme.typography.bodySmall, color = FaColors.Accent,
+                )
                 ChatView(chat, Modifier.weight(1f), enabled = doc != null && settings.hasAiKey) { ask(it) }
             } else {
                 Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
                     when (mode) {
                         Tool.TRANSLATE -> {
-                            SectionLabel("Ausgangssprache")
+                            SectionLabel("Quellsprache")
                             FaDropdown(from, listOf<Lang?>(null) + Lang.entries, { it?.title ?: "Automatisch (erkennen)" }, Modifier.padding(horizontal = 16.dp)) { from = it }
                             SectionLabel("Zielsprache")
                             FaDropdown(to, Lang.entries.toList(), { it.title }, Modifier.padding(horizontal = 16.dp)) { to = it }
                             Spacer(Modifier.height(8.dp))
-                            ToggleRow("Layout beibehalten", "Übersetzung an derselben Stelle wie das Original", checked = keepLayout) { keepLayout = it }
-                            SectionLabel("Verfahren")
-                            ChoiceBoxes(listOf("Auf dem Gerät", "KI (Cloud)"), if (offline) 0 else 1, subtitles = listOf("Kostenlos, Dokument bleibt auf dem Gerät", "Eigener API-Schlüssel nötig")) { offline = it == 0 }
+                            ToggleRow("Layout beibehalten", "Originales Layout, Formatierung und Bilder beibehalten.", checked = keepLayout) { keepLayout = it }
+                            ThinDivider()
+                            Spacer(Modifier.height(8.dp))
+                            if (doc != null) {
+                                val tdoc = docs.firstOrNull { it.id == translatedId }
+                                SideBySide(doc, tdoc, "Original (${detectedFrom?.title ?: from?.title ?: "automatisch"})", "Übersetzung (${to.title})")
+                            }
                         }
                         Tool.AI_SUMMARY -> {
-                            SectionLabel("Art der Zusammenfassung")
+                            SectionLabel("Zusammenfassungsart")
                             ChoiceBoxes(Prompts.SummaryKind.entries.map { it.title }, summaryKind.ordinal) { summaryKind = Prompts.SummaryKind.entries[it] }
                             SectionLabel("Sprache")
-                            FaDropdown(summaryLang, Lang.entries.toList(), { it.title }, Modifier.padding(horizontal = 16.dp)) { summaryLang = it }
+                            FaDropdown(summaryLang, Lang.entries.toList(), { it.title }, Modifier.padding(horizontal = 16.dp), leading = Icons.Outlined.Language) { summaryLang = it }
                         }
                         else -> {
-                            SectionLabel("Anzahl der Fragen", trailing = { Stepper(qCount, 3..20) { qCount = it } })
+                            SectionLabel("Anzahl der Fragen")
+                            Box(Modifier.padding(horizontal = 16.dp)) { Stepper(qCount, 3..20) { qCount = it } }
                             SectionLabel("Fragetyp")
-                            ChoiceBoxes(listOf("Multiple Choice", "Offen"), if (qMulti) 0 else 1) { qMulti = it == 0 }
-                            SectionLabel("Schwierigkeit")
+                            ChoiceBoxes(
+                                listOf("Multiple Choice", "Offene Fragen"), if (qMulti) 0 else 1,
+                                subtitles = listOf("Fragen mit mehreren Antwortoptionen.", "Fragen zum frei beantworten."),
+                            ) { qMulti = it == 0 }
+                            SectionLabel("Schwierigkeitsgrad")
                             FaDropdown(qDiff, Prompts.Difficulty.entries.toList(), { it.title }, Modifier.padding(horizontal = 16.dp)) { qDiff = it }
                         }
                     }
@@ -335,23 +387,18 @@ fun AiScreen(tool: Tool, docId: Long?, appVm: AppViewModel, onBack: () -> Unit, 
                         icon = if (mode == Tool.TRANSLATE) Icons.Outlined.Translate else Icons.Outlined.AutoAwesome,
                         enabled = doc != null && (!needsCloud || settings.hasAiKey) && (mode != Tool.TRANSLATE || from != to),
                     ) { quiz = emptyList(); runTask() }
-                    if (mode == Tool.TRANSLATE && offline) Text(
-                        "Jeder Absatz wird übersetzt und an derselben Stelle eingesetzt – Layout, Schriftfarbe und Ausrichtung bleiben erhalten. Für rechtsverbindliche Übersetzungen nicht geeignet.",
-                        Modifier.padding(horizontal = 16.dp, vertical = 4.dp), style = MaterialTheme.typography.bodySmall, color = FaColors.SecondaryLabel,
-                    )
                     val tid = translatedId
                     val tdoc = docs.firstOrNull { it.id == tid }
-                    if (mode == Tool.TRANSLATE && doc != null && tdoc != null) {
-                        SectionLabel("Vorschau")
-                        SideBySide(doc, tdoc)
-                        FaButton("Übersetzte PDF öffnen") { onOpenDoc(tdoc.id) }
+                    if (mode == Tool.TRANSLATE && tdoc != null) {
+                        FaSoftButton("Übersetzte PDF öffnen") { onOpenDoc(tdoc.id) }
                     }
                     if (mode == Tool.AI_QUESTIONS && quiz.isNotEmpty()) {
-                        SectionLabel("Fragen")
+                        ThinDivider()
                         QuizCards(quiz)
                     }
                     result?.let { r ->
-                        if (mode == Tool.AI_SUMMARY || (mode == Tool.AI_QUESTIONS && quiz.isEmpty())) {
+                        if (mode == Tool.AI_SUMMARY) SummaryCard(r)
+                        if (mode == Tool.AI_QUESTIONS && quiz.isEmpty()) {
                             SectionLabel("Ergebnis")
                             SelectionContainer {
                                 Text(
@@ -379,6 +426,10 @@ fun AiScreen(tool: Tool, docId: Long?, appVm: AppViewModel, onBack: () -> Unit, 
                             }
                         }
                         if (mode == Tool.AI_SUMMARY) FaSoftButton("Fragen zum Dokument stellen") { mode = Tool.AI_CHAT }
+                        if (mode == Tool.TRANSLATE) Text(
+                            "Übersetzung auf dem Gerät: Das Dokument verlässt das Gerät nicht. Für rechtsverbindliche Übersetzungen nicht geeignet.",
+                            Modifier.padding(horizontal = 16.dp), style = MaterialTheme.typography.bodySmall, color = FaColors.SecondaryLabel,
+                        )
                     }
                     Spacer(Modifier.height(16.dp))
                 }
@@ -386,6 +437,12 @@ fun AiScreen(tool: Tool, docId: Long?, appVm: AppViewModel, onBack: () -> Unit, 
         }
     }
 
+    if (pagePicker && doc != null) AlertDialog(
+        onDismissRequest = { pagePicker = false },
+        title = { Text("Seiten für den Chat") },
+        text = { PageChips(doc.pageCount, chatPages) { chatPages = it } },
+        confirmButton = { TextButton(onClick = { pagePicker = false }) { Text("Fertig") } },
+    )
     busy?.let { BusyDialog(it) }
     error?.let { MessageDialog("Hinweis", it) { error = null } }
     consentFor?.let { action ->
@@ -427,22 +484,87 @@ private fun PageChips(count: Int, selected: Set<Int>, onChange: (Set<Int>) -> Un
 }
 
 @Composable
-private fun SideBySide(original: DocumentEntity, translated: DocumentEntity) {
+private fun SideBySide(original: DocumentEntity, translated: DocumentEntity?, leftTitle: String, rightTitle: String) {
     val a = rememberDocSource(original, null)
     val b = rememberDocSource(translated, null)
-    var page by remember(translated.id) { mutableStateOf(0) }
-    val count = maxOf(1, minOf(a?.pageCount ?: 1, b?.pageCount ?: 1))
+    var page by remember(translated?.id) { mutableStateOf(0) }
+    val count = maxOf(1, if (b != null) minOf(a?.pageCount ?: 1, b.pageCount) else (a?.pageCount ?: 1))
     Row(Modifier.padding(horizontal = 16.dp).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        listOf("Original" to a, "Übersetzung" to b).forEach { (label, src) ->
-            Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(label, style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(bottom = 4.dp))
-                Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).border(1.dp, FaColors.CardBorder, RoundedCornerShape(10.dp))) {
+        listOf(Triple(leftTitle, a, false), Triple(rightTitle, b, true)).forEach { (label, src, isTarget) ->
+            Column(
+                Modifier.weight(1f).clip(RoundedCornerShape(12.dp))
+                    .background(if (isTarget) FaColors.AccentLight else FaColors.Card)
+                    .border(1.dp, FaColors.CardBorder, RoundedCornerShape(12.dp))
+            ) {
+                Text(
+                    label, style = MaterialTheme.typography.labelMedium, maxLines = 1,
+                    color = if (isTarget) FaColors.Accent else FaColors.Label,
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                )
+                Box(Modifier.fillMaxWidth().aspectRatio(0.72f).background(Color.White), contentAlignment = Alignment.Center) {
                     if (src != null) PageThumb(src, page.coerceAtMost(src.pageCount - 1), Modifier.fillMaxWidth(), renderWidth = 600)
+                    else Text(
+                        if (isTarget) "Die Übersetzung erscheint hier" else "", style = MaterialTheme.typography.bodySmall,
+                        color = FaColors.SecondaryLabel, modifier = Modifier.padding(12.dp),
+                    )
                 }
             }
         }
     }
     if (count > 1) PageNavigator(page, count) { page = it }
+}
+
+private val pageRef = Regex("\\(?\\bSeite\\s+(\\d+)\\)?")
+
+/** Text ohne „(Seite N)“-Verweise und die gefundenen Seitenzahlen. */
+private fun splitPageRefs(line: String): Pair<String, List<Int>> {
+    val pages = pageRef.findAll(line).mapNotNull { it.groupValues[1].toIntOrNull() }.distinct().toList()
+    val clean = line.replace(Regex("\\s*\\(Seite\\s+\\d+\\)"), "").trim()
+    return clean to pages
+}
+
+@Composable
+private fun PageChip(p: Int) {
+    Row(
+        Modifier.padding(end = 6.dp, top = 4.dp).clip(RoundedCornerShape(6.dp)).background(FaColors.AccentLight).padding(horizontal = 6.dp, vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(Icons.Outlined.Description, null, Modifier.size(12.dp), tint = FaColors.Accent)
+        Spacer(Modifier.width(3.dp))
+        Text("Seite $p", style = MaterialTheme.typography.labelSmall, color = FaColors.Accent)
+    }
+}
+
+@Composable
+private fun SummaryCard(text: String) {
+    Column(
+        Modifier.padding(16.dp).fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Color.White)
+            .border(1.dp, FaColors.CardBorder, RoundedCornerShape(14.dp)).padding(14.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Outlined.AutoAwesome, null, tint = FaColors.Accent, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            Text("Zusammenfassung", style = MaterialTheme.typography.titleSmall)
+        }
+        Spacer(Modifier.height(6.dp))
+        SelectionContainer {
+            Column {
+                text.lines().filter { it.isNotBlank() }.forEach { raw ->
+                    val l = raw.trim()
+                    val bullet = l.startsWith("•") || l.startsWith("- ") || l.startsWith("* ")
+                    val heading = !bullet && (l.startsWith("#") || (l.length < 60 && l.endsWith(":")) || Regex("^\\d+\\.\\s").containsMatchIn(l) && l.length < 60)
+                    val (clean, pages) = splitPageRefs(l.removePrefix("•").removePrefix("- ").removePrefix("* ").trimStart('#', ' ').replace("**", ""))
+                    Row(Modifier.padding(vertical = 3.dp)) {
+                        if (bullet) Text("•", Modifier.padding(end = 8.dp), style = MaterialTheme.typography.bodyMedium)
+                        Column {
+                            Text(clean, style = if (heading) MaterialTheme.typography.titleSmall else MaterialTheme.typography.bodyMedium)
+                            if (pages.isNotEmpty()) Row { pages.take(4).forEach { PageChip(it) } }
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 @Composable
@@ -452,93 +574,118 @@ private fun QuizCards(quiz: List<QuizQuestion>) {
     val chosen = remember(quiz) { mutableStateMapOf<Int, Int>() }
     val q = quiz[i.coerceIn(0, quiz.size - 1)]
     val shown = i in reveal
+    Row(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text("Generierte Frage", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+        Text("${i + 1} / ${quiz.size}", style = MaterialTheme.typography.labelLarge, color = FaColors.SecondaryLabel)
+    }
     Column(
-        Modifier.padding(horizontal = 16.dp).fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(FaColors.Card)
+        Modifier.padding(horizontal = 16.dp).fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Color.White)
             .border(1.dp, FaColors.CardBorder, RoundedCornerShape(14.dp)).padding(14.dp)
     ) {
-        Text("Frage ${i + 1}", style = MaterialTheme.typography.labelMedium, color = FaColors.Ai)
-        Text(q.question, style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(vertical = 6.dp))
+        Text(q.question, style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(bottom = 6.dp))
         q.options.forEachIndexed { k, o ->
             val picked = chosen[i] == k
-            val color = when {
-                shown && k == q.correct -> Color(0xFF0E8F80)
-                shown && picked -> FaColors.Destructive
-                picked -> FaColors.Accent
-                else -> FaColors.CardBorder
-            }
+            val correct = shown && k == q.correct
+            val wrong = shown && picked && k != q.correct
             Row(
-                Modifier.padding(vertical = 3.dp).fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(Color.White)
-                    .border(1.dp, color, RoundedCornerShape(10.dp)).clickable { chosen[i] = k }.padding(10.dp),
+                Modifier.padding(vertical = 2.dp).fillMaxWidth().clip(RoundedCornerShape(8.dp))
+                    .background(when { correct -> Color(0xFFE3F7F2); wrong -> Color(0xFFFDEAE6); picked -> FaColors.AccentLight; else -> Color.Transparent })
+                    .clickable { chosen[i] = k }.padding(horizontal = 4.dp, vertical = 2.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text("${'A' + k}", style = MaterialTheme.typography.labelLarge, color = color, modifier = Modifier.padding(end = 10.dp))
-                Text(o, style = MaterialTheme.typography.bodyMedium)
+                RadioButton(picked, { chosen[i] = k })
+                Text("${'A' + k}) $o", style = MaterialTheme.typography.bodyMedium)
             }
         }
+        if (q.options.isEmpty() && !shown) Text("Offene Frage – überlegen Sie Ihre Antwort und lassen Sie sie sich dann anzeigen.", style = MaterialTheme.typography.bodySmall, color = FaColors.SecondaryLabel)
+        Row(
+            Modifier.padding(top = 8.dp).fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(FaColors.AccentLight)
+                .clickable { if (shown) reveal.remove(i) else reveal.add(i) }.padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(Icons.Outlined.Lightbulb, null, tint = FaColors.Accent, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            Text("Antwort anzeigen", color = FaColors.Accent, style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f))
+            Icon(if (shown) Icons.Outlined.KeyboardArrowUp else Icons.Outlined.KeyboardArrowDown, null, tint = FaColors.Accent)
+        }
         if (shown) Text(
-            "Antwort: ${q.answer}" + (q.page?.let { " (Seite $it)" } ?: ""),
-            Modifier.padding(top = 8.dp).fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(FaColors.AccentLight).padding(10.dp),
-            style = MaterialTheme.typography.bodyMedium,
+            q.answer + (q.page?.let { " (Seite $it)" } ?: ""),
+            Modifier.padding(top = 8.dp), style = MaterialTheme.typography.bodyMedium,
         )
-        Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = { if (shown) reveal.remove(i) else reveal.add(i) }) { Text(if (shown) "Antwort ausblenden" else "Antwort anzeigen") }
+        Row(Modifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             Spacer(Modifier.weight(1f))
-            IconButton(onClick = { i-- }, enabled = i > 0) { Icon(Icons.AutoMirrored.Outlined.KeyboardArrowLeft, "Zurück") }
-            Text("${i + 1}/${quiz.size}", style = MaterialTheme.typography.labelLarge)
-            IconButton(onClick = { i++ }, enabled = i < quiz.size - 1) { Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, "Weiter") }
+            IconButton(onClick = { i-- }, enabled = i > 0) { Icon(Icons.AutoMirrored.Outlined.KeyboardArrowLeft, "Vorherige Frage") }
+            IconButton(onClick = { i++ }, enabled = i < quiz.size - 1) { Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, "Nächste Frage") }
         }
     }
 }
 
 private val suggestions = listOf(
     "Worum geht es in diesem Dokument?", "Welche Fristen gibt es?", "Welche Beträge werden genannt?",
-    "Wer ist der Absender?", "Was muss ich als Nächstes tun?",
+    "Was muss ich als Nächstes tun?",
 )
+
+private val timeFmt = java.text.SimpleDateFormat("HH:mm", java.util.Locale.GERMANY)
 
 @Composable
 private fun ChatView(messages: List<ChatMessage>, modifier: Modifier, enabled: Boolean, onSend: (String) -> Unit) {
     var input by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
-    LaunchedEffect(messages.size) { if (messages.isNotEmpty()) listState.animateScrollToItem(messages.size - 1) }
+    val times = remember { mutableStateMapOf<Int, String>() }
+    LaunchedEffect(messages.size) {
+        messages.indices.forEach { if (it !in times) times[it] = timeFmt.format(java.util.Date()) }
+        if (messages.isNotEmpty()) listState.animateScrollToItem(messages.size)
+    }
     Column(modifier) {
         LazyColumn(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 12.dp), state = listState) {
-            if (messages.isEmpty()) {
-                item {
-                    Text(
-                        "Stellen Sie eine Frage zum Dokument. Die Antwort beruht ausschließlich auf dem Dokumentinhalt (bzw. den gewählten Seiten).",
-                        Modifier.padding(8.dp), color = FaColors.SecondaryLabel, style = MaterialTheme.typography.bodySmall,
-                    )
-                    Text("Vorschläge", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp))
-                }
-                items(suggestions) { q ->
-                    Text(
-                        q, color = if (enabled) FaColors.Accent else FaColors.SecondaryLabel, style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.padding(vertical = 4.dp, horizontal = 4.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp))
-                            .background(FaColors.AccentLight).clickable(enabled = enabled) { onSend(q) }.padding(12.dp),
-                    )
+            if (messages.isEmpty()) item {
+                Text(
+                    "Stellen Sie eine Frage zum Dokument. Die Antwort beruht ausschließlich auf dem Dokumentinhalt.",
+                    Modifier.padding(8.dp), color = FaColors.SecondaryLabel, style = MaterialTheme.typography.bodySmall,
+                )
+            }
+            itemsIndexed(messages) { idx, m ->
+                val mine = m.role == "user"
+                Column(Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalAlignment = if (mine) Alignment.End else Alignment.Start) {
+                    Row(verticalAlignment = Alignment.Top) {
+                        if (!mine) Icon(Icons.Outlined.AutoAwesome, null, tint = FaColors.Accent, modifier = Modifier.padding(end = 6.dp, top = 6.dp).size(20.dp))
+                        val (clean, pages) = if (mine) m.content to emptyList() else m.content to pageRef.findAll(m.content).mapNotNull { it.groupValues[1].toIntOrNull() }.distinct().toList()
+                        Column(
+                            Modifier.widthIn(max = 300.dp).clip(RoundedCornerShape(14.dp))
+                                .background(if (mine) FaColors.AccentLight else Color.White)
+                                .border(if (mine) 0.dp else 1.dp, if (mine) Color.Transparent else FaColors.CardBorder, RoundedCornerShape(14.dp))
+                                .padding(12.dp)
+                        ) {
+                            SelectionContainer { Text(clean, color = FaColors.Label, style = MaterialTheme.typography.bodyMedium) }
+                            if (pages.isNotEmpty()) Row { pages.take(4).forEach { PageChip(it) } }
+                        }
+                    }
+                    times[idx]?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = FaColors.SecondaryLabel, modifier = Modifier.padding(top = 2.dp, end = 4.dp)) }
                 }
             }
-            items(messages) { m ->
-                val mine = m.role == "user"
-                Box(Modifier.fillMaxWidth().padding(vertical = 4.dp), contentAlignment = if (mine) Alignment.CenterEnd else Alignment.CenterStart) {
-                    SelectionContainer {
-                        Text(
-                            m.content, color = if (mine) Color.White else FaColors.Label,
-                            modifier = Modifier.widthIn(max = 320.dp).clip(RoundedCornerShape(16.dp))
-                                .background(if (mine) FaColors.Accent else FaColors.Card).padding(12.dp),
-                        )
-                    }
-                }
+            item {
+                Text("Vorgeschlagene Fragen", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp))
+            }
+            items(suggestions) { q ->
+                Text(
+                    q, style = MaterialTheme.typography.bodyMedium, color = if (enabled) FaColors.Label else FaColors.SecondaryLabel,
+                    modifier = Modifier.padding(vertical = 3.dp).clip(RoundedCornerShape(20.dp))
+                        .border(1.dp, FaColors.CardBorder, RoundedCornerShape(20.dp))
+                        .clickable(enabled = enabled) { onSend(q) }.padding(horizontal = 14.dp, vertical = 8.dp),
+                )
             }
         }
         Row(Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
             OutlinedTextField(
-                input, { input = it }, Modifier.weight(1f), placeholder = { Text("Frage zum Dokument …") }, enabled = enabled, maxLines = 4,
+                input, { input = it }, Modifier.weight(1f), placeholder = { Text("Frage eingeben …") }, enabled = enabled, maxLines = 4,
                 shape = RoundedCornerShape(24.dp),
             )
-            IconButton(onClick = { val q = input.trim(); if (q.isNotEmpty()) { onSend(q); input = "" } }, enabled = enabled && input.isNotBlank()) {
-                Icon(Icons.AutoMirrored.Outlined.Send, "Senden", tint = FaColors.Accent)
-            }
+            Spacer(Modifier.width(8.dp))
+            Box(
+                Modifier.size(48.dp).clip(CircleShape).background(if (enabled && input.isNotBlank()) FaColors.Accent else FaColors.Accent.copy(alpha = 0.35f))
+                    .clickable(enabled = enabled && input.isNotBlank()) { val q = input.trim(); if (q.isNotEmpty()) { onSend(q); input = "" } },
+                contentAlignment = Alignment.Center,
+            ) { Icon(Icons.AutoMirrored.Outlined.Send, "Senden", tint = Color.White) }
         }
     }
 }

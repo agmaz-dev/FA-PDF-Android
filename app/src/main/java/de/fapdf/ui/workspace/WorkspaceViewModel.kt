@@ -638,7 +638,7 @@ class WorkspaceViewModel(app: Application, val docId: Long, initialMode: Workspa
         }
     }
 
-    fun applyRedaction(forceRaster: Boolean, removeMetadata: Boolean) {
+    fun applyRedaction(forceRaster: Boolean, removeMetadata: Boolean, then: () -> Unit = {}) {
         if (redactRects.isEmpty()) return
         val byPage = redactRects.groupBy({ it.page }, { it.box })
         var report: RedactionReport? = null
@@ -654,6 +654,7 @@ class WorkspaceViewModel(app: Application, val docId: Long, initialMode: Workspa
                     append("\nSpeichern Sie das Dokument, um die Schwärzung zu übernehmen.")
                 }
             }
+            then()
         })
     }
 
