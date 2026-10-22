@@ -186,6 +186,70 @@ object PdfOps {
         }
     }
 
+    /**
+     * Fügt ein leeres, echtes PDF-Unterschriftsfeld ein (z. B. für Unterschriftsanfragen).
+     * Empfänger sehen es in Acrobat & Co. als Feld zum Unterschreiben. [viewBox] in Ansichtspunkten.
+     */
+    fun addSignatureField(doc: PDDocument, pageIndex: Int, viewBox: Box, name: String) {
+        val catalog = doc.documentCatalog
+        val form = catalog.acroForm ?: com.tom_roush.pdfbox.pdmodel.interactive.form.PDAcroForm(doc).also {
+            it.defaultResources = com.tom_roush.pdfbox.pdmodel.PDResources()
+            catalog.acroForm = it
+        }
+        val page = doc.getPage(pageIndex)
+        val g = PdfIo.geometry(page)
+        val user = g.viewBoxToUser(viewBox)
+        val field = com.tom_roush.pdfbox.pdmodel.interactive.form.PDSignatureField(form)
+        var n = name; var k = 2
+        while (form.getField(n) != null) n = "$name $k".also { k++ }
+        field.partialName = n
+        val widget = field.widgets.first()
+        widget.rectangle = PDRectangle(user.left, user.top, user.width, user.height)
+        widget.page = page
+        widget.isPrinted = true
+        val annots = page.annotations.toMutableList(); annots.add(widget); page.annotations = annots
+        val fields = form.fields.toMutableList(); fields.add(field); form.fields = fields
+        form.isSignaturesExist = true
+        form.isAppendOnly = true
+    }
+
+    /**
+     * Ausweis-Modus: Vorder- und Rückseite (Seite 1 und 2 des Scans) in Originalgröße
+     * einer Ausweiskarte (85,6 × 54 mm) untereinander auf eine A4-Seite setzen.
+     */
+    fun idCardLayout(input: File, output: File) {
+        PdfIo.load(input).use { src ->
+            PDDocument().use { out ->
+                val a4 = PDRectangle.A4
+                val page = PDPage(a4)
+                out.addPage(page)
+                val lu = com.tom_roush.pdfbox.multipdf.LayerUtility(out)
+                val mm = 72f / 25.4f
+                val cardW = 85.6f * mm; val cardH = 54f * mm
+                val cb = ContentBuilder(PdfIo.resourcesOf(page))
+                val count = minOf(2, src.numberOfPages)
+                for (i in 0 until count) {
+                    val form = lu.importPageAsForm(src, i)
+                    val bb = form.bBox
+                    val m = form.matrix.toAffine()
+                    val tb = Box.bounding(listOf(
+                        m.apply(bb.lowerLeftX, bb.lowerLeftY), m.apply(bb.upperRightX, bb.lowerLeftY),
+                        m.apply(bb.lowerLeftX, bb.upperRightY), m.apply(bb.upperRightX, bb.upperRightY),
+                    ))
+                    // Seitenverhältnis erhalten, in den Kartenrahmen einpassen
+                    val s = minOf(cardW / tb.width, cardH / tb.height)
+                    val w = tb.width * s; val h = tb.height * s
+                    val x = (a4.width - w) / 2
+                    val y = if (i == 0) a4.height - 70f * mm + (cardH - h) / 2 else a4.height - 140f * mm + (cardH - h) / 2
+                    val fit = Affine.translate(-tb.left, -tb.top).then(Affine.scale(s, s)).then(Affine.translate(x, y))
+                    cb.save(); cb.transform(fit); cb.tokens.add(PdfIo.resourcesOf(page).add(form)); cb.tokens.add(com.tom_roush.pdfbox.contentstream.operator.Operator.getOperator("Do")); cb.restore()
+                }
+                PdfIo.appendToPage(out, page, cb.tokens)
+                PdfIo.save(out, output)
+            }
+        }
+    }
+
     fun watermark(doc: PDDocument, fonts: FontLibrary, spec: WatermarkSpec) {
         val cache = DocFontCache(doc, fonts)
         val font = cache.get(FontFamily.SANS, true, false)
@@ -274,12 +338,32 @@ object PdfOps {
         for (page in doc.pages) flattenAnnotations(doc, page)
     }
 
-    fun flattenAnnotations(doc: PDDocument, page: PDPage) {
+    private val commentTypes = setOf("Text", "Highlight", "Underline", "StrikeOut", "Squiggly", "FreeText", "Caret", "FileAttachment", "Sound")
+    private val drawingTypes = setOf("Ink", "Line", "Square", "Circle", "Polygon", "PolyLine", "Stamp")
+
+    /** Reduziert nur die gewählten Ebenen: Kommentare, Formularfelder, Zeichnungen. */
+    fun flattenSelective(doc: PDDocument, comments: Boolean, forms: Boolean, drawings: Boolean) {
+        if (forms) {
+            val form = doc.documentCatalog.acroForm
+            if (form != null) {
+                runCatching { if (form.needAppearances) form.refreshAppearances() }
+                runCatching { form.flatten() }
+                runCatching { if (form.fields.isEmpty()) doc.documentCatalog.acroForm = null }
+            }
+        }
+        for (page in doc.pages) flattenAnnotations(doc, page) { sub ->
+            (comments && sub in commentTypes) || (drawings && sub in drawingTypes) ||
+                (comments && drawings && sub !in commentTypes && sub !in drawingTypes)
+        }
+    }
+
+    fun flattenAnnotations(doc: PDDocument, page: PDPage, include: (String) -> Boolean = { true }) {
         val keep = ArrayList<PDAnnotation>()
         val cb = ContentBuilder(PdfIo.resourcesOf(page))
         for (a in page.annotations) {
             val sub = a.subtype
             if (sub == "Link" || sub == "Popup") { keep.add(a); continue }
+            if (!include(sub ?: "")) { keep.add(a); continue }
             if (a is PDAnnotationWidget) { keep.add(a); continue }
             if (a.isHidden || a.isNoView) continue
             val ap = a.normalAppearanceStream

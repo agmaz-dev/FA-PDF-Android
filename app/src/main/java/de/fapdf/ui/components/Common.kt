@@ -303,6 +303,24 @@ object FileActions {
         context.startActivity(Intent.createChooser(intent, "PDF weitergeben"))
     }
 
+    /** Direkt an eine bestimmte App teilen; falls nicht vorhanden, normale Auswahl öffnen. */
+    fun shareTo(context: Context, file: File, displayName: String, pkg: String, cls: String?) {
+        val uri = shareCopy(context, file, displayName)
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = "application/pdf"
+            putExtra(Intent.EXTRA_STREAM, uri)
+            putExtra(Intent.EXTRA_SUBJECT, displayName)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            if (cls != null) setClassName(pkg, cls) else setPackage(pkg)
+        }
+        try {
+            context.startActivity(intent)
+        } catch (e: android.content.ActivityNotFoundException) {
+            toast(context, "App nicht installiert – bitte eine andere App wählen.")
+            share(context, file, displayName)
+        }
+    }
+
     fun shareMany(context: Context, files: List<Pair<File, String>>) {
         val uris = ArrayList(files.map { (f, n) -> shareCopy(context, f, n) })
         val intent = Intent(Intent.ACTION_SEND_MULTIPLE).apply {
