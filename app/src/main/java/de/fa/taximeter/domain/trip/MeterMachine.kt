@@ -26,6 +26,10 @@ data class TripRun(
     val surcharges: SurchargeSelection,
     val gaps: List<GapRecord>,
     val restoredAfterProcessDeath: Boolean = false,
+    /** Höchster bisher angezeigter Fahrpreis – die Anzeige läuft nie rückwärts (Tunnel-Schätzung). */
+    val fareFloor: BigDecimal = BigDecimal.ZERO,
+    /** Nach dem ersten STOPP zeigt die große Anzeige die Summe inkl. Zuschlägen (KASSE). */
+    val showTotal: Boolean = false,
 )
 
 /** Abgeschlossene Fahrt (KASSE). Fahrpreis, Zuschläge und Gesamtbetrag stammen aus diesem einen Datensatz. */
@@ -135,7 +139,7 @@ object MeterMachine {
 
     fun pressStopp(s: MeterMachineState, nowMs: Long, nowWallMs: Long, cfg: GpsFilterConfig): CommandResult {
         if (s.phase != Phase.BESETZT) return CommandResult(s, null, changed = false)
-        val run = s.run!!
+        val run = withFloor(s.run!!, nowMs).copy(showTotal = true)
         val r = DistanceTracker.closeAt(run.tracker, nowMs, nowWallMs, cfg)
         val meter = r.interval?.let { FareEngine.apply(run.meter, it, run.profile) } ?: run.meter
         val gaps = if (r.gap != null) run.gaps + r.gap else run.gaps
@@ -149,7 +153,7 @@ object MeterMachine {
             return CommandResult(s, if (s.phase == Phase.BESETZT) "Erst STOPP drücken" else null, changed = false)
         }
         val run = s.run!!
-        val fare = FareEngine.displayedFare(run.profile, run.meter)
+        val fare = maxOf(run.fareFloor, FareEngine.displayedFare(run.profile, run.meter)).setScale(2)
         val surchargeTotal = run.surcharges.total
         val record = TripRecord(
             id = run.tripId,
@@ -181,10 +185,10 @@ object MeterMachine {
     /** Verarbeitet eine Standortmessung (nur während BESETZT). */
     fun onFix(s: MeterMachineState, fix: GpsFix, nowMs: Long, cfg: GpsFilterConfig): CommandResult {
         if (s.phase != Phase.BESETZT) return CommandResult(s, null, changed = false)
-        val run = s.run!!
+        val run = withFloor(s.run!!, nowMs)
         val r = DistanceTracker.onFix(run.tracker, fix, nowMs, cfg)
         if (r.rejected != null) {
-            return CommandResult(s.copy(run = run.copy(tracker = r.state)), r.rejected.label, changed = r.state != run.tracker)
+            return CommandResult(s.copy(run = run.copy(tracker = r.state)), r.rejected.label, changed = r.state != run.tracker || run != s.run)
         }
         val meter = r.interval?.let { FareEngine.apply(run.meter, it, run.profile) } ?: run.meter
         val gaps = if (r.gap != null) run.gaps + r.gap else run.gaps
@@ -222,7 +226,113 @@ object MeterMachine {
 
     fun liveFare(s: MeterMachineState): BigDecimal = when (s.phase) {
         Phase.FREI -> BigDecimal.ZERO.setScale(2)
-        Phase.BESETZT, Phase.STOPP -> FareEngine.displayedFare(s.run!!.profile, s.run.meter)
+        Phase.BESETZT, Phase.STOPP -> maxOf(s.run!!.fareFloor, FareEngine.displayedFare(s.run.profile, s.run.meter)).setScale(2)
         Phase.KASSE -> s.completed!!.fare
+    }
+
+    /** Fahrpreis inkl. laufender Tunnel-/GPS-Lücken-Schätzung zum Zeitpunkt [nowMs]. */
+    fun liveFare(s: MeterMachineState, nowMs: Long): BigDecimal {
+        if (s.phase != Phase.BESETZT) return liveFare(s)
+        val run = s.run!!
+        return maxOf(run.fareFloor, estimatedFare(run, nowMs)).setScale(2)
+    }
+
+    /** Betrag der großen Anzeige: Fahrpreis, nach dem ersten STOPP die Summe inkl. Zuschlägen. */
+    fun displayAmount(s: MeterMachineState, nowMs: Long): BigDecimal {
+        val fare = liveFare(s, nowMs)
+        val run = s.run ?: return fare
+        return if (run.showTotal) Money.cents(fare.add(run.surcharges.total)) else fare
+    }
+
+    fun showsTotal(s: MeterMachineState): Boolean = s.run?.showTotal ?: false
+
+    /** Läuft gerade eine Schätzung, weil kein GPS empfangen wird (z. B. Tunnel)? */
+    fun isEstimating(s: MeterMachineState, nowMs: Long): Boolean =
+        s.phase == Phase.BESETZT && s.run != null && estimatedGapM(s.run, nowMs) > 0.0
+
+    /** Speichert den aktuell angezeigten Preis als Untergrenze (regelmäßig aufrufen). */
+    fun tick(s: MeterMachineState, nowMs: Long): CommandResult {
+        if (s.phase != Phase.BESETZT) return CommandResult(s, null, changed = false)
+        val run = s.run!!
+        val updated = withFloor(run, nowMs)
+        return if (updated == run) CommandResult(s, null, changed = false) else CommandResult(s.copy(run = updated))
+    }
+
+    // ---------------------------------------------------------------- Zuschlag in 0,50-€-Schritten
+
+    const val SURCHARGE_ID = "zuschlag"
+    val SURCHARGE_STEP: BigDecimal = BigDecimal("0.50")
+    val SURCHARGE_MAX: BigDecimal = BigDecimal("99.50")
+
+    private fun stepDef(amount: BigDecimal) = SurchargeDef(
+        id = SURCHARGE_ID,
+        label = "ZUSCHLAG",
+        amount = amount,
+        condition = "Am Gerät in 0,50-€-Schritten eingegeben",
+        legalRef = "manuell",
+        custom = false,
+    )
+
+    private fun withSelection(s: MeterMachineState, f: (SurchargeSelection) -> SurchargeSelection): CommandResult =
+        when (s.phase) {
+            Phase.FREI -> CommandResult(s.copy(pendingSurcharges = f(s.pendingSurcharges)))
+            Phase.BESETZT, Phase.STOPP -> {
+                val run = s.run!!
+                CommandResult(s.copy(run = run.copy(surcharges = f(run.surcharges))))
+            }
+            Phase.KASSE -> CommandResult(s, "Fahrt ist abgeschlossen", changed = false)
+        }
+
+    /** Ein Tippen auf ZUSCHLAG: +0,50 €. */
+    fun addSurchargeStep(s: MeterMachineState): CommandResult = withSelection(s) { sel ->
+        val current = sel.items.firstOrNull { it.id == SURCHARGE_ID }?.amount ?: BigDecimal.ZERO
+        val next = current.add(SURCHARGE_STEP).min(SURCHARGE_MAX).setScale(2)
+        SurchargeSelection(sel.items.filterNot { it.id == SURCHARGE_ID } + stepDef(next))
+    }
+
+    /** Langes Drücken auf ZUSCHLAG: alle Zuschläge auf 0. */
+    fun resetSurcharges(s: MeterMachineState): CommandResult = withSelection(s) { SurchargeSelection() }
+
+    /** FREI: aus STOPP wird die Fahrt abgeschlossen (Datensatz in [CommandResult.state].completed) und geleert. */
+    fun pressFrei(s: MeterMachineState, nowWallMs: Long): Pair<CommandResult, TripRecord?> = when (s.phase) {
+        Phase.STOPP -> {
+            val rec = pressKasse(s, nowWallMs).state.completed!!
+            CommandResult(MeterMachineState(phase = Phase.FREI, selectedTariff = s.selectedTariff, savedWallMs = s.savedWallMs)) to rec
+        }
+        Phase.KASSE -> newTrip(s) to null
+        Phase.BESETZT -> CommandResult(s, "Fahrt läuft – erst STOPP drücken.", changed = false) to null
+        Phase.FREI -> CommandResult(s, null, changed = false) to null
+    }
+
+    // ---------------------------------------------------------------- Tunnel-/GPS-Lücken-Schätzung
+
+    /** Ab so langer Zeit ohne akzeptierte Messung wird geschätzt. */
+    const val ESTIMATE_AFTER_MS = 3_000L
+    /** Höchstdauer der Schätzung; danach bleibt der Zähler stehen, bis GPS wieder da ist. */
+    const val ESTIMATE_MAX_MS = 180_000L
+    /** Unterhalb dieser letzten Geschwindigkeit (7,2 km/h) wird nicht geschätzt (Stau/Stand). */
+    const val ESTIMATE_MIN_SPEED_MPS = 2.0
+    /** Obergrenze der Schätzgeschwindigkeit (100 km/h). */
+    const val ESTIMATE_MAX_SPEED_MPS = 100.0 / 3.6
+
+    fun estimatedGapM(run: TripRun, nowMs: Long): Double {
+        val open = nowMs - run.tracker.cursorMs
+        if (open <= ESTIMATE_AFTER_MS) return 0.0
+        val v = run.tracker.lastSpeedMps ?: return 0.0
+        if (v < ESTIMATE_MIN_SPEED_MPS) return 0.0
+        return minOf(v, ESTIMATE_MAX_SPEED_MPS) * (minOf(open, ESTIMATE_MAX_MS) / 1000.0)
+    }
+
+    private fun estimatedFare(run: TripRun, nowMs: Long): BigDecimal {
+        val est = estimatedGapM(run, nowMs)
+        if (est <= 0.0) return FareEngine.displayedFare(run.profile, run.meter)
+        val open = nowMs - run.tracker.cursorMs
+        val m = FareEngine.apply(run.meter, MeterInterval(open, est, null, measured = false), run.profile)
+        return FareEngine.displayedFare(run.profile, m)
+    }
+
+    private fun withFloor(run: TripRun, nowMs: Long): TripRun {
+        val f = maxOf(run.fareFloor, estimatedFare(run, nowMs))
+        return if (f.compareTo(run.fareFloor) == 0) run else run.copy(fareFloor = f)
     }
 }

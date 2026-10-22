@@ -42,28 +42,29 @@ Der Workflow führt vorher alle Unit-Tests aus (`testDebugUnitTest`); Testberich
 | Element | Funktion |
 |---|---|
 | **TARIF** (oben links, antippbar) | Im Zustand FREI Tarif 3 – BER oder 4 – Berlin wählen. Während der Fahrt gesperrt. |
-| **ZUSCHLAG** (oben rechts, antippbar) | Öffnet die Zuschlagsauswahl. Jeder Zuschlag einzeln an/aus, keine Doppelbuchung. Oben steht die Summe. Die Fahrtberechnung läuft dabei weiter. |
-| **FREI** | Ruhezustand. Keine Berechnung. |
-| **BESETZT** | Startet genau eine Fahrt (nur mit brauchbarem GPS-Fix), Grundpreis einmalig. Mehrfaches Tippen ohne Wirkung. Aus STOPP: Fortsetzen derselben Fahrt. |
-| **STOPP** | Friert Strecke, Zeit und Preis ein. |
-| **KASSE** (unten, rot nur in STOPP) | Schließt die Fahrt ab, speichert sie und öffnet die bildschirmfüllende Abschlussanzeige. |
-| **NEUE FAHRT** (Abschlussanzeige) | Nach Bestätigung zurück auf FREI; Strecke, Zeit, Preis und Zuschläge werden zurückgesetzt. Die Fahrt bleibt in der Historie. |
+| **ZUSCHLAG** (oben rechts) | Jedes Antippen: **+0,50 €**. Langes Drücken: Zuschlag auf 0,00 €. Funktioniert in FREI (für die nächste Fahrt), BESETZT und STOPP. |
+| **BESETZT** | Startet genau eine Fahrt (nur mit brauchbarem GPS-Fix), Grundpreis einmalig. Mehrfaches Tippen ohne Wirkung. Aus STOPP: dieselbe Fahrt läuft weiter – die Anzeige zeigt dann weiter die Summe inkl. Zuschlägen. |
+| **STOPP** | Friert die Berechnung ein. Die große Anzeige zeigt die **Summe aus Fahrpreis und Zuschlägen**, „KASSE“ leuchtet rot. |
+| **FREI** | Aus STOPP: Fahrt wird gespeichert (Historie unter FAHRTEN), der Zähler ist leer. Während BESETZT ohne Wirkung. |
+| **G ••••** (unten rechts) | Empfang: 4 Punkte gut, 3 mäßig, 1 unzuverlässig, 0 kein Empfang bzw. Tunnel-Schätzung. |
 
-Abschlussanzeige (Beispiel):
-
-```
-FAHRPREIS              42,30 €
-BER-ZUSCHLAG            1,50 €
-GESAMTBETRAG           43,80 €     (sehr groß)
-```
-
-Gesamtbetrag = Fahrpreis ohne Zuschläge + Summe der ausgewählten Zuschläge – alle drei Werte stammen aus
-demselben gespeicherten Fahrtabschluss.
+Summe = Fahrpreis ohne Zuschläge + Zuschläge (genau einmal). Die gespeicherte Fahrt in der Historie zeigt Fahrpreis,
+Zuschlag, Summe, Strecke, Dauer und Messlücken.
 
 Zurück-Taste während einer Fahrt beendet nichts: erster Druck zeigt einen Hinweis, ein zweiter innerhalb von
 2,5 s schickt die App in den Hintergrund (die Fahrt läuft über den Foreground-Service weiter).
 
----
+### Tunnel / kein GPS-Empfang
+
+1. Nach 3 s ohne Messung zählt die App mit der **zuletzt gemessenen Geschwindigkeit** weiter (höchstens 100 km/h,
+   höchstens 3 Minuten; unter 7 km/h – Stau – keine Schätzung). Beispiel Britzer Tunnel (A113) bei 80 km/h:
+   etwa alle 3 Sekunden +0,20 €.
+2. Nach der Ausfahrt wird die Strecke im Tunnel aus der gemessenen Position vor und nach dem Tunnel bestimmt
+   (Luftlinie = nachweisbare Mindeststrecke), wenn die Lücke höchstens 10 Minuten dauert und die
+   Durchschnittsgeschwindigkeit plausibel ist (≤ 130 km/h).
+3. Der angezeigte Preis springt dabei **nie zurück**: Lag die Schätzung höher, bleibt der Zähler stehen,
+   bis die echte Berechnung ihn eingeholt hat.
+4. Eine Lücke erzeugt nie Wartezeit und wird in der Fahrt vermerkt.
 
 ## 3. Tarife und Quellen (geprüft am 22.10.2026)
 
@@ -162,7 +163,7 @@ Implementiert in `domain/gps/DistanceTracker.kt`. Zeitdifferenzen ausschließlic
 | Sprung | (Abstand − Genauigkeiten) / Zeit > 70 m/s → verworfen | GPS-Sprünge; nach 5 Sprüngen in Folge Neuverankerung **ohne** Strecke |
 | Ankerschwelle | Genauigkeit, begrenzt auf 5…25 m; ohne Doppler-Bewegung (< 1 m/s) doppelte Schwelle | Stillstandsrauschen erzeugt keine Kilometer |
 | Messlücke | > 10 s ohne akzeptierte Messung | „GPS verloren“, keine Wartezeit |
-| Überbrückung | nur Lücken ≤ 30 s, Ø ≤ 180 km/h, beide Fixe ≤ 20 m | Luftlinie als nachweisbare Untergrenze; sonst **keine** Strecke |
+| Überbrückung (Tunnel) | Lücken ≤ 10 min, Ø ≤ 130 km/h, beide Fixe ≤ 20 m | Luftlinie als nachweisbare Untergrenze; sonst **keine** Strecke |
 | Anzeige „unzuverlässig“ | > 3 s ohne Messung oder Genauigkeit > 30 m | Warnhinweis |
 
 Langsame echte Fahrt wird nicht verschluckt: Die Verschiebung wird vom letzten Ankerpunkt gemessen und bei

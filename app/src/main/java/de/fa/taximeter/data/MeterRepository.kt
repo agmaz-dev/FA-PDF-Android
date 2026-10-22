@@ -156,6 +156,40 @@ class MeterRepository(private val app: Context) {
         if (r.changed) MeterService.stop(app)
     }
 
+    /** FREI: aus STOPP Fahrt speichern und Zähler leeren. */
+    fun pressFrei() {
+        val (r, rec) = MeterMachine.pressFrei(_state.value, System.currentTimeMillis())
+        if (rec != null) {
+            _history.value = listOf(rec) + _history.value.filterNot { it.id == rec.id }
+            store.saveHistory(_history.value)
+            _restoreNotice.value = null
+        }
+        if (r.changed && r.state.phase == Phase.FREI) {
+            val fresh = r.state.copy(selectedTariff = settings.current.profileFor(r.state.selectedTariff.displayNumber))
+            apply(CommandResult(fresh, r.message))
+            gpsHub.setSimulation(isSimulationActive(fresh))
+            MeterService.stop(app)
+        } else {
+            apply(r)
+        }
+    }
+
+    fun addSurchargeStep() = apply(MeterMachine.addSurchargeStep(_state.value))
+
+    fun resetSurcharges() {
+        apply(MeterMachine.resetSurcharges(_state.value))
+        message("Zuschlag auf 0,00 € zurückgesetzt")
+    }
+
+    /** Regelmäßig aufrufen: hält den angezeigten Preis (Tunnel-Schätzung) als Untergrenze fest. */
+    fun tick() {
+        val r = MeterMachine.tick(_state.value, SystemClock.elapsedRealtime())
+        if (r.changed) {
+            _state.value = r.state
+            if (SystemClock.elapsedRealtime() - lastSaveElapsed >= SAVE_INTERVAL_MS) save()
+        }
+    }
+
     fun newTrip() {
         val r = MeterMachine.newTrip(_state.value)
         if (r.changed) {
@@ -200,12 +234,13 @@ class MeterRepository(private val app: Context) {
 
     /** Wird vom Service periodisch aufgerufen, damit auch ohne neue Messungen gesichert wird. */
     fun periodicSave() {
+        tick()
         if (SystemClock.elapsedRealtime() - lastSaveElapsed >= SAVE_INTERVAL_MS) save()
     }
 
     fun notificationText(): String {
         val s = _state.value
-        val fare = Money.formatEuro(MeterMachine.liveFare(s))
+        val fare = Money.formatEuro(MeterMachine.displayAmount(s, SystemClock.elapsedRealtime()))
         val km = String.format(java.util.Locale.GERMANY, "%.2f km", (s.run?.meter?.odometerM ?: 0.0) / 1000.0)
         return when (s.phase) {
             Phase.BESETZT -> "BESETZT · $fare · $km"

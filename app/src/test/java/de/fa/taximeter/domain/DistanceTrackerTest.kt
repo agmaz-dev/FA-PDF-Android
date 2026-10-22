@@ -112,22 +112,38 @@ class DistanceTrackerTest {
         assertEquals(0.0, run.distance, 0.0)
     }
 
-    @Test fun gpsAusfallUndWiederempfang_langeLueckeOhneLuftlinie() {
-        val run = Run(DistanceTracker.seed(fix(0.0, 0.0, 0, speed = 10.0), 0))
-        for (t in 1..10) feed(run, fix(0.0, t * 10.0, t * 1000L, speed = 10.0))
-        // 2 Minuten kein Fix (Tunnel), dann 1200 m weiter
-        val r = DistanceTracker.onFix(run.state, fix(0.0, 1_300.0, 130_000, speed = 10.0), 130_000, cfg)
+    @Test fun tunnelLueckeWirdPerLuftlinieUeberbrueckt() {
+        // Britzer Tunnel: ca. 77 s ohne Empfang bei 80 km/h, 1,7 km
+        val run = Run(DistanceTracker.seed(fix(0.0, 0.0, 0, speed = 22.2), 0))
+        for (t in 1..10) feed(run, fix(0.0, t * 22.2, t * 1000L, speed = 22.2))
+        val r = DistanceTracker.onFix(run.state, fix(0.0, 222.0 + 1_700.0, 87_000, speed = 22.2), 87_000, cfg)
         val gap = r.gap!!
         assertEquals(GapReason.GPS_LOST, gap.reason)
-        assertEquals(120_000L, gap.durationMs)
-        assertEquals(0.0, gap.bridgedM, 0.0)              // keine ungeprüfte Luftlinienbrücke
-        assertEquals(1_200.0, gap.straightLineM!!, 1.0)    // nur dokumentiert
-        assertFalse(r.interval!!.measured)                 // Lücke ≠ Stillstand
-        assertEquals(0.0, r.interval!!.distanceM, 0.0)
-        // Danach wird normal weitergemessen
+        assertEquals(77_000L, gap.durationMs)
+        assertEquals(1_700.0, gap.bridgedM, 1.0)
+        assertFalse(r.interval!!.measured)                 // Lücke ≠ Stillstand, keine Wartezeit
+        assertEquals(1_700.0, r.interval!!.distanceM, 1.0)
         run.state = r.state
-        for (t in 131..140) feed(run, fix(0.0, 1_300.0 + (t - 130) * 10.0, t * 1000L, speed = 10.0))
-        assertEquals(200.0, run.distance, 12.0)
+        for (t in 88..97) feed(run, fix(0.0, 1_922.0 + (t - 87) * 22.2, t * 1000L, speed = 22.2))
+        assertEquals(222.0 + 1_700 + 222.0, run.distance + 1_700.0, 25.0)
+    }
+
+    @Test fun sehrLangeLueckeOhneLuftlinie() {
+        val run = Run(DistanceTracker.seed(fix(0.0, 0.0, 0, speed = 10.0), 0))
+        for (t in 1..10) feed(run, fix(0.0, t * 10.0, t * 1000L, speed = 10.0))
+        // 15 Minuten kein Fix: nicht mehr prüfbar -> keine Strecke, nur dokumentiert
+        val r = DistanceTracker.onFix(run.state, fix(0.0, 3_100.0, 910_000, speed = 10.0), 910_000, cfg)
+        assertEquals(0.0, r.gap!!.bridgedM, 0.0)
+        assertEquals(3_000.0, r.gap!!.straightLineM!!, 1.0)
+        assertEquals(0.0, r.interval!!.distanceM, 0.0)
+    }
+
+    @Test fun unplausibelSchnelleLueckeOhneLuftlinie() {
+        val run = Run(DistanceTracker.seed(fix(0.0, 0.0, 0, speed = 10.0), 0))
+        for (t in 1..10) feed(run, fix(0.0, t * 10.0, t * 1000L, speed = 10.0))
+        // 3 km in 70 s = 154 km/h -> nicht überbrücken
+        val r = DistanceTracker.onFix(run.state, fix(0.0, 3_100.0, 80_000, speed = 10.0), 80_000, cfg)
+        assertEquals(0.0, r.gap!!.bridgedM, 0.0)
     }
 
     @Test fun kurzeLueckeWirdGeprueftUeberbrueckt() {

@@ -1,13 +1,15 @@
 package de.fa.taximeter.ui.screens
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -15,8 +17,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -24,11 +28,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -36,7 +36,6 @@ import de.fa.taximeter.domain.Money
 import de.fa.taximeter.domain.gps.GpsQuality
 import de.fa.taximeter.domain.tariff.TariffProfile
 import de.fa.taximeter.domain.trip.Phase
-import de.fa.taximeter.ui.Format
 import de.fa.taximeter.ui.components.SevenSegment
 import de.fa.taximeter.ui.theme.MeterColors
 import java.math.BigDecimal
@@ -45,35 +44,31 @@ import java.math.BigDecimal
 data class MeterUi(
     val phase: Phase,
     val tariff: TariffProfile,
-    val fare: BigDecimal,
+    /** Betrag der großen Anzeige (Fahrpreis oder – nach STOPP – Summe inkl. Zuschläge). */
+    val amount: BigDecimal,
+    val showsTotal: Boolean,
     val surchargeTotal: BigDecimal,
-    val distanceM: Double,
-    val durationMs: Long,
-    val waitingMs: Long,
-    val speedMps: Double?,
     val gpsQuality: GpsQuality,
-    val gpsAccuracyM: Double?,
+    val estimating: Boolean,
     val simulation: Boolean,
     val providerEnabled: Boolean,
     val fineLocation: Boolean,
     val anyLocation: Boolean,
-    val restoreNotice: String?,
-    val gapCount: Int,
 )
 
 class MeterActions(
     val onTarif: () -> Unit,
     val onZuschlag: () -> Unit,
+    val onZuschlagLong: () -> Unit,
     val onFrei: () -> Unit,
     val onBesetzt: () -> Unit,
     val onStopp: () -> Unit,
-    val onKasse: () -> Unit,
     val onHistory: () -> Unit,
     val onSettings: () -> Unit,
-    val onDismissNotice: () -> Unit,
     val onRequestPermission: () -> Unit,
 )
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun MeterScreen(ui: MeterUi, actions: MeterActions) {
     BoxWithConstraints(
@@ -83,7 +78,6 @@ fun MeterScreen(ui: MeterUi, actions: MeterActions) {
             .padding(horizontal = 12.dp, vertical = 6.dp)
     ) {
         val landscape = maxWidth > maxHeight * 1.1f
-        // Skalierung der Beschriftungen nach verfügbarer Fläche (Smartphone, Querformat, Fold innen/außen)
         val scale = if (landscape) {
             minOf(maxWidth.value / 700f, maxHeight.value / 340f)
         } else {
@@ -91,11 +85,15 @@ fun MeterScreen(ui: MeterUi, actions: MeterActions) {
         }.coerceIn(0.7f, 2.4f)
         val labelSize = (22f * scale).sp
         val barSize = (24f * scale).sp
-        val smallSize = (12.5f * scale.coerceAtMost(1.5f)).sp
-        val infoSize = (15f * scale.coerceAtMost(1.7f)).sp
+        val smallSize = (12f * scale.coerceAtMost(1.4f)).sp
 
         Column(Modifier.fillMaxSize()) {
-            Header(ui, actions, smallSize)
+            // Nur FAHRTEN und EINSTELLUNGEN, dezent
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Spacer(Modifier.weight(1f))
+                HeaderButton("FAHRTEN", smallSize, actions.onHistory)
+                HeaderButton("EINSTELLUNGEN", smallSize, actions.onSettings)
+            }
             Banners(ui, actions, smallSize)
 
             // ---------------- TARIF | ZUSCHLAG
@@ -131,7 +129,13 @@ fun MeterScreen(ui: MeterUi, actions: MeterActions) {
                     Modifier
                         .weight(6f)
                         .fillMaxHeight()
-                        .clickable(role = Role.Button, onClickLabel = "Zuschläge wählen", onClick = actions.onZuschlag),
+                        .combinedClickable(
+                            role = Role.Button,
+                            onClickLabel = "Zuschlag plus 0,50 Euro",
+                            onLongClickLabel = "Zuschlag zurücksetzen",
+                            onLongClick = actions.onZuschlagLong,
+                            onClick = actions.onZuschlag,
+                        ),
                     horizontalAlignment = Alignment.End,
                 ) {
                     Text("ZUSCHLAG", color = MeterColors.Label, fontSize = labelSize, fontWeight = FontWeight.Bold, maxLines = 1)
@@ -154,24 +158,27 @@ fun MeterScreen(ui: MeterUi, actions: MeterActions) {
             Spacer(Modifier.height(if (landscape) 6.dp else 10.dp))
 
             // ---------------- FREI | BESETZT | STOPP
-            StatusBar(
-                phase = ui.phase,
-                fontSize = barSize,
-                modifier = Modifier
+            Row(
+                Modifier
                     .fillMaxWidth(if (landscape) 0.82f else 1f)
                     .align(Alignment.CenterHorizontally)
-                    .weight(if (landscape) 0.15f else 0.12f)
-                    .heightIn(min = 56.dp),
-                actions = actions,
-            )
+                    .weight(if (landscape) 0.16f else 0.12f)
+                    .heightIn(min = 56.dp)
+                    .border(2.5.dp, MeterColors.Frame, RoundedCornerShape(10.dp)),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                StatusCell("FREI", ui.phase == Phase.FREI, barSize, actions.onFrei)
+                StatusCell("BESETZT", ui.phase == Phase.BESETZT, barSize, actions.onBesetzt)
+                StatusCell("STOPP", ui.phase == Phase.STOPP, barSize, actions.onStopp)
+            }
 
             Spacer(Modifier.height(if (landscape) 6.dp else 10.dp))
 
-            // ---------------- € Fahrpreis
+            // ---------------- € Betrag
             Row(
                 Modifier
                     .fillMaxWidth()
-                    .weight(if (landscape) 0.36f else 0.22f),
+                    .weight(if (landscape) 0.40f else 0.24f),
             ) {
                 Text(
                     "€",
@@ -180,78 +187,45 @@ fun MeterScreen(ui: MeterUi, actions: MeterActions) {
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(top = 4.dp, end = 4.dp),
                 )
-                val fareText = if (ui.phase == Phase.FREI) "" else Money.formatDe(ui.fare)
+                val text = if (ui.phase == Phase.FREI) "" else Money.formatDe(ui.amount)
                 SevenSegment(
-                    text = fareText,
+                    text = text,
                     digits = 7,
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxHeight(),
-                    description = "Fahrpreis ${Money.formatEuro(ui.fare)}",
+                    description = (if (ui.showsTotal) "Kasse " else "Fahrpreis ") + Money.formatEuro(ui.amount),
                 )
             }
 
-            // ---------------- FAHRPREIS | KASSE   + GPS
+            // ---------------- FAHRPREIS | KASSE   + GPS-Punkte
             Row(
                 Modifier
                     .fillMaxWidth()
-                    .padding(top = 4.dp),
+                    .padding(top = 4.dp, bottom = 2.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Spacer(Modifier.weight(1f))
+                val running = ui.phase == Phase.BESETZT || ui.phase == Phase.STOPP
                 Text(
                     "FAHRPREIS",
-                    color = if (ui.phase == Phase.BESETZT || ui.phase == Phase.STOPP) MeterColors.Label else MeterColors.Inactive,
+                    color = if (running && !ui.showsTotal) MeterColors.Label else MeterColors.Inactive,
                     fontSize = labelSize,
                     fontWeight = FontWeight.Bold,
                     maxLines = 1,
                 )
                 Spacer(Modifier.width((28f * scale).dp))
-                Box(
-                    Modifier
-                        .heightIn(min = 48.dp)
-                        .widthIn(min = 96.dp)
-                        .clickable(role = Role.Button, onClickLabel = "Kasse", onClick = actions.onKasse),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        "KASSE",
-                        color = if (ui.phase == Phase.STOPP) MeterColors.Label else MeterColors.Inactive,
-                        fontSize = labelSize,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                    )
-                }
+                Text(
+                    "KASSE",
+                    color = if (running && ui.showsTotal) MeterColors.Label else MeterColors.Inactive,
+                    fontSize = labelSize,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                )
                 Spacer(Modifier.weight(1f))
-                GpsIndicator(ui, smallSize, (34f * scale.coerceAtMost(1.6f)).dp)
+                GpsDots(ui, smallSize)
             }
-
-            InfoRow(ui, infoSize, landscape)
         }
-    }
-}
-
-@Composable
-private fun Header(ui: MeterUi, actions: MeterActions, size: TextUnit) {
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f)) {
-            Text(
-                "FA Taximeter · ${ui.tariff.label}",
-                color = MeterColors.White,
-                fontSize = size,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                "GPS-Fahrpreisrechner – nicht geeicht",
-                color = MeterColors.Inactive,
-                fontSize = (size.value * 0.9f).sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-        HeaderButton("FAHRTEN", size, actions.onHistory)
-        HeaderButton("EINSTELLUNGEN", size, actions.onSettings)
     }
 }
 
@@ -264,7 +238,7 @@ private fun HeaderButton(text: String, size: TextUnit, onClick: () -> Unit) {
             .padding(horizontal = 10.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Text(text, color = MeterColors.Inactive, fontSize = size, fontWeight = FontWeight.Bold, maxLines = 1)
+        Text(text, color = MeterColors.Dim, fontSize = size, fontWeight = FontWeight.Bold, maxLines = 1)
     }
 }
 
@@ -284,48 +258,21 @@ private fun Banner(text: String, color: Color, size: TextUnit, onClick: (() -> U
     }
 }
 
+/** Nur Hinweise, ohne die keine Messung möglich ist. */
 @Composable
 private fun Banners(ui: MeterUi, actions: MeterActions, size: TextUnit) {
-    if (ui.simulation) {
-        Banner("SIMULATION – TESTMODUS: keine echten GPS-Werte", MeterColors.Warn, size)
-    }
     if (!ui.anyLocation) {
         Banner("Standortfreigabe fehlt – ohne GPS keine Fahrt möglich", MeterColors.Label, size, actions.onRequestPermission, "FREIGEBEN")
     } else if (!ui.fineLocation && !ui.simulation) {
-        Banner("Nur ungefährer Standort freigegeben – Strecke kann nicht gemessen werden", MeterColors.Warn, size, actions.onRequestPermission, "GENAU ERLAUBEN")
+        Banner("Nur ungefährer Standort freigegeben", MeterColors.Warn, size, actions.onRequestPermission, "GENAU ERLAUBEN")
     }
     if (!ui.providerEnabled && !ui.simulation) {
         Banner("Standort/GPS ist im Gerät ausgeschaltet", MeterColors.Label, size)
     }
-    if (ui.phase == Phase.BESETZT) {
-        when (ui.gpsQuality) {
-            GpsQuality.LOST -> Banner("GPS VERLOREN – es wird keine Strecke berechnet (Messlücke)", MeterColors.Label, size)
-            GpsQuality.UNRELIABLE -> Banner("GPS UNZUVERLÄSSIG – Messungen werden verworfen", MeterColors.Warn, size)
-            else -> Unit
-        }
-    }
-    ui.restoreNotice?.let { Banner(it, MeterColors.Warn, size, actions.onDismissNotice, "OK") }
 }
 
 @Composable
-private fun StatusBar(phase: Phase, fontSize: TextUnit, modifier: Modifier, actions: MeterActions) {
-    Row(
-        modifier.border(2.5.dp, MeterColors.Frame, RoundedCornerShape(10.dp)),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        StatusCell("FREI", phase == Phase.FREI, fontSize, actions.onFrei)
-        StatusCell("BESETZT", phase == Phase.BESETZT, fontSize, actions.onBesetzt)
-        StatusCell("STOPP", phase == Phase.STOPP, fontSize, actions.onStopp)
-    }
-}
-
-@Composable
-private fun androidx.compose.foundation.layout.RowScope.StatusCell(
-    text: String,
-    active: Boolean,
-    fontSize: TextUnit,
-    onClick: () -> Unit,
-) {
+private fun RowScope.StatusCell(text: String, active: Boolean, fontSize: TextUnit, onClick: () -> Unit) {
     Box(
         Modifier
             .weight(1f)
@@ -343,92 +290,32 @@ private fun androidx.compose.foundation.layout.RowScope.StatusCell(
     }
 }
 
+/** Dezente Empfangsanzeige: „G“ und vier kleine Punkte. Im Tunnel (Schätzung) sind alle Punkte aus. */
 @Composable
-private fun GpsIndicator(ui: MeterUi, size: TextUnit, barHeight: Dp) {
-    val (bars, color) = when (ui.gpsQuality) {
-        GpsQuality.GOOD -> 4 to MeterColors.Lit
-        GpsQuality.FAIR -> 3 to MeterColors.Warn
-        GpsQuality.UNRELIABLE -> 1 to MeterColors.Warn
-        GpsQuality.LOST -> 0 to MeterColors.Dim
+private fun GpsDots(ui: MeterUi, size: TextUnit) {
+    val dots = when {
+        ui.estimating -> 0
+        else -> when (ui.gpsQuality) {
+            GpsQuality.GOOD -> 4
+            GpsQuality.FAIR -> 3
+            GpsQuality.UNRELIABLE -> 1
+            GpsQuality.LOST -> 0
+        }
     }
-    Row(verticalAlignment = Alignment.Bottom) {
-        Column(horizontalAlignment = Alignment.End) {
-            Text(
-                when (ui.gpsQuality) {
-                    GpsQuality.LOST -> "GPS verloren"
-                    GpsQuality.UNRELIABLE -> "GPS unzuverlässig"
-                    else -> "GPS"
-                },
-                color = if (ui.gpsQuality == GpsQuality.LOST) MeterColors.Label else color,
-                fontSize = size,
-                fontWeight = FontWeight.Bold,
-                maxLines = 1,
+    val on = MeterColors.Lit.copy(alpha = 0.55f)
+    val off = MeterColors.Unlit
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.widthIn(min = 56.dp)) {
+        if (ui.simulation) {
+            Text("SIM ", color = MeterColors.Warn.copy(alpha = 0.7f), fontSize = size, fontWeight = FontWeight.Bold)
+        }
+        Text("G", color = MeterColors.Dim, fontSize = size, fontWeight = FontWeight.Bold)
+        for (i in 1..4) {
+            Box(
+                Modifier
+                    .padding(start = 3.dp)
+                    .size(5.dp)
+                    .background(if (i <= dots) on else off, CircleShape)
             )
-            Text(
-                ui.gpsAccuracyM?.let { "±" + Format.decimal(it, 0) + " m" } ?: "± – m",
-                color = MeterColors.Inactive,
-                fontSize = size,
-                maxLines = 1,
-            )
-        }
-        Spacer(Modifier.width(6.dp))
-        Row(Modifier.height(barHeight), verticalAlignment = Alignment.Bottom) {
-            for (i in 1..4) {
-                Box(
-                    Modifier
-                        .padding(start = 2.dp)
-                        .width(5.dp)
-                        .fillMaxHeight(i / 4f)
-                        .background(if (i <= bars) color else MeterColors.Unlit)
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun InfoRow(ui: MeterUi, size: TextUnit, landscape: Boolean) {
-    val items = buildList {
-        add(Format.km(ui.distanceM))
-        add("Dauer " + Format.duration(ui.durationMs))
-        add("Warten " + Format.duration(ui.waitingMs))
-        add(Format.speedKmh(ui.speedMps))
-        if (ui.phase != Phase.FREI && ui.surchargeTotal.signum() > 0) {
-            add("Gesamt " + Money.formatEuro(Money.cents(ui.fare.add(ui.surchargeTotal))))
-        }
-        if (ui.gapCount > 0) add("Messlücken: ${ui.gapCount}")
-    }
-    val color = if (ui.phase == Phase.FREI) MeterColors.Dim else MeterColors.Inactive
-    if (landscape) {
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .padding(top = 2.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly,
-        ) {
-            items.forEach {
-                Text(it, color = color, fontSize = size, fontFamily = FontFamily.Monospace, maxLines = 1)
-            }
-        }
-    } else {
-        // Hochformat: zwei Spalten, damit nichts abgeschnitten wird
-        Column(Modifier.fillMaxWidth().padding(top = 6.dp)) {
-            items.chunked(2).forEach { row ->
-                Row(Modifier.fillMaxWidth()) {
-                    row.forEach {
-                        Text(
-                            it,
-                            color = color,
-                            fontSize = size,
-                            fontFamily = FontFamily.Monospace,
-                            maxLines = 1,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.weight(1f),
-                        )
-                    }
-                    if (row.size == 1) Spacer(Modifier.weight(1f))
-                }
-            }
         }
     }
 }

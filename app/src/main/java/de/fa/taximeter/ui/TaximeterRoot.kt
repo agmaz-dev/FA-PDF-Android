@@ -32,11 +32,8 @@ import androidx.core.content.ContextCompat
 import android.content.pm.PackageManager
 import de.fa.taximeter.data.MeterRepository
 import de.fa.taximeter.data.OrientationMode
-import de.fa.taximeter.domain.tariff.TariffCatalog
 import de.fa.taximeter.domain.trip.MeterMachine
 import de.fa.taximeter.domain.trip.Phase
-import de.fa.taximeter.domain.trip.SurchargeDef
-import de.fa.taximeter.ui.screens.ConfirmDialog
 import de.fa.taximeter.ui.screens.HistoryScreen
 import de.fa.taximeter.ui.screens.KasseScreen
 import de.fa.taximeter.ui.screens.MeterActions
@@ -44,12 +41,10 @@ import de.fa.taximeter.ui.screens.MeterScreen
 import de.fa.taximeter.ui.screens.MeterUi
 import de.fa.taximeter.ui.screens.SettingsActions
 import de.fa.taximeter.ui.screens.SettingsScreen
-import de.fa.taximeter.ui.screens.SurchargeDialog
 import de.fa.taximeter.ui.screens.TariffDialog
 import de.fa.taximeter.ui.theme.MeterColors
 import de.fa.taximeter.ui.theme.MeterTheme
 import kotlinx.coroutines.delay
-import java.util.UUID
 
 private enum class Screen { METER, HISTORY, DETAIL, SETTINGS }
 
@@ -71,8 +66,6 @@ fun TaximeterRoot(
         var screen by rememberSaveable { mutableStateOf(Screen.METER) }
         var detailId by rememberSaveable { mutableStateOf<String?>(null) }
         var showTariff by rememberSaveable { mutableStateOf(false) }
-        var showSurcharges by rememberSaveable { mutableStateOf(false) }
-        var confirmNewTrip by rememberSaveable { mutableStateOf(false) }
         var lastBack by remember { mutableLongStateOf(0L) }
         var permissionTick by remember { mutableIntStateOf(0) }
 
@@ -81,6 +74,7 @@ fun TaximeterRoot(
         LaunchedEffect(Unit) {
             while (true) {
                 nowMs = SystemClock.elapsedRealtime()
+                repo.tick()
                 delay(500)
             }
         }
@@ -88,6 +82,12 @@ fun TaximeterRoot(
             repo.messages.collect { Toast.makeText(context, it, Toast.LENGTH_SHORT).show() }
         }
         LaunchedEffect(settings.orientation) { onOrientation(settings.orientation) }
+        LaunchedEffect(restoreNotice) {
+            restoreNotice?.let {
+                Toast.makeText(context, it, Toast.LENGTH_LONG).show()
+                repo.dismissRestoreNotice()
+            }
+        }
 
         // Bildschirm anlassen, solange eine Fahrt aktiv ist (inkl. Abschlussanzeige)
         val keepOn = settings.keepScreenOn && state.phase != Phase.FREI
@@ -137,8 +137,7 @@ fun TaximeterRoot(
                 onLeaveToBackground()
             } else {
                 lastBack = now
-                val hint = if (state.phase == Phase.KASSE) "Abschlussanzeige bleibt bis „Neue Fahrt“."
-                else "Fahrt läuft weiter. Nochmals ZURÜCK: App in den Hintergrund."
+                val hint = "Fahrt läuft weiter. Nochmals ZURÜCK: App in den Hintergrund."
                 Toast.makeText(context, hint, Toast.LENGTH_SHORT).show()
             }
         }
@@ -151,74 +150,45 @@ fun TaximeterRoot(
         ) {
             when (screen) {
                 Screen.METER -> {
-                    val completed = state.completed
-                    if (state.phase == Phase.KASSE && completed != null) {
-                        KasseScreen(
-                            record = completed,
-                            primaryLabel = "NEUE FAHRT",
-                            onPrimary = { confirmNewTrip = true },
-                        )
-                    } else {
-                        val run = state.run
-                        val ui = MeterUi(
+                    MeterScreen(
+                        MeterUi(
                             phase = state.phase,
-                            tariff = run?.profile ?: state.selectedTariff,
-                            fare = MeterMachine.liveFare(state),
+                            tariff = state.run?.profile ?: state.selectedTariff,
+                            amount = MeterMachine.displayAmount(state, nowMs),
+                            showsTotal = MeterMachine.showsTotal(state),
                             surchargeTotal = state.activeSurcharges.total,
-                            distanceM = run?.meter?.odometerM ?: 0.0,
-                            durationMs = MeterMachine.liveDurationMs(state, nowMs),
-                            waitingMs = run?.meter?.chargedWaitingMs ?: 0L,
-                            speedMps = gps.lastRaw?.speedMps?.takeIf { nowMs - (gps.lastRaw?.elapsedMs ?: 0L) < 5_000 },
                             gpsQuality = repo.quality(nowMs),
-                            gpsAccuracyM = gps.lastRaw?.accuracyM,
+                            estimating = MeterMachine.isEstimating(state, nowMs),
                             simulation = repo.simulationActive,
                             providerEnabled = gps.providerEnabled,
                             fineLocation = fine,
                             anyLocation = fine || coarse || repo.simulationActive,
-                            restoreNotice = restoreNotice,
-                            gapCount = run?.gaps?.size ?: 0,
-                        )
-                        MeterScreen(
-                            ui,
-                            MeterActions(
-                                onTarif = {
-                                    if (state.phase == Phase.FREI) showTariff = true
-                                    else repo.message("Tarifwechsel während der Fahrt gesperrt")
-                                },
-                                onZuschlag = { showSurcharges = true },
-                                onFrei = {
-                                    when (state.phase) {
-                                        Phase.BESETZT -> repo.message("Fahrt läuft – erst STOPP, dann KASSE.")
-                                        Phase.STOPP -> repo.message("Erst KASSE drücken, um die Fahrt abzuschließen.")
-                                        else -> Unit
-                                    }
-                                },
-                                onBesetzt = {
-                                    if (state.phase == Phase.FREI && !repo.simulationActive && !fine) {
-                                        if (coarse) repo.message("Für die Streckenmessung wird der genaue Standort benötigt.")
-                                        requestPermissions()
-                                    } else {
-                                        repo.pressBesetzt()
-                                    }
-                                },
-                                onStopp = {
-                                    if (state.phase == Phase.FREI) repo.message("Keine Fahrt aktiv.")
-                                    else repo.pressStopp()
-                                },
-                                onKasse = {
-                                    when (state.phase) {
-                                        Phase.STOPP -> repo.pressKasse()
-                                        Phase.BESETZT -> repo.message("Erst STOPP drücken.")
-                                        else -> Unit
-                                    }
-                                },
-                                onHistory = { screen = Screen.HISTORY },
-                                onSettings = { screen = Screen.SETTINGS },
-                                onDismissNotice = repo::dismissRestoreNotice,
-                                onRequestPermission = requestPermissions,
-                            ),
-                        )
-                    }
+                        ),
+                        MeterActions(
+                            onTarif = {
+                                if (state.phase == Phase.FREI) showTariff = true
+                                else repo.message("Tarifwechsel während der Fahrt gesperrt")
+                            },
+                            onZuschlag = { repo.addSurchargeStep() },
+                            onZuschlagLong = { repo.resetSurcharges() },
+                            onFrei = { repo.pressFrei() },
+                            onBesetzt = {
+                                if (state.phase == Phase.FREI && !repo.simulationActive && !fine) {
+                                    if (coarse) repo.message("Für die Streckenmessung wird der genaue Standort benötigt.")
+                                    requestPermissions()
+                                } else {
+                                    repo.pressBesetzt()
+                                }
+                            },
+                            onStopp = {
+                                if (state.phase == Phase.FREI) repo.message("Keine Fahrt aktiv.")
+                                else repo.pressStopp()
+                            },
+                            onHistory = { screen = Screen.HISTORY },
+                            onSettings = { screen = Screen.SETTINGS },
+                            onRequestPermission = requestPermissions,
+                        ),
+                    )
                 }
 
                 Screen.HISTORY -> HistoryScreen(
@@ -280,40 +250,6 @@ fun TaximeterRoot(
                     showTariff = false
                 },
                 onDismiss = { showTariff = false },
-            )
-        }
-        if (showSurcharges && screen == Screen.METER) {
-            SurchargeDialog(
-                available = TariffCatalog.SURCHARGES + settings.customSurcharges,
-                selection = state.activeSurcharges,
-                editable = state.phase != Phase.KASSE,
-                onToggle = { repo.toggleSurcharge(it) },
-                onCreateCustom = { label, amount ->
-                    val def = SurchargeDef(
-                        id = "custom-" + UUID.randomUUID().toString().take(8),
-                        label = label,
-                        amount = amount,
-                        condition = "Benutzerdefiniert – nicht in der Tarifverordnung geregelt.",
-                        legalRef = "benutzerdefiniert",
-                        custom = true,
-                    )
-                    repo.settings.addCustomSurcharge(def)
-                    repo.toggleSurcharge(def)
-                },
-                onDismiss = { showSurcharges = false },
-            )
-        }
-        if (confirmNewTrip) {
-            ConfirmDialog(
-                title = "NEUE FAHRT?",
-                text = "Die Abschlussanzeige wird geschlossen und der Zähler auf FREI gesetzt. " +
-                    "Die abgeschlossene Fahrt bleibt in der Historie.",
-                confirm = "NEUE FAHRT",
-                onConfirm = {
-                    confirmNewTrip = false
-                    repo.newTrip()
-                },
-                onDismiss = { confirmNewTrip = false },
             )
         }
     }

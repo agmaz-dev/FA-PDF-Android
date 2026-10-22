@@ -18,10 +18,10 @@ data class GpsFilterConfig(
     val gapMs: Long = 10_000,
     /** Ohne akzeptierte Messung seit dieser Zeit: "GPS unzuverlässig". */
     val unreliableAfterMs: Long = 3_000,
-    /** Kurze Lücken bis zu dieser Dauer dürfen geprüft per Luftlinie (Untergrenze) überbrückt werden. */
-    val bridgeMaxGapMs: Long = 30_000,
-    /** Maximal plausible Durchschnittsgeschwindigkeit für eine Überbrückung (180 km/h). */
-    val bridgeMaxSpeedMps: Double = 50.0,
+    /** Lücken (z. B. Tunnel) bis zu dieser Dauer werden geprüft per Luftlinie (Untergrenze) überbrückt. */
+    val bridgeMaxGapMs: Long = 600_000,
+    /** Maximal plausible Durchschnittsgeschwindigkeit für eine Überbrückung (130 km/h). */
+    val bridgeMaxSpeedMps: Double = 36.0,
     /** Mindest-/Höchstschwelle für das Fortschreiben des Ankerpunkts. */
     val minCommitM: Double = 5.0,
     val maxCommitM: Double = 25.0,

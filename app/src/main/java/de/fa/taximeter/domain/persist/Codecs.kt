@@ -195,6 +195,8 @@ object Codecs {
         "surcharges" to r.surcharges.items.map { surchargeToMap(it) },
         "gaps" to r.gaps.map { gapToMap(it) },
         "restored" to r.restoredAfterProcessDeath,
+        "fareFloor" to r.fareFloor.toPlainString(),
+        "showTotal" to r.showTotal,
     )
 
     private fun runFromMap(m: Map<String, Any?>) = TripRun(
@@ -207,6 +209,8 @@ object Codecs {
         surcharges = SurchargeSelection(m.objList("surcharges").map { surchargeFromMap(it) }),
         gaps = m.objList("gaps").map { gapFromMap(it) },
         restoredAfterProcessDeath = m.bool("restored"),
+        fareFloor = m.strOrNull("fareFloor")?.let { BigDecimal(it) } ?: BigDecimal.ZERO,
+        showTotal = m.bool("showTotal"),
     )
 
     fun recordToMap(r: TripRecord): Map<String, Any?> = linkedMapOf(
