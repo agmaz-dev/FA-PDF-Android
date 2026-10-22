@@ -108,11 +108,14 @@ object LayoutTranslator {
             val scanned = list.filter { it.first.ocrBoxes.isNotEmpty() }
             val encoders = HashMap<TransUnit, TextRunEncoder>()
             // Hindernisse für die Breitenberechnung: alle Textzeilen der Seite (auch nicht übersetzte, z. B. Zahlen)
-            val obstacles = ArrayList<Pair<Box, Set<Int>>>()
-            list.forEach { (u, _) -> obstacles.add(u.box to emptySet()) }
+            val obstacles = ArrayList<Obstacle>()
+            list.forEach { (u, _) -> obstacles.add(Obstacle(u.box, emptySet(), u)) }
             if (digital.isNotEmpty()) {
                 val pt = PageAnalyzer.analyze(doc, page)
-                pt.lines.forEach { l -> obstacles.add(pt.viewBoxOf(l) to setOf(l.id)) }
+                pt.lines.forEach { l ->
+                    val owner = digital.firstOrNull { l.id in it.first.lineIds }?.first
+                    obstacles.add(Obstacle(pt.viewBoxOf(l), setOf(l.id), owner))
+                }
                 // Originalschrift je Absatz: so bleibt das Schriftbild erhalten, wo die Glyphen vorhanden sind
                 for ((u, _) in digital) {
                     val fontId = pt.lines.getOrNull(u.lineIds.first())?.fontId ?: continue
@@ -153,8 +156,7 @@ object LayoutTranslator {
             val margin = list.minOf { it.first.box.left }.coerceIn(10f, g.viewWidth / 4f)
             for ((u, translated) in list) {
                 val enc = encoders[u] ?: TextRunEncoder(null, emptyMap()) { cache.get(u.family, u.bold, u.italic) }
-                val own = obstacles.filter { (b, ids) -> (ids.isNotEmpty() && ids.all { it in u.lineIds }) || b == u.box }.map { it.first }.toSet()
-                val others = obstacles.map { it.first }.filter { it !in own }
+                val others = obstacles.filter { o -> o.unit !== u && !(o.lineIds.isNotEmpty() && o.lineIds.all { it in u.lineIds }) && o.box != u.box }
                 val (l, r) = availableSpan(u, others, margin, g.viewWidth - margin)
                 drawFitted(cb, enc, g, u, translated, l, r)
             }
@@ -167,15 +169,27 @@ object LayoutTranslator {
      * hinaus wachsen – bis kurz vor den nächsten Text links/rechts auf gleicher Höhe bzw. bis zum Seitenrand.
      * So werden längere Übersetzungen nicht unnötig klein, überdecken aber keine Nachbarspalte.
      */
-    fun availableSpan(u: TransUnit, others: List<Box>, pageLeft: Float, pageRight: Float): Pair<Float, Float> {
+    class Obstacle(val box: Box, val lineIds: Set<Int>, val unit: TransUnit?)
+
+    fun availableSpan(u: TransUnit, others: List<Obstacle>, pageLeft: Float, pageRight: Float): Pair<Float, Float> {
         var leftLimit = minOf(pageLeft, u.box.left)
         var rightLimit = maxOf(pageRight, u.box.right)
         val gap = 0.6f * u.size
-        for (o in others) {
+        for (ob in others) {
+            val o = ob.box
             val verticalOverlap = o.top < u.box.bottom + u.size * 0.2f && u.box.top < o.bottom + u.size * 0.2f
             if (!verticalOverlap) continue
-            if (o.left >= u.box.right - 1f) rightLimit = minOf(rightLimit, o.left - gap)
-            else if (o.right <= u.box.left + 1f) leftLimit = maxOf(leftLimit, o.right + gap)
+            val other = ob.unit
+            if (o.left >= u.box.right - 1f) {
+                // Wächst der Nachbar ebenfalls in die Lücke (rechts-/mittig ausgerichtet), Lücke teilen
+                val growsLeft = other != null && other.alignment != Alignment.LEFT
+                val limit = if (growsLeft) (u.box.right + o.left) / 2f - gap / 2f else o.left - gap
+                rightLimit = minOf(rightLimit, limit)
+            } else if (o.right <= u.box.left + 1f) {
+                val growsRight = other != null && other.alignment != Alignment.RIGHT
+                val limit = if (growsRight) (o.right + u.box.left) / 2f + gap / 2f else o.right + gap
+                leftLimit = maxOf(leftLimit, limit)
+            }
         }
         rightLimit = max(rightLimit, u.box.right)
         leftLimit = minOf(leftLimit, u.box.left)
