@@ -66,6 +66,7 @@ object PdfIo {
     fun save(doc: PDDocument, target: File) {
         target.parentFile?.mkdirs()
         val tmp = File(target.parentFile, target.name + ".part")
+        PendingSubsets.flush(doc) // neue Schriften einbetten (sonst Zeichensalat auf dem Gerät)
         doc.save(tmp)
         if (target.exists()) target.delete()
         if (!tmp.renameTo(target)) { tmp.copyTo(target, overwrite = true); tmp.delete() }

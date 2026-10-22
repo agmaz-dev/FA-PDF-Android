@@ -26,6 +26,19 @@ jobs:
         shell: bash
         run: set -o pipefail; ./gradlew --no-daemon testDebugUnitTest 2>&1 | tee test.log
 
+      - name: Test-PDFs veröffentlichen
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p app/build/test-pdf-out
+          cp -r app/build/test-results app/build/test-pdf-out/ 2>/dev/null || true
+          (cd app/build && zip -qr ../../test-output.zip test-pdf-out)
+          gh release delete test-output --yes --cleanup-tag || true
+          sleep 3
+          gh release create test-output test-output.zip --target "$GITHUB_SHA" --title "Test-PDFs" --notes "Commit ${GITHUB_SHA::7}" --prerelease || true
+          gh release edit test-output --draft=false || true
+
       - name: APK bauen
         shell: bash
         run: set -o pipefail; ./gradlew --no-daemon assembleDebug 2>&1 | tee build.log

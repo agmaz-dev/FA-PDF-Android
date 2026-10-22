@@ -53,11 +53,30 @@ android {
             excludes += setOf("META-INF/DEPENDENCIES", "META-INF/LICENSE*", "META-INF/NOTICE*")
         }
     }
+    testOptions {
+        // android.util.Log usw. liefern in JVM-Tests Standardwerte statt Ausnahmen
+        unitTests.isReturnDefaultValues = true
+    }
+    sourceSets["test"].resources.srcDir(layout.buildDirectory.dir("pdfboxTestResources"))
     androidResources {
         // Schriften nicht komprimieren, damit sie direkt gelesen werden können
         noCompress += "ttf"
     }
 }
+
+// PDFBox-Android liest CMaps, Glyphenlisten und AFM-Dateien aus seinen Assets. Für JVM-Tests
+// werden diese aus dem AAR entpackt und als Test-Ressourcen (Klassenpfad) bereitgestellt.
+val pdfboxAssets: Configuration by configurations.creating
+val extractPdfboxAssets by tasks.registering(Sync::class) {
+    from({ zipTree(pdfboxAssets.singleFile) }) {
+        include("assets/**")
+        eachFile { path = path.removePrefix("assets/") }
+        includeEmptyDirs = false
+    }
+    into(layout.buildDirectory.dir("pdfboxTestResources"))
+}
+tasks.matching { it.name.contains("UnitTest") && (it.name.startsWith("process") || it.name.startsWith("compile")) }
+    .configureEach { dependsOn(extractPdfboxAssets) }
 
 ksp {
     arg("room.schemaLocation", "$projectDir/schemas")
@@ -101,4 +120,5 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.9.0")
 
     testImplementation("junit:junit:4.13.2")
+    pdfboxAssets("com.tom-roush:pdfbox-android:2.0.27.0@aar")
 }

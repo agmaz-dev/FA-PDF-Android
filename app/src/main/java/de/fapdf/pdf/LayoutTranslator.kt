@@ -106,8 +106,18 @@ object LayoutTranslator {
             val g = PdfIo.geometry(pdPage)
             val digital = list.filter { it.first.lineIds.isNotEmpty() }
             val scanned = list.filter { it.first.ocrBoxes.isNotEmpty() }
+            val encoders = HashMap<TransUnit, TextRunEncoder>()
             if (digital.isNotEmpty()) {
                 val pt = PageAnalyzer.analyze(doc, page)
+                // Originalschrift je Absatz: so bleibt das Schriftbild erhalten, wo die Glyphen vorhanden sind
+                for ((u, _) in digital) {
+                    val fontId = pt.lines.getOrNull(u.lineIds.first())?.fontId ?: continue
+                    val f = pt.fonts.fonts[fontId]
+                    val meta = pt.fontMeta(fontId)
+                    val known = HashMap<String, Int>()
+                    pt.glyphs.filter { it.fontId == fontId && it.unicode.isNotEmpty() }.forEach { known.putIfAbsent(it.unicode, it.code) }
+                    encoders[u] = TextRunEncoder(f, known) { cache.matching(meta.rawName, u.family, u.bold, u.italic) }
+                }
                 val removal = HashMap<Int, MutableSet<Int>>()
                 digital.flatMap { it.first.lineIds }.forEach { id ->
                     pt.lines.getOrNull(id)?.glyphs?.forEach { gi ->
@@ -136,14 +146,16 @@ object LayoutTranslator {
                 bmp.recycle()
             }
             val cb = ContentBuilder(PdfIo.resourcesOf(pdPage))
-            for ((u, translated) in list) drawFitted(cb, cache, g, u, translated)
+            for ((u, translated) in list) {
+                val enc = encoders[u] ?: TextRunEncoder(null, emptyMap()) { cache.get(u.family, u.bold, u.italic) }
+                drawFitted(cb, enc, g, u, translated)
+            }
             PdfIo.appendToPage(doc, pdPage, cb.tokens)
         }
     }
 
-    private fun drawFitted(cb: ContentBuilder, cache: DocFontCache, g: PageGeometry, u: TransUnit, raw: String) {
-        val font = cache.get(u.family, u.bold, u.italic)
-        val text = raw.replace('\n', ' ').map { c -> if (runCatching { font.encode(c.toString()) }.isSuccess) c else '?' }.joinToString("").trim()
+    private fun drawFitted(cb: ContentBuilder, enc: TextRunEncoder, g: PageGeometry, u: TransUnit, raw: String) {
+        val text = raw.replace('\n', ' ').replace(Regex("\\s+"), " ").trim()
         if (text.isEmpty()) return
         val width = max(u.box.width, 20f)
         val avail = u.box.height + u.size * 0.35f
@@ -151,7 +163,7 @@ object LayoutTranslator {
         var lines: List<String> = emptyList()
         while (true) {
             val s = size
-            lines = TextLayout.wrap(text, width) { font.getStringWidth(it) / 1000f * s }
+            lines = TextLayout.wrap(text, width) { enc.width(it) / 1000f * s }
             if (lines.size * s * 1.18f <= avail || size <= 5f) break
             size *= 0.93f
         }
@@ -159,10 +171,13 @@ object LayoutTranslator {
         var v = u.box.top + size * 0.88f
         for (l in lines) {
             if (l.isNotEmpty()) {
-                l.codePoints().forEach { font.addToSubset(it) }
-                val w = font.getStringWidth(l) / 1000f * size
-                val x = TextLayout.alignX(u.alignment, u.box.left, u.box.left + width, w)
-                cb.text(font, size, g.uprightMatrixAt(x, v), listOf(font.encode(l)), u.colorArgb)
+                val runs = enc.encode(l)
+                val w = runs.sumOf { it.widthUnits.toDouble() }.toFloat() / 1000f * size
+                var x = TextLayout.alignX(u.alignment, u.box.left, u.box.left + width, w)
+                for (r in runs) {
+                    cb.text(r.font, size, g.uprightMatrixAt(x, v), r.elements, u.colorArgb)
+                    x += r.widthUnits / 1000f * size
+                }
             }
             v += lead
         }

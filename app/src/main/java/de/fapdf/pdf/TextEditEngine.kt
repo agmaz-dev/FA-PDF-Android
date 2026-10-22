@@ -45,8 +45,6 @@ data class EditOutcome(val note: String? = null)
  */
 class TextEditEngine(private val fontLibrary: FontLibrary) {
 
-    private class Encoded(val font: PDFont, val elements: List<Any>, val widthUnits: Float, val usedOriginal: Boolean)
-
     fun detectStyle(pt: PageText, lineIds: List<Int>): DetectedStyle {
         val lines = lineIds.map { pt.lines[it] }
         val first = lines.first()
@@ -63,72 +61,45 @@ class TextEditEngine(private val fontLibrary: FontLibrary) {
         )
     }
 
-    private fun encode(
-        doc: PDDocument, cache: DocFontCache, pt: PageText, text: String, style: TextStyle,
-        originalFontId: Int?, glyphMaps: HashMap<Int, Map<String, Int>>,
-    ): Encoded {
-        if (style.useOriginalFont && originalFontId != null) {
-            val f = pt.fonts.fonts[originalFontId]
-            FontSupport.encodeIfComplete(f, text)?.let { bytes ->
-                return Encoded(f, listOf(bytes), FontSupport.widthOfBytes(f, bytes), true)
-            }
-            // Zeichen aus bereits vorhandenen Glyphen derselben Schrift zusammensetzen
-            val pageMap = HashMap<String, Int>()
-            pt.glyphs.filter { it.fontId == originalFontId && it.unicode.length == 1 }.forEach { pageMap.putIfAbsent(it.unicode, it.code) }
-            reuseGlyphs(f, text, pageMap)?.let { return it }
-            val docMap = glyphMaps.getOrPut(originalFontId) { PageAnalyzer.glyphMapFor(doc, f.cosObject) }
-            reuseGlyphs(f, text, docMap + pageMap)?.let { return it }
+    /** Encoder für eine Zeile: Originalschrift (falls gewünscht und stilgleich), sonst passende Ersatzschrift. */
+    private fun encoder(
+        doc: PDDocument, cache: DocFontCache, pt: PageText, style: TextStyle, originalFontId: Int?,
+        glyphMaps: HashMap<Int, Map<String, Int>>, sample: String,
+    ): TextRunEncoder {
+        val meta = originalFontId?.let { pt.fontMeta(it) }
+        val useOriginal = style.useOriginalFont && meta != null && meta.bold == style.bold && meta.italic == style.italic
+        val substitute = {
+            if (style.useOriginalFont && meta != null) cache.matching(meta.rawName, style.family, style.bold, style.italic)
+            else cache.get(style.family, style.bold, style.italic)
         }
-        val sub = cache.get(style.family, style.bold, style.italic)
-        val clean = sanitizeFor(sub, text)
-        clean.codePoints().forEach { sub.addToSubset(it) }
-        val bytes = sub.encode(clean)
-        return Encoded(sub, listOf(bytes), sub.getStringWidth(clean), false)
+        if (!useOriginal) return TextRunEncoder(null, emptyMap(), substitute)
+        val f = pt.fonts.fonts[originalFontId!!]
+        val pageMap = HashMap<String, Int>()
+        pt.glyphs.filter { it.fontId == originalFontId && it.unicode.isNotEmpty() }.forEach { pageMap.putIfAbsent(it.unicode, it.code) }
+        val onPage = TextRunEncoder(f, pageMap, substitute)
+        if (onPage.originalCovers(sample)) return onPage
+        // Glyphen derselben Schrift von anderen Seiten des Dokuments mitnutzen
+        val docMap = glyphMaps.getOrPut(originalFontId) { PageAnalyzer.glyphMapFor(doc, f.cosObject) }
+        return TextRunEncoder(f, docMap + pageMap, substitute)
     }
 
-    private fun reuseGlyphs(f: PDFont, text: String, map: Map<String, Int>): Encoded? {
-        val elements = ArrayList<Any>()
-        val buf = java.io.ByteArrayOutputStream()
-        var width = 0f
-        for (ch in text) {
-            val s = ch.toString()
-            val code = map[s]
-            if (code == null) {
-                if (ch == ' ') {
-                    if (buf.size() > 0) { elements.add(buf.toByteArray()); buf.reset() }
-                    val sw = FontSupport.spaceWidth(f)
-                    elements.add(-sw); width += sw
-                    continue
-                }
-                return null
-            }
-            val bytes = FontSupport.codeToBytes(f, code) ?: return null
-            buf.write(bytes)
-            width += runCatching { f.getWidth(code) }.getOrDefault(500f)
-        }
-        if (buf.size() > 0) elements.add(buf.toByteArray())
-        return Encoded(f, elements, width, true)
-    }
-
-    /** Entfernt Zeichen, die selbst die Ersatzschrift nicht darstellen kann (z. B. Emojis). */
-    private fun sanitizeFor(font: PDType0Font, text: String): String {
-        val sb = StringBuilder()
-        var i = 0
-        while (i < text.length) {
-            val cp = text.codePointAt(i)
-            val s = String(Character.toChars(cp))
-            val ok = runCatching { font.encode(s); true }.getOrDefault(false)
-            sb.append(if (ok) s else "?")
-            i += Character.charCount(cp)
-        }
-        return sb.toString()
-    }
-
-    private fun originalFontNote(pt: PageText, fontId: Int, style: TextStyle, results: List<Encoded>): String? {
-        if (!style.useOriginalFont || results.all { it.usedOriginal }) return null
+    private fun substituteNote(pt: PageText, fontId: Int, style: TextStyle, runs: List<TextRun>): String? {
+        if (!style.useOriginalFont || runs.all { it.original }) return null
         val meta = pt.fontMeta(fontId)
-        return "Die Originalschrift „${meta.displayName}“ enthält nicht alle benötigten Zeichen. " +
-            "Es wurde die passende Ersatzschrift (${style.family.title}${if (style.bold) ", fett" else ""}${if (style.italic) ", kursiv" else ""}) verwendet."
+        val sub = runs.first { !it.original }.font
+        val subName = FontMeta.cleanName(runCatching { sub.name }.getOrNull() ?: style.family.title)
+        return if (runs.none { it.original })
+            "Die eingebettete Originalschrift „${meta.displayName}“ enthält die benötigten Zeichen nicht. Der Text wurde in der passenden Ersatzschrift „$subName“ gesetzt."
+        else
+            "Die eingebettete Originalschrift „${meta.displayName}“ enthält nicht alle Zeichen. Nur die betroffenen Wörter wurden in der passenden Ersatzschrift „$subName“ gesetzt."
+    }
+
+    private fun drawRuns(cb: ContentBuilder, runs: List<TextRun>, size: Float, x0: Float, baseline: Float, color: Int) {
+        var x = x0
+        for (r in runs) {
+            cb.text(r.font, size, Affine.translate(x, baseline), r.elements, color)
+            x += r.widthUnits / 1000f * size
+        }
     }
 
     private fun removalMap(pt: PageText, glyphIdx: Collection<Int>): Map<Int, Set<Int>> {
@@ -163,30 +134,29 @@ class TextEditEngine(private val fontLibrary: FontLibrary) {
         val maps = HashMap<Int, Map<String, Int>>()
         val left = lines.minOf { it.startX }
         val right = lines.maxOf { it.endX }
+        val enc = encoder(doc, cache, pt, style, fontId, maps, newText)
         val texts = if (asBlock) {
-            TextLayout.wrap(newText, right - left) { s ->
-                encode(doc, cache, pt, s, style, fontId, maps).widthUnits / 1000f * style.size
-            }
+            TextLayout.wrap(newText, right - left) { s -> enc.width(s) / 1000f * style.size }
         } else listOf(newText.replace('\n', ' '))
-        val encoded = texts.map { encode(doc, cache, pt, it, style, fontId, maps) }
+        val encoded = texts.map { enc.encode(it) }
 
         ContentRewriter.removeGlyphs(doc, page, pt, removalMap(pt, lines.flatMap { it.glyphs }))
 
         val cb = ContentBuilder(PdfIo.resourcesOf(page))
         val spacing = if (lines.size > 1) (lines.first().baseline - lines.last().baseline) / (lines.size - 1) else style.size * 1.2f
         var baseline = lines.first().baseline
-        encoded.forEachIndexed { i, e ->
+        encoded.forEachIndexed { i, runs ->
             if (texts[i].isNotEmpty()) {
-                val w = e.widthUnits / 1000f * style.size
+                val w = runs.sumOf { it.widthUnits.toDouble() }.toFloat() / 1000f * style.size
                 val x = TextLayout.alignX(alignment, left, right, w)
-                cb.text(e.font, style.size, Affine.translate(x, baseline), e.elements, style.colorArgb)
+                drawRuns(cb, runs, style.size, x, baseline, style.colorArgb)
             }
             baseline -= spacing
         }
         PdfIo.appendToPage(doc, page, cb.tokens)
         val overflow = asBlock && texts.size > lines.size
         val note = listOfNotNull(
-            originalFontNote(pt, fontId, style, encoded),
+            substituteNote(pt, fontId, style, encoded.flatten()),
             if (overflow) "Der neue Text ist länger als der ursprüngliche Absatz und kann nachfolgenden Inhalt überlappen." else null,
         ).joinToString("\n").ifBlank { null }
         return EditOutcome(note)
@@ -222,7 +192,7 @@ class TextEditEngine(private val fontLibrary: FontLibrary) {
                 cb.text(font, gl.size, Affine.translate(gl.x + dx, gl.y + dy), listOf(bytes), gl.colorArgb)
             } else {
                 val meta = pt.fontMeta(gl.fontId)
-                val sub = cache.get(meta.family, meta.bold, meta.italic)
+                val sub = cache.matching(meta.rawName, meta.family, meta.bold, meta.italic)
                 val s = sanitizeFor(sub, gl.unicode)
                 s.codePoints().forEach { sub.addToSubset(it) }
                 cb.text(sub, gl.size, Affine.translate(gl.x + dx, gl.y + dy), listOf(sub.encode(s)), gl.colorArgb)
@@ -240,18 +210,21 @@ class TextEditEngine(private val fontLibrary: FontLibrary) {
         val maps = HashMap<Int, Map<String, Int>>()
         val cb = ContentBuilder(PdfIo.resourcesOf(page))
         var vv = v
-        val results = ArrayList<Encoded>()
+        val results = ArrayList<TextRun>()
+        val enc = encoder(doc, cache, pt, style, originalFontId, maps, text)
         for (line in text.split('\n')) {
             if (line.isNotEmpty()) {
-                val e = encode(doc, cache, pt, line, style, originalFontId, maps)
-                results.add(e)
-                val m = pt.geometry.uprightMatrixAt(u, vv)
-                cb.text(e.font, style.size, m, e.elements, style.colorArgb)
+                var uu = u
+                for (r in enc.encode(line)) {
+                    results.add(r)
+                    cb.text(r.font, style.size, pt.geometry.uprightMatrixAt(uu, vv), r.elements, style.colorArgb)
+                    uu += r.widthUnits / 1000f * style.size
+                }
             }
             vv += style.size * 1.2f
         }
         PdfIo.appendToPage(doc, page, cb.tokens)
-        return EditOutcome(originalFontId?.let { originalFontNote(pt, it, style, results) })
+        return EditOutcome(originalFontId?.let { substituteNote(pt, it, style, results) })
     }
 
     /** Fügt ein Bild (Foto oder Unterschrift mit Transparenz) ein. Maße in Ansichtspunkten. */
