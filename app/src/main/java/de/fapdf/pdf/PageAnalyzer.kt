@@ -24,7 +24,7 @@ import kotlin.math.abs
 import kotlin.math.sqrt
 
 /** Bild- oder Objektbereich einer Seite (für Schwärzen und Scan-Erkennung). */
-data class ImageRegion(val opIndex: Int, val bbox: Box, val isForm: Boolean)
+data class ImageRegion(val opIndex: Int, val bbox: Box, val isForm: Boolean, val name: String? = null)
 
 /** Ergebnis der Analyse einer Seite. Gültig, solange das zugehörige PDDocument geöffnet ist. */
 class PageText(
@@ -126,17 +126,17 @@ private class GlyphCollector : PDFTextStripper() {
 
     private fun ctm(): Affine = graphicsState.currentTransformationMatrix.toAffine()
 
-    private fun captureUnitSquare(isForm: Boolean) {
+    private fun captureUnitSquare(isForm: Boolean, name: String? = null) {
         val m = ctm()
         val pts = listOf(m.apply(0f, 0f), m.apply(1f, 0f), m.apply(0f, 1f), m.apply(1f, 1f))
-        images.add(ImageRegion(currentOp, Box.bounding(pts), isForm))
+        images.add(ImageRegion(currentOp, Box.bounding(pts), isForm, name))
     }
 
     private fun captureXObject(operands: List<COSBase>) {
         val name = operands.firstOrNull() as? COSName ?: return
         val xobj = resources?.getXObject(name) ?: return
         when (xobj) {
-            is PDImageXObject -> captureUnitSquare(false)
+            is PDImageXObject -> captureUnitSquare(false, name.name)
             is PDFormXObject -> {
                 val bb = xobj.bBox ?: return
                 val m = xobj.matrix.toAffine().then(ctm())
@@ -144,7 +144,7 @@ private class GlyphCollector : PDFTextStripper() {
                     m.apply(bb.lowerLeftX, bb.lowerLeftY), m.apply(bb.upperRightX, bb.lowerLeftY),
                     m.apply(bb.lowerLeftX, bb.upperRightY), m.apply(bb.upperRightX, bb.upperRightY),
                 )
-                images.add(ImageRegion(currentOp, Box.bounding(pts), true))
+                images.add(ImageRegion(currentOp, Box.bounding(pts), true, name.name))
             }
         }
     }

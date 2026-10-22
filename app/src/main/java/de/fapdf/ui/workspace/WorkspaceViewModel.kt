@@ -42,6 +42,8 @@ import de.fapdf.pdf.PdfIo
 import de.fapdf.pdf.PdfOps
 import de.fapdf.pdf.PdfPageSource
 import de.fapdf.pdf.PdfUserException
+import de.fapdf.pdf.PlacedObject
+import de.fapdf.pdf.PlacedObjects
 import de.fapdf.pdf.PreviewFactory
 import de.fapdf.pdf.RedactionReport
 import de.fapdf.pdf.Redactor
@@ -215,7 +217,8 @@ class WorkspaceViewModel(app: Application, val docId: Long, initialMode: Workspa
 
     fun switchMode(m: WorkspaceMode) {
         mode = m
-        selection = null; dragRect = null; placement = null; moveState = null
+        selection = null; dragRect = null; moveState = null
+        if (placement != null) cancelPlacement()
         if (m == WorkspaceMode.FORM) viewModelScope.launch { maybeOfferProfiles() }
         if (m == WorkspaceMode.SIGN) formInfo?.signatureFields?.firstOrNull()?.let { signatureFieldPrompt = it }
     }
@@ -303,6 +306,7 @@ class WorkspaceViewModel(app: Application, val docId: Long, initialMode: Workspa
     fun onEditTap(page: Int, u: Float, v: Float) {
         if (placement != null || moveState != null) return
         viewModelScope.launch {
+            placedObjectAt(page, u, v)?.let { objectMenu = it; return@launch }
             val ocr = ocrPages[page]
             if (ocr != null) {
                 val idx = ocr.lines.indexOfFirst { it.viewBox.inset(3f).contains(u, v) }
@@ -476,8 +480,64 @@ class WorkspaceViewModel(app: Application, val docId: Long, initialMode: Workspa
     fun commitPlacement() {
         val p = placement ?: return
         placement = null
-        runEdit(if (placementIsSignature) "Unterschrift wird eingefügt …" else "Bild wird eingefügt …", op = { input, out ->
-            PdfIo.transform(input, out) { d -> editEngine.insertImage(d, p.page, p.bitmap, p.cx, p.cy, p.w, p.h, p.rotation) }
+        placementFromEdit = false
+        val sig = placementIsSignature
+        runEdit(if (sig) "Unterschrift wird eingefügt …" else "Bild wird eingefügt …", op = { input, out ->
+            PdfIo.transform(input, out) { d -> PlacedObjects.insert(d, p.page, p.bitmap, p.cx, p.cy, p.w, p.h, p.rotation, sig) }
+            null
+        })
+    }
+
+    /** Abbrechen: Wurde ein vorhandenes Objekt bearbeitet, wird es wiederhergestellt. */
+    fun cancelPlacement() {
+        placement = null
+        if (placementFromEdit) { placementFromEdit = false; undo() }
+    }
+
+    // ---------- Eingefügte Unterschriften/Bilder nachträglich bearbeiten ----------
+    var objectMenu by mutableStateOf<PlacedObject?>(null)
+    var placementFromEdit by mutableStateOf(false); private set
+
+    /** Prüft, ob an der Stelle eine von FA PDF eingefügte Unterschrift bzw. ein Bild liegt. */
+    fun tapObjectOr(page: Int, u: Float, v: Float, otherwise: () -> Unit) {
+        if (placement != null) return
+        viewModelScope.launch {
+            val obj = placedObjectAt(page, u, v)
+            if (obj != null) objectMenu = obj else otherwise()
+        }
+    }
+
+    private suspend fun placedObjectAt(page: Int, u: Float, v: Float): PlacedObject? {
+        val f = current ?: return null
+        return withContext(PdfIo.pdfDispatcher) {
+            val d = analysisDoc ?: PdfIo.load(f).also { analysisDoc = it }
+            runCatching { PlacedObjects.find(d, page) }.getOrDefault(emptyList())
+                .lastOrNull { it.viewBox.inset(6f).contains(u, v) }
+        }
+    }
+
+    fun editObject(obj: PlacedObject) {
+        objectMenu = null
+        var bmp: Bitmap? = null
+        runEdit("Wird zum Bearbeiten geöffnet …", op = { input, out ->
+            PdfIo.transform(input, out) { d ->
+                bmp = PlacedObjects.bitmapOf(d, obj) ?: throw PdfUserException("Das Bild konnte nicht gelesen werden.")
+                PlacedObjects.remove(d, obj)
+            }
+            null
+        }, onSuccess = {
+            bmp?.let { b ->
+                placement = Placement(obj.pageIndex, b, obj.cx, obj.cy, obj.w, obj.h, obj.rotation)
+                placementIsSignature = obj.signature
+                placementFromEdit = true
+            }
+        })
+    }
+
+    fun deleteObject(obj: PlacedObject) {
+        objectMenu = null
+        runEdit(if (obj.signature) "Unterschrift wird entfernt …" else "Bild wird entfernt …", op = { input, out ->
+            PdfIo.transform(input, out) { d -> PlacedObjects.remove(d, obj) }
             null
         })
     }

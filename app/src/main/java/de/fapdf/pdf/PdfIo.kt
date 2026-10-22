@@ -185,6 +185,13 @@ class ContentBuilder(private val resources: PDResources) {
         return this
     }
 
+    /** Zeichnet ein Form-XObject: dessen Einheitsquadrat wird über [m] auf die Seite abgebildet. */
+    fun form(f: com.tom_roush.pdfbox.pdmodel.graphics.form.PDFormXObject, m: Affine): ContentBuilder {
+        val name = resources.add(f)
+        save(); transform(m); op("Do", name); restore()
+        return this
+    }
+
     /**
      * Gibt Text aus. [elements] enthält kodierte Zeichenfolgen (ByteArray) und
      * Positionskorrekturen (Float, in Tausendstel Textraum wie beim TJ-Operator).

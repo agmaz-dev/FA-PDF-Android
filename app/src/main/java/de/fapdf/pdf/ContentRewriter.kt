@@ -138,6 +138,21 @@ object ContentRewriter {
         return result
     }
 
+    /** Löscht ganze Operatoren (samt Operanden) anhand ihres Index im Seiteninhalt. */
+    fun removeOperators(doc: PDDocument, page: PDPage, ops: Set<Int>) {
+        if (ops.isEmpty()) return
+        val out = ArrayList<Any>()
+        val operands = ArrayList<Any>()
+        var opIndex = 0
+        for (t in parse(page)) {
+            if (t !is Operator) { operands.add(t); continue }
+            if (opIndex++ !in ops) { out.addAll(operands); out.add(t) }
+            operands.clear()
+        }
+        out.addAll(operands)
+        PdfIo.replacePageContent(doc, page, out)
+    }
+
     fun parse(page: PDPage): List<Any> {
         val parser = PDFStreamParser(page)
         val tokens = ArrayList<Any>()

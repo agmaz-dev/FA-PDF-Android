@@ -245,20 +245,25 @@ fun PageThumbGrid(
         return
     }
     val pages = order ?: (0 until src.pageCount).toList()
-    // Raster mit fester Höhe, da es in einer scrollbaren Spalte liegt
-    val rows = (pages.size + 2) / 3
-    LazyVerticalGrid(
-        columns = GridCells.Fixed(3),
-        modifier = modifier.padding(horizontal = 12.dp).fillMaxWidth().height((rows * 178).coerceAtMost(6000).dp),
-        userScrollEnabled = false,
-    ) {
-        itemsIndexed(pages, key = { _, p -> p }) { pos, p ->
-            PageThumb(
-                src, p, Modifier.padding(6.dp), extraRotation = rotations[p] ?: 0, selected = p in selected,
-                accent = accentFor(p),
-                label = labelFor?.invoke(pos, p) ?: (if (order != null) "${pos + 1} (S. ${p + 1})" else "Seite ${p + 1}"),
-                onClick = { onToggle(p) },
-            )
+    // Normales (nicht „lazy“) Raster: wächst mit der Seitenzahl, der ganze Bildschirm scrollt.
+    // Kleine Renderbreite hält den Speicherbedarf auch bei vielen Seiten gering.
+    Column(modifier.padding(horizontal = 12.dp).fillMaxWidth()) {
+        pages.chunked(3).forEachIndexed { row, chunk ->
+            Row(Modifier.fillMaxWidth()) {
+                chunk.forEachIndexed { col, p ->
+                    val pos = row * 3 + col
+                    androidx.compose.runtime.key(p) {
+                        PageThumb(
+                            src, p, Modifier.weight(1f).padding(6.dp), extraRotation = rotations[p] ?: 0, selected = p in selected,
+                            accent = accentFor(p),
+                            label = labelFor?.invoke(pos, p) ?: (if (order != null) "${pos + 1} (S. ${p + 1})" else "Seite ${p + 1}"),
+                            renderWidth = 200,
+                            onClick = { onToggle(p) },
+                        )
+                    }
+                }
+                repeat(3 - chunk.size) { Spacer(Modifier.weight(1f)) }
+            }
         }
     }
 }

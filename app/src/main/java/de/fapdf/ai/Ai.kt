@@ -103,6 +103,39 @@ class AiClient(private val provider: AiProvider, private val apiKey: String, pri
     }
 }
 
+/** KI-Übersetzung vieler Absätze in wenigen Anfragen; jeder Absatz behält seine Nummer. */
+object AiBatchTranslator {
+    private val marker = Regex("<<(\\d+)>>")
+
+    suspend fun translateAll(client: AiClient, texts: List<String>, target: Lang, onProgress: (Int, Int) -> Unit): List<String> {
+        val result = texts.toMutableList()
+        // Pakete von ca. 5000 Zeichen, damit die Antwort sicher vollständig zurückkommt
+        val batches = ArrayList<List<Int>>()
+        var cur = ArrayList<Int>(); var len = 0
+        texts.indices.forEach { i ->
+            if (len > 5000 && cur.isNotEmpty()) { batches.add(cur); cur = ArrayList(); len = 0 }
+            cur.add(i); len += texts[i].length
+        }
+        if (cur.isNotEmpty()) batches.add(cur)
+        batches.forEachIndexed { b, idx ->
+            onProgress(b + 1, batches.size)
+            val input = idx.joinToString("\n\n") { "<<$it>> ${texts[it]}" }
+            val system = "Übersetze jeden nummerierten Abschnitt vollständig und sinngetreu ins ${target.inSentence}. " +
+                "Antworte ausschließlich im selben Format: jede Übersetzung beginnt mit ihrer Markierung <<n>>. " +
+                "Keine Erklärungen, keine zusätzlichen Abschnitte."
+            val answer = client.complete(system, listOf(ChatMessage("user", input)), maxTokens = 8000)
+            val matches = marker.findAll(answer).toList()
+            matches.forEachIndexed { k, m ->
+                val n = m.groupValues[1].toIntOrNull() ?: return@forEachIndexed
+                val end = if (k + 1 < matches.size) matches[k + 1].range.first else answer.length
+                val t = answer.substring(m.range.last + 1, end).trim()
+                if (n in result.indices && t.isNotEmpty()) result[n] = t
+            }
+        }
+        return result
+    }
+}
+
 object Prompts {
     const val CHAT = "Du bist ein sorgfältiger Assistent für Dokumente. Beantworte Fragen ausschließlich anhand des " +
         "folgenden Dokumentinhalts. Wenn die Antwort nicht im Dokument steht, sage das ausdrücklich und erfinde nichts. " +
@@ -166,6 +199,23 @@ enum class Lang(val title: String, val mlKit: String, val inSentence: String) {
 
 /** Übersetzung auf dem Gerät mit ML Kit – kostenlos, Dokumente verlassen das Gerät nicht. */
 class OfflineTranslator(@Suppress("unused") private val context: Context) {
+    /** Übersetzt jeden Absatz einzeln (ganze Sätze → deutlich bessere Qualität als Zeile für Zeile). */
+    suspend fun translateAll(texts: List<String>, from: Lang, to: Lang, onProgress: (Int, Int) -> Unit): List<String> {
+        if (from == to) return texts
+        val translator = Translation.getClient(
+            TranslatorOptions.Builder().setSourceLanguage(from.mlKit).setTargetLanguage(to.mlKit).build()
+        )
+        try {
+            translator.downloadModelIfNeeded(DownloadConditions.Builder().build()).await()
+            return texts.mapIndexed { i, t ->
+                onProgress(i + 1, texts.size)
+                runCatching { translator.translate(t).await() }.getOrDefault(t)
+            }
+        } finally {
+            translator.close()
+        }
+    }
+
     suspend fun translate(text: String, from: Lang, to: Lang, onProgress: (Int, Int) -> Unit): String {
         if (from == to) return text
         val translator = Translation.getClient(

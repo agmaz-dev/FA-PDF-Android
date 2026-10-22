@@ -47,6 +47,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import de.fapdf.ai.AiBatchTranslator
 import de.fapdf.ai.AiClient
 import de.fapdf.ai.ChatMessage
 import de.fapdf.ai.DocumentText
@@ -56,7 +57,11 @@ import de.fapdf.ai.Prompts
 import de.fapdf.data.AppSettings
 import de.fapdf.data.DocumentEntity
 import de.fapdf.data.DocumentRepository
+import de.fapdf.pdf.LayoutTranslator
+import de.fapdf.pdf.OcrEngine
+import de.fapdf.pdf.PageRaster
 import de.fapdf.pdf.PdfIo
+import de.fapdf.pdf.TransUnit
 import de.fapdf.pdf.TextPdfWriter
 import de.fapdf.ui.AppViewModel
 import de.fapdf.ui.Tool
@@ -71,6 +76,7 @@ import de.fapdf.ui.components.SectionTitle
 import de.fapdf.ui.components.file
 import de.fapdf.ui.theme.FaColors
 import de.fapdf.ui.tools.DocHeader
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -136,22 +142,81 @@ fun AiScreen(tool: Tool, docId: Long?, appVm: AppViewModel, onBack: () -> Unit, 
 
     fun withConsent(action: () -> Unit) { if (consentGiven) action() else consentFor = action }
 
+    var translatedId by remember { mutableStateOf<Long?>(null) }
+
+    /** Übersetzt Absatz für Absatz und erzeugt eine PDF im Original-Layout. */
+    suspend fun translateUnits(d: DocumentEntity, units: List<TransUnit>) {
+        busy = "Übersetzung …"
+        try {
+            val texts = units.map { it.text }
+            val translated = if (offline) {
+                OfflineTranslator(context).translateAll(texts, from, to) { p, n -> busy = "Übersetze Absatz $p von $n …" }
+            } else {
+                val key = appVm.container.settings.apiKey() ?: throw IllegalStateException("Kein API-Schlüssel hinterlegt.")
+                val s = appVm.container.settings.current()
+                AiBatchTranslator.translateAll(AiClient(s.aiProvider, key, s.aiModel), texts, to) { p, n -> busy = "KI-Übersetzung Teil $p von $n …" }
+            }
+            busy = "Übersetzte PDF wird erstellt …"
+            val tmp = File(context.cacheDir, "ai").apply { mkdirs() }
+            val out = File(context.cacheDir, "translated_${System.nanoTime()}.pdf")
+            withContext(PdfIo.pdfDispatcher) {
+                PdfIo.transform(d.file(), out) { pd -> LayoutTranslator.apply(pd, units.zip(translated), appVm.container.fonts, d.file(), tmp) }
+            }
+            val id = appVm.container.documents.importFile(out, "${DocumentRepository.baseName(d.displayName)} (${to.title}).pdf")
+            out.delete()
+            translatedId = id
+            result = translated.joinToString("\n\n")
+        } catch (e: Exception) {
+            error = "Übersetzung fehlgeschlagen: ${e.message}" + if (offline) "\nBeim ersten Mal muss das Sprachmodell (ca. 30 MB) einmalig aus dem Internet geladen werden." else ""
+        } finally {
+            busy = null
+        }
+    }
+
+    fun translateLayout() {
+        val d = doc ?: return
+        translatedId = null; result = null
+        scope.launch {
+            busy = "Dokument wird analysiert …"
+            try {
+                val file = d.file()
+                val tmp = File(context.cacheDir, "ai").apply { mkdirs() }
+                val (digital, scannedPages) = withContext(PdfIo.pdfDispatcher) { PdfIo.load(file).use { LayoutTranslator.collect(it) } }
+                val units = ArrayList(digital)
+                if (scannedPages.isNotEmpty()) {
+                    val ocr = OcrEngine()
+                    try {
+                        scannedPages.forEachIndexed { k, p ->
+                            busy = "Texterkennung Seite ${p + 1} (${k + 1}/${scannedPages.size}) …"
+                            val bmp = withContext(Dispatchers.IO) { PageRaster.render(file, p, OcrEngine.OCR_SCALE, tmp) }
+                            val res = ocr.recognize(p, bmp, OcrEngine.OCR_SCALE)
+                            units.addAll(LayoutTranslator.ocrUnits(p, res, bmp, OcrEngine.OCR_SCALE))
+                            bmp.recycle()
+                        }
+                    } finally {
+                        ocr.close()
+                    }
+                }
+                if (units.isEmpty()) throw IllegalStateException("Im Dokument wurde kein übersetzbarer Text gefunden.")
+                extracted = DocumentText.Result(units.joinToString("\n\n") { it.text }, d.pageCount, scannedPages.size, false)
+                busy = null
+                val proceed: () -> Unit = { scope.launch { translateUnits(d, units) } }
+                if (offline) proceed() else withConsent(proceed)
+            } catch (e: de.fapdf.pdf.PasswordRequiredException) {
+                busy = null
+                error = "Das Dokument ist passwortgeschützt. Entfernen Sie den Schutz zuerst mit „PDF-Passwort entfernen“."
+            } catch (e: Exception) {
+                busy = null
+                error = e.message ?: "Fehler beim Lesen des Dokuments"
+            }
+        }
+    }
+
     fun runTask() {
+        if (mode == Tool.TRANSLATE) { translateLayout(); return }
         extract {
             val text = extracted?.text ?: return@extract
             when (mode) {
-                Tool.TRANSLATE -> if (offline) {
-                    scope.launch {
-                        busy = "Übersetzung auf dem Gerät …"
-                        try {
-                            result = OfflineTranslator(context).translate(text, from, to) { p, n -> busy = "Übersetze Absatz $p von $n …" }
-                        } catch (e: Exception) {
-                            error = "Übersetzung fehlgeschlagen: ${e.message}. Beim ersten Mal muss das Sprachmodell (ca. 30 MB) einmalig geladen werden."
-                        } finally { busy = null }
-                    }
-                } else withConsent {
-                    cloud(Prompts.withDocument(Prompts.translate(to.inSentence), text), listOf(ChatMessage("user", "Bitte übersetzen."))) { result = it }
-                }
                 Tool.AI_SUMMARY -> withConsent { cloud(Prompts.withDocument(Prompts.SUMMARY, text), listOf(ChatMessage("user", "Bitte fasse das Dokument zusammen."))) { result = it } }
                 Tool.AI_QUESTIONS -> withConsent { cloud(Prompts.withDocument(Prompts.QUESTIONS, text), listOf(ChatMessage("user", "Bitte erstelle die Fragen."))) { result = it } }
                 else -> {}
@@ -197,7 +262,7 @@ fun AiScreen(tool: Tool, docId: Long?, appVm: AppViewModel, onBack: () -> Unit, 
                             FilterChip(!offline, { offline = false }, { Text("KI (Cloud)") })
                         }
                         if (offline) Text(
-                            "Das Dokument verlässt das Gerät nicht. Die Qualität ist gut für das Verständnis, aber nicht für rechtsverbindliche Übersetzungen geeignet.",
+                            "Jeder Absatz wird übersetzt und an derselben Stelle der Seite eingesetzt – Layout, Schriftfarbe und Ausrichtung bleiben erhalten; längere Übersetzungen werden etwas kleiner gesetzt. Das Dokument verlässt das Gerät nicht. Für rechtsverbindliche Übersetzungen nicht geeignet.",
                             Modifier.padding(horizontal = 20.dp, vertical = 6.dp), style = MaterialTheme.typography.bodySmall, color = FaColors.SecondaryLabel,
                         )
                     }
@@ -210,9 +275,13 @@ fun AiScreen(tool: Tool, docId: Long?, appVm: AppViewModel, onBack: () -> Unit, 
                         SelectionContainer {
                             Text(r, Modifier.padding(horizontal = 16.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Color.White).padding(14.dp))
                         }
+                        val tid = translatedId
+                        if (mode == Tool.TRANSLATE && tid != null) {
+                            PrimaryButton("Übersetzte PDF öffnen (Layout erhalten)", Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) { onOpenDoc(tid) }
+                        }
                         Row(Modifier.padding(12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            OutlinedButton(onClick = { FileActions.shareText(context, r, mode.title) }) { Text("Teilen") }
-                            OutlinedButton(onClick = {
+                            OutlinedButton(onClick = { FileActions.shareText(context, r, mode.title) }) { Text("Text teilen") }
+                            if (mode != Tool.TRANSLATE) OutlinedButton(onClick = {
                                 val d = doc ?: return@OutlinedButton
                                 scope.launch {
                                     busy = "PDF wird erstellt …"

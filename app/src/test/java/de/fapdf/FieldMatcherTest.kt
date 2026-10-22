@@ -39,6 +39,18 @@ class FieldMatcherTest {
         assertEquals(ProfileKey.EMAIL, FieldMatcher.match("E-posta"))
     }
 
+    @Test fun accountHolderGetsFullName() {
+        assertEquals(ProfileKey.FULL_NAME, FieldMatcher.match("Kontoinhaber"))
+        assertEquals(ProfileKey.FULL_NAME, FieldMatcher.match("Name des Kontoinhabers"))
+        assertEquals(ProfileKey.FULL_NAME, FieldMatcher.match("Kontoinhaber/in (Vorname, Name)"))
+        assertEquals(ProfileKey.FULL_NAME, FieldMatcher.match("Account holder"))
+        assertEquals(ProfileKey.FULL_NAME, FieldMatcher.match("Hesap Sahibi"))
+        assertNull(FieldMatcher.match("Name der Bank"))
+        // Kontoinhaber neben „Vorname“ bleibt der volle Name
+        val plan = FieldMatcher.plan(listOf("a" to "Vorname", "b" to "Kontoinhaber"), profile).associate { it.fieldId to it.value }
+        assertEquals("Emine Muster", plan["b"])
+    }
+
     @Test fun technicalFieldNamesAndExclusions() {
         assertEquals(ProfileKey.FIRST_NAME, FieldMatcher.match("form1[0].seite1[0].Vorname[0]"))
         assertNull(FieldMatcher.match("Geburtsname"))

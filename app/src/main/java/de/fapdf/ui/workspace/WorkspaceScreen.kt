@@ -311,6 +311,20 @@ fun WorkspaceScreen(
         )
     }
     vm.selection?.let { sel -> EditTextSheet(vm, sel) }
+    vm.objectMenu?.let { obj ->
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { vm.objectMenu = null },
+            title = { Text(if (obj.signature) "Unterschrift" else "Bild") },
+            text = { Text("Sie können das eingefügte Element verschieben, in der Größe ändern, drehen oder entfernen.") },
+            confirmButton = { TextButton(onClick = { vm.editObject(obj) }) { Text("Bearbeiten") } },
+            dismissButton = {
+                Row {
+                    TextButton(onClick = { vm.deleteObject(obj) }) { Text("Entfernen", color = FaColors.Destructive) }
+                    TextButton(onClick = { vm.objectMenu = null }) { Text("Abbrechen") }
+                }
+            },
+        )
+    }
     vm.addTextAt?.let { (p, u, v) -> AddTextDialog(vm.newTextStyle, onDismiss = { vm.addTextAt = null }) { text, style -> vm.addText(p, u, v, text, style) } }
     vm.noteAt?.let { (p, u, v) -> NoteDialog(onDismiss = { vm.noteAt = null }) { vm.addNote(p, u, v, it) } }
     vm.editingField?.let { f -> FieldDialog(f, vm.displayValue(f), onDismiss = { vm.editingField = null }) { value -> vm.setPending(f.id, value); vm.editingField = null } }
@@ -369,15 +383,15 @@ private fun gesturesFor(vm: WorkspaceViewModel): PageGestures = when (vm.mode) {
     }
     WorkspaceMode.REDACT -> if (vm.redactScroll) PageGestures()
     else PageGestures(dragEnabled = true, onDragStart = vm::onDragStart, onDrag = vm::onDrag, onDragEnd = vm::onDragEnd)
-    WorkspaceMode.FORM -> PageGestures(onTap = { p, u, v ->
+    WorkspaceMode.FORM -> PageGestures(onTap = { p, u, v -> vm.tapObjectOr(p, u, v) {
         val f = vm.formInfo?.fields?.firstOrNull { fi -> fi.widgets.any { it.pageIndex == p && it.viewBox.inset(2f).contains(u, v) } }
         when {
             f != null && f.kind == FieldKind.SIGNATURE -> vm.signatureFieldPrompt = f
             f != null && !f.readOnly -> vm.editingField = f
             f == null -> vm.addTextAt = Triple(p, u, v)
         }
-    })
-    WorkspaceMode.SIGN -> PageGestures()
+    } })
+    WorkspaceMode.SIGN -> PageGestures(onTap = { p, u, v -> vm.tapObjectOr(p, u, v) {} })
 }
 
 @Composable
@@ -465,7 +479,7 @@ private fun ModeBanners(vm: WorkspaceViewModel, onSignatureField: (de.fapdf.pdf.
             val sig = vm.formInfo?.signatureFields?.firstOrNull()
             if (vm.placement != null) InfoBanner("Unterschrift verschieben und unten in der Größe anpassen, dann „Übernehmen“.")
             else if (sig != null) InfoBanner("Unterschriftsfeld erkannt.", FaColors.Sign, "Einfügen" to { onSignatureField(sig) })
-            else InfoBanner("Wählen Sie unten eine Unterschrift. Hinweis: Dies ist eine einfache elektronische Unterschrift (Bild), keine kryptografische Signatur.")
+            else InfoBanner("Wählen Sie unten eine Unterschrift. Eine eingefügte Unterschrift können Sie antippen, um sie zu verschieben, zu skalieren oder zu entfernen. (Einfache elektronische Unterschrift, keine kryptografische Signatur.)")
         }
         WorkspaceMode.REDACT -> InfoBanner(
             if (vm.redactScroll) "Blättern aktiv – zum Auswählen unten „Bereich“ wählen."
@@ -540,7 +554,7 @@ private fun BottomTools(
                 Slider(value = p.rotation, onValueChange = { p.rotation = it }, valueRange = -180f..180f, modifier = Modifier.weight(1f).padding(horizontal = 8.dp))
                 Text("${p.rotation.toInt()}°", style = MaterialTheme.typography.bodySmall)
             }
-            ConfirmBar(if (vm.placementIsSignature) "Unterschrift einsetzen?" else "Bild einsetzen?", onCancel = { vm.placement = null }, onConfirm = vm::commitPlacement)
+            ConfirmBar(if (vm.placementIsSignature) "Unterschrift einsetzen?" else "Bild einsetzen?", onCancel = vm::cancelPlacement, onConfirm = vm::commitPlacement)
         }
         return
     }

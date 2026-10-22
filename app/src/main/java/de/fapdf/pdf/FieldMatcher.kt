@@ -29,7 +29,11 @@ object FieldMatcher {
     fun match(label: String): ProfileKey? {
         val n = normalize(label)
         if (n.isEmpty()) return null
-        if (any(n, "geburtsname", "maidenname", "kontoinhaber", "arbeitgeber", "firma", "kasse", "bank", "unterschrift", "signature", "imza")) return null
+        if (any(n, "geburtsname", "maidenname", "arbeitgeber", "firma", "kasse", "bank", "unterschrift", "signature", "imza")) return null
+        // Kontoinhaber, Versicherungsnehmer usw. = vollständiger Name der Person
+        if (any(n, "kontoinhaber", "accountholder", "accountname", "nameofaccountholder", "hesapsahibi", "hesapsahib", "versicherungsnehmer", "antragsteller", "policyholder")) {
+            return ProfileKey.FULL_NAME
+        }
         return when {
             any(n, "email", "mail", "eposta") -> ProfileKey.EMAIL
             any(n, "telefon", "phone", "mobil", "handy", "telnr", "cepno", "ceptel") || n == "tel" || n.startsWith("tel") && n.length <= 6 -> ProfileKey.PHONE

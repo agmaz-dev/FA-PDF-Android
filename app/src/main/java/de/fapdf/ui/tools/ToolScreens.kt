@@ -249,6 +249,12 @@ private fun PageSelectTool(doc: DocumentEntity, runner: ToolRunner, onChange: ()
     val selected = remember { mutableStateListOf<Int>() }
     DocHeader(doc, onChange, showPages = false)
     InfoBanner(if (delete) "Tippen Sie auf die Seiten, die entfernt werden sollen." else "Tippen Sie auf die Seiten, die in eine neue PDF übernommen werden sollen.")
+    Row(Modifier.padding(horizontal = 16.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Text("${selected.size} von ${doc.pageCount} ausgewählt", Modifier.weight(1f), color = FaColors.SecondaryLabel)
+        OutlinedButton(onClick = { selected.clear(); selected.addAll(0 until doc.pageCount) }) { Text("Alle") }
+        Spacer(Modifier.width(6.dp))
+        OutlinedButton(onClick = { selected.clear() }, enabled = selected.isNotEmpty()) { Text("Keine") }
+    }
     PageThumbGrid(doc, runner.password, null, selected.toSet(), onToggle = { p -> if (p in selected) selected.remove(p) else selected.add(p) },
         onNeedPassword = { runner.askPassword = {} })
     PrimaryButton(

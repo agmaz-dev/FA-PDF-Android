@@ -3,6 +3,12 @@
 Vollständiges Android-Studio-Projekt (Kotlin, Jetpack Compose, Material 3, MVVM, Room, DataStore, Android Keystore).
 Alle 25 Werkzeuge der Referenzgrafik sind programmiert – ohne Platzhalter-Bildschirme.
 
+## Änderungen 1.2 (Rückmeldungen aus dem Test)
+- Formular-AutoFill: Felder wie „Kontoinhaber“, „Account holder“, „Hesap sahibi“, „Versicherungsnehmer“ erhalten den vollständigen Namen.
+- Eingefügte Unterschriften und Bilder lassen sich nachträglich antippen, verschieben, skalieren, drehen oder entfernen (gilt für ab Version 1.2 eingefügte Elemente).
+- PDF übersetzen: Ergebnis ist jetzt eine PDF im Original-Layout (absatzweise übersetzt, an derselben Stelle gesetzt); gescannte Seiten per OCR.
+- Seiten löschen/extrahieren/drehen/teilen: alle Seiten werden angezeigt und sind durch Scrollen erreichbar; „Alle“/„Keine“ auswählen.
+
 ## Änderungen 1.1 (Oberfläche)
 - Einheitliche Seitenvorschauen mit echter Ausrichtung in allen Werkzeugen; geplante Drehungen werden in der Vorschau angezeigt.
 - „PDFs zusammenfügen“: Vorschaukacheln aller Seiten jeder Datei. „PDF teilen“: farbige Vorschau, welche Seite in welche neue PDF kommt.
