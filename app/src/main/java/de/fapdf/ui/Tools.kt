@@ -32,13 +32,17 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import de.fapdf.ui.theme.FaColors
 
-enum class ToolCategory(val title: String, val color: Color, val tile: Color, val headerIcon: ImageVector) {
-    ORGANIZE("Organisieren", FaColors.Organize, FaColors.OrganizeTile, Icons.Filled.Description),
-    EDIT("Bearbeiten", FaColors.Edit, FaColors.EditTile, Icons.Filled.Edit),
-    SIGN("Ausfüllen und Signieren", FaColors.Sign, FaColors.SignTile, Icons.Outlined.Draw),
-    ENCRYPT("Verschlüsseln", FaColors.Encrypt, FaColors.EncryptTile, Icons.Filled.Shield),
-    AI("KI PDF", FaColors.Ai, FaColors.AiTile, Icons.Filled.AutoAwesome),
-    SCAN("Scan", FaColors.Scan, FaColors.ScanTile, Icons.Outlined.CropFree),
+enum class ToolCategory(val title: String, private val colors: () -> Pair<Color, Color>, val headerIcon: ImageVector) {
+    ORGANIZE("Organisieren", { FaColors.Organize to FaColors.OrganizeTile }, Icons.Filled.Description),
+    EDIT("Bearbeiten", { FaColors.Edit to FaColors.EditTile }, Icons.Filled.Edit),
+    SIGN("Ausfüllen und Signieren", { FaColors.Sign to FaColors.SignTile }, Icons.Outlined.Draw),
+    ENCRYPT("Verschlüsseln", { FaColors.Encrypt to FaColors.EncryptTile }, Icons.Filled.Shield),
+    AI("KI PDF", { FaColors.Ai to FaColors.AiTile }, Icons.Filled.AutoAwesome),
+    SCAN("Scan", { FaColors.Scan to FaColors.ScanTile }, Icons.Outlined.CropFree);
+
+    /** Farben werden bei jedem Zugriff gelesen, damit Hell/Dunkel sofort wirkt. */
+    val color: Color get() = colors().first
+    val tile: Color get() = colors().second
 }
 
 /** Arbeitsbereich-Modi für Werkzeuge, die die Seitenansicht benötigen. */

@@ -95,7 +95,7 @@ fun PdfPagesView(
     BoxWithConstraints(
         modifier
             .fillMaxSize()
-            .background(Color(0xFFE3E3E8))
+            .background(FaColors.PageArea)
             .pointerInput(Unit) {
                 awaitEachGesture {
                     awaitFirstDown(requireUnconsumed = false)

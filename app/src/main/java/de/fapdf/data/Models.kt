@@ -30,7 +30,10 @@ enum class AiProvider(val title: String, val endpointHost: String, val pricingUr
     OPENAI("OpenAI", "api.openai.com", "https://openai.com/api/pricing/", ""),
 }
 
+enum class ThemeMode(val title: String) { SYSTEM("Wie System"), LIGHT("Hell"), DARK("Dunkel") }
+
 data class AppSettings(
+    val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val biometricLock: Boolean = false,
     val aiProvider: AiProvider = AiProvider.ANTHROPIC,
     val aiModel: String = AiProvider.ANTHROPIC.defaultModel,

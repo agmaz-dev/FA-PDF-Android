@@ -90,6 +90,55 @@ class ToolRunner(private val scope: CoroutineScope, private val appVm: AppViewMo
 
     fun tmp(name: String = "out") = File(tmpDir, "${name}_${System.nanoTime()}.pdf")
 
+    /** Letzte direkte Änderung: Dokument-ID + Sicherung für „Rückgängig“. */
+    var undo by mutableStateOf<Pair<Long, File>?>(null)
+    var doneMessage by mutableStateOf<String?>(null)
+
+    /**
+     * Ändert das Dokument selbst (z. B. Seiten löschen/drehen/ordnen). [block] schreibt das Ergebnis
+     * in die übergebene Datei; danach ersetzt es das Dokument. Eine Sicherung erlaubt „Rückgängig“.
+     */
+    fun runInPlace(label: String, doc: DocumentEntity, message: String, block: suspend (File) -> Unit) {
+        scope.launch {
+            busy = label
+            try {
+                val out = tmp("inplace")
+                withContext(PdfIo.pdfDispatcher) { block(out) }
+                val backup = tmp("backup")
+                withContext(kotlinx.coroutines.Dispatchers.IO) { File(doc.filePath).copyTo(backup, overwrite = true) }
+                repo.replaceContent(doc.id, out)
+                out.delete()
+                undo?.second?.delete()
+                undo = doc.id to backup
+                results = emptyList()
+                doneMessage = message
+            } catch (e: PasswordRequiredException) {
+                askPassword = { runInPlace(label, doc, message, block) }
+            } catch (e: Exception) {
+                error = e.message ?: e.javaClass.simpleName
+            } finally {
+                busy = null
+            }
+        }
+    }
+
+    fun undoInPlace() {
+        val (id, backup) = undo ?: return
+        scope.launch {
+            busy = "Wird rückgängig gemacht …"
+            try {
+                repo.replaceContent(id, backup)
+                backup.delete()
+                undo = null
+                doneMessage = null
+            } catch (e: Exception) {
+                error = e.message ?: e.javaClass.simpleName
+            } finally {
+                busy = null
+            }
+        }
+    }
+
     /** [block] erzeugt Dateien + Namen; diese werden als neue Dokumente gespeichert. */
     fun run(label: String, block: suspend () -> List<Pair<File, String>>) {
         scope.launch {
@@ -133,6 +182,7 @@ fun ToolScaffold(
         Column(mod.fillMaxSize().verticalScroll(rememberScrollState())) {
             tool.limitedNote?.let { de.fapdf.ui.components.InfoCard("Hinweis: $it") }
             if (runner.results.isNotEmpty()) ResultCard(runner, onOpenDoc, replaceTarget)
+            runner.doneMessage?.let { msg -> InPlaceCard(msg, runner, onOpenDoc) }
             content()
             Spacer(Modifier.height(40.dp))
         }
@@ -144,6 +194,19 @@ fun ToolScaffold(
         PasswordDialog("Passwortgeschützte PDF", "Bitte geben Sie das Passwort der PDF ein.", onConfirm = {
             runner.password = it; runner.askPassword = null; retry()
         }, onDismiss = { runner.askPassword = null })
+    }
+}
+
+@Composable
+private fun InPlaceCard(message: String, runner: ToolRunner, onOpenDoc: (Long) -> Unit) {
+    GroupCard(Modifier.padding(bottom = 8.dp)) {
+        Row(Modifier.padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Outlined.CheckCircle, null, tint = FaColors.Success)
+            Spacer(Modifier.width(8.dp))
+            Text(message, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+            if (runner.undo != null) TextButton(onClick = { runner.undoInPlace() }) { Text("Rückgängig") }
+            runner.undo?.first?.let { id -> TextButton(onClick = { onOpenDoc(id) }) { Text("Öffnen") } }
+        }
     }
 }
 

@@ -50,6 +50,25 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.unit.IntOffset
+import kotlin.math.roundToInt
 import de.fapdf.pdf.Alignment as TextAlignment
 import de.fapdf.pdf.FontFamily
 import de.fapdf.pdf.PdfPageSource
@@ -183,7 +202,7 @@ fun InlineTextEditor(vm: WorkspaceViewModel, sel: TextSelection, onMore: () -> U
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PageGridSheet(source: PdfPageSource, current: Int, onDismiss: () -> Unit, onGo: (Int) -> Unit) {
-    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = Color.White) {
+    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = FaColors.Surface) {
         Column(Modifier.navigationBarsPadding()) {
             Text("Seitenübersicht", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(horizontal = 20.dp))
             Spacer(Modifier.height(8.dp))
@@ -196,6 +215,103 @@ fun PageGridSheet(source: PdfPageSource, current: Int, onDismiss: () -> Unit, on
                 }
             }
             Spacer(Modifier.height(16.dp))
+        }
+    }
+}
+
+
+/**
+ * Direkte Eingabe in ein Formularfeld auf der Seite: Das Textfeld liegt exakt über dem PDF-Feld,
+ * die Tastatur öffnet sich sofort, „Weiter“ springt ins nächste Feld.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun InlineFieldEditor(vm: WorkspaceViewModel, f: de.fapdf.pdf.FormFieldInfo, w: de.fapdf.pdf.WidgetInfo, s: Float) {
+    val density = LocalDensity.current
+    val focus = remember(f.id) { FocusRequester() }
+    val bring = remember(f.id) { BringIntoViewRequester() }
+    var value by remember(f.id) {
+        val start = vm.displayValue(f).ifEmpty { f.value }
+        mutableStateOf(TextFieldValue(start, TextRange(start.length)))
+    }
+    val multi = f.kind == de.fapdf.pdf.FieldKind.MULTILINE
+    val b = w.viewBox
+    val boxH = b.height * s
+    val fontPx = if (multi) (11f * s).coerceAtMost(boxH * 0.8f) else (boxH * 0.62f).coerceIn(10f, 40f * s)
+    LaunchedEffect(f.id) {
+        focus.requestFocus()
+        kotlinx.coroutines.delay(350) // Tastatur einblenden lassen, dann Feld sichtbar scrollen
+        bring.bringIntoView()
+    }
+    val next = vm.nextTextField(f.id)
+    BasicTextField(
+        value = value,
+        onValueChange = { nv ->
+            if (f.maxLength > 0 && nv.text.length > f.maxLength) return@BasicTextField
+            value = nv
+            vm.setPending(f.id, de.fapdf.pdf.FieldValue.Text(nv.text))
+        },
+        singleLine = !multi,
+        textStyle = androidx.compose.ui.text.TextStyle(
+            color = Color(0xFF0A3CA0), fontSize = with(density) { fontPx.toSp() },
+        ),
+        cursorBrush = SolidColor(FaColors.Accent),
+        keyboardOptions = KeyboardOptions(
+            keyboardType = if (f.kind == de.fapdf.pdf.FieldKind.DATE) KeyboardType.Number else KeyboardType.Text,
+            capitalization = KeyboardCapitalization.Sentences,
+            imeAction = if (multi) ImeAction.Default else if (next != null) ImeAction.Next else ImeAction.Done,
+        ),
+        keyboardActions = KeyboardActions(
+            onNext = { next?.let { vm.activateField(it) } },
+            onDone = { vm.inlineFieldId = null },
+        ),
+        modifier = Modifier
+            .offset { IntOffset((b.left * s).roundToInt(), (b.top * s).roundToInt()) }
+            .size(with(density) { (b.width * s).toDp() }, with(density) { boxH.toDp() })
+            .bringIntoViewRequester(bring)
+            .background(Color.White.copy(alpha = 0.92f))
+            .border(2.dp, FaColors.Accent)
+            .padding(horizontal = 3.dp)
+            .focusRequester(focus),
+        decorationBox = { inner -> Box(Modifier.fillMaxSize(), contentAlignment = if (multi) Alignment.TopStart else Alignment.CenterStart) { inner() } },
+    )
+}
+
+/** Freier Text direkt auf der Seite: tippen, mit ✓ oder „Fertig“ übernehmen. */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun InlineNewTextEditor(vm: WorkspaceViewModel, page: Int, u: Float, v: Float, s: Float) {
+    val density = LocalDensity.current
+    val focus = remember(page, u, v) { FocusRequester() }
+    val bring = remember(page, u, v) { BringIntoViewRequester() }
+    var text by remember(page, u, v) { mutableStateOf("") }
+    val style = vm.newTextStyle
+    val fontPx = style.size * s
+    LaunchedEffect(page, u, v) {
+        focus.requestFocus()
+        kotlinx.coroutines.delay(350)
+        bring.bringIntoView()
+    }
+    val commit = {
+        if (text.isNotBlank()) vm.addText(page, u, v, text, style)
+        vm.inlineNewText = null
+    }
+    Row(
+        Modifier.offset { IntOffset((u * s).roundToInt(), (v * s - fontPx * 0.2f).roundToInt()) }
+            .bringIntoViewRequester(bring)
+            .background(Color.White.copy(alpha = 0.92f)).border(2.dp, FaColors.Accent),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        BasicTextField(
+            text, { text = it },
+            textStyle = androidx.compose.ui.text.TextStyle(color = Color(style.colorArgb), fontSize = with(density) { fontPx.toSp() }),
+            cursorBrush = SolidColor(FaColors.Accent),
+            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences, imeAction = ImeAction.Done),
+            keyboardActions = KeyboardActions(onDone = { commit() }),
+            modifier = Modifier.widthIn(min = 80.dp, max = 320.dp).padding(horizontal = 4.dp, vertical = 2.dp).focusRequester(focus),
+        )
+        Box(Modifier.size(32.dp).background(FaColors.Accent).clickable { commit() }, contentAlignment = Alignment.Center) {
+            Icon(Icons.Outlined.Check, "Übernehmen", tint = Color.White, modifier = Modifier.size(20.dp))
         }
     }
 }

@@ -181,7 +181,7 @@ private fun PositionGrid(selected: NumberPosition, onSelect: (NumberPosition) ->
                     val sel = p == selected
                     Box(
                         Modifier.weight(1f).height(46.dp).clip(RoundedCornerShape(8.dp))
-                            .background(if (sel) FaColors.AccentLight else Color.White)
+                            .background(if (sel) FaColors.AccentLight else FaColors.Surface)
                             .border(if (sel) 2.dp else 1.dp, if (sel) FaColors.Accent else FaColors.CardBorder, RoundedCornerShape(8.dp))
                             .clickable { onSelect(p) }.padding(8.dp),
                         contentAlignment = when (p) {
@@ -452,7 +452,7 @@ fun RequestSignaturesToolV2(doc: DocumentEntity, runner: ToolRunner, onChange: (
     val src = rememberDocSource(doc, runner.password) { runner.askPassword = {} }
     DocCard(doc, onChange = onChange)
     Row(
-        Modifier.padding(horizontal = 16.dp, vertical = 6.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Color(0xFFFFF3E0)).padding(12.dp),
+        Modifier.padding(horizontal = 16.dp, vertical = 6.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(if (FaColors.dark) Color(0xFF3A2C18) else Color(0xFFFFF3E0)).padding(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(Icons.Outlined.WarningAmber, null, tint = Color(0xFFEF6C00))

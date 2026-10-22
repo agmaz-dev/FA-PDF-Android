@@ -22,6 +22,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -257,8 +262,9 @@ fun WorkspaceScreen(
             )
         },
         bottomBar = {
-            if (!fullscreen) Surface(color = Color.White, shadowElevation = 8.dp) {
-                Column(Modifier.navigationBarsPadding()) {
+            if (!fullscreen) Surface(color = FaColors.Surface, shadowElevation = 8.dp) {
+                // Leiste wandert mit der Tastatur nach oben – das Eingabefeld bleibt sichtbar
+                Column(Modifier.windowInsetsPadding(WindowInsets.navigationBars.union(WindowInsets.ime))) {
                     if (vm.mode == WorkspaceMode.READ && source != null && source.pageCount > 0 && vm.placement == null) {
                         ThumbStrip(vm, source, currentPage) { p -> scope.launch { listState.animateScrollToItem(p) } }
                         ZoomRow(zoom, onZoom = { zoom = it }, onFullscreen = { fullscreen = true }, onGrid = { sheet = "grid" })
@@ -308,7 +314,7 @@ fun WorkspaceScreen(
                 scope.launch { listState.animateScrollToItem(w.pageIndex) }
                 sheet = "sign"
             })
-            Box(Modifier.weight(1f).fillMaxWidth().background(Color(0xFFF1F2F5))) {
+            Box(Modifier.weight(1f).fillMaxWidth().background(FaColors.PageArea)) {
                 if (source != null) {
                     val gestures = gesturesFor(vm)
                     PdfPagesView(
@@ -382,7 +388,8 @@ fun WorkspaceScreen(
             },
         )
     }
-    vm.addTextAt?.let { (p, u, v) -> AddTextDialog(vm.newTextStyle, onDismiss = { vm.addTextAt = null }) { text, style -> vm.addText(p, u, v, text, style) } }
+    // Neuer Text wird direkt auf der Seite eingegeben (kein Dialog)
+    LaunchedEffect(vm.addTextAt) { vm.addTextAt?.let { vm.inlineNewText = it; vm.addTextAt = null } }
     vm.noteAt?.let { (p, u, v) -> NoteDialog(onDismiss = { vm.noteAt = null }) { vm.addNote(p, u, v, it) } }
     vm.editingField?.let { f -> FieldDialog(f, vm.displayValue(f), onDismiss = { vm.editingField = null }) { value -> vm.setPending(f.id, value); vm.editingField = null } }
     vm.autofillPreview?.let { (profile, list) -> AutofillPreviewDialog(profile.label, list, onDismiss = { vm.autofillPreview = null }) { vm.acceptAutofill(it) } }
@@ -452,11 +459,14 @@ private fun gesturesFor(vm: WorkspaceViewModel): PageGestures = when (vm.mode) {
     WorkspaceMode.REDACT -> if (vm.redactScroll) PageGestures()
     else PageGestures(dragEnabled = true, onDragStart = vm::onDragStart, onDrag = vm::onDrag, onDragEnd = vm::onDragEnd)
     WorkspaceMode.FORM -> PageGestures(onTap = { p, u, v -> vm.tapObjectOr(p, u, v) {
-        val f = vm.formInfo?.fields?.firstOrNull { fi -> fi.widgets.any { it.pageIndex == p && it.viewBox.inset(2f).contains(u, v) } }
+        var widget: de.fapdf.pdf.WidgetInfo? = null
+        val f = vm.formInfo?.fields?.firstOrNull { fi ->
+            fi.widgets.firstOrNull { it.pageIndex == p && it.viewBox.inset(2f).contains(u, v) }?.also { widget = it } != null
+        }
         when {
-            f != null && f.kind == FieldKind.SIGNATURE -> vm.signatureFieldPrompt = f
-            f != null && !f.readOnly -> vm.editingField = f
-            f == null -> vm.addTextAt = Triple(p, u, v)
+            f != null -> vm.activateField(f, widget)
+            vm.inlineFieldId != null || vm.inlineNewText != null -> { vm.inlineFieldId = null; vm.inlineNewText = null }
+            else -> vm.inlineNewText = Triple(p, u, v)
         }
     } })
     WorkspaceMode.SIGN -> PageGestures(onTap = { p, u, v -> vm.tapObjectOr(p, u, v) {} })
@@ -503,12 +513,25 @@ private fun PageOverlay(vm: WorkspaceViewModel, page: Int, s: Float) {
                 rect(w.viewBox, (if (isSig) Color(0xFFE364E8) else accent).copy(alpha = 0.10f), fill = true)
                 rect(w.viewBox, (if (isSig) Color(0xFFE364E8) else accent).copy(alpha = 0.55f), width = 1.dp.toPx())
                 if (f.id == vm.focusedFieldId) rect(w.viewBox.inset(2f), accent, width = 2.5f.dp.toPx())
-                val text = vm.pendingValues[f.id]?.let { vm.displayValue(f) }
+                if (f.id == vm.inlineFieldId) return@forEach // wird gerade direkt bearbeitet
+                val text = when {
+                    vm.pendingValues[f.id] == null -> null
+                    f.kind == FieldKind.RADIO -> if (vm.currentChoice(f) == w.onValue) "●" else null
+                    f.kind == FieldKind.CHECKBOX -> if (vm.currentChecked(f)) "✓" else null
+                    else -> vm.displayValue(f)
+                }
                 if (!text.isNullOrEmpty()) drawFieldText(text, w.viewBox, s)
             }
         }
     }
     vm.placement?.takeIf { it.page == page }?.let { PlacementLayer(it, s) }
+    // Direkte Eingabe auf der Seite
+    if (vm.mode == WorkspaceMode.FORM) {
+        val f = vm.formInfo?.fields?.firstOrNull { it.id == vm.inlineFieldId }
+        val w = f?.widgets?.firstOrNull { it.pageIndex == page }
+        if (f != null && w != null) InlineFieldEditor(vm, f, w, s)
+    }
+    vm.inlineNewText?.takeIf { it.first == page }?.let { (_, u, v) -> InlineNewTextEditor(vm, page, u, v, s) }
 }
 
 private fun DrawScope.drawStroke(pts: List<Pair<Float, Float>>, s: Float, color: Color) {
@@ -842,15 +865,22 @@ private fun FormNavigator(vm: WorkspaceViewModel, onGo: (Int) -> Unit) {
     val fields = vm.formInfo?.fields.orEmpty().filter { !it.readOnly && it.widgets.isNotEmpty() }
     if (fields.isEmpty()) return
     var i by remember(vm.formInfo) { mutableStateOf(0) }
-    val idx = i.coerceIn(0, fields.size - 1)
+    val focusedIdx = fields.indexOfFirst { it.id == vm.focusedFieldId }
+    val idx = if (focusedIdx >= 0) focusedIdx else i.coerceIn(0, fields.size - 1)
     val f = fields[idx]
-    fun go(n: Int) { i = n.coerceIn(0, fields.size - 1); onGo(fields[i].widgets.first().pageIndex); vm.focusedFieldId = fields[i].id }
+    fun go(n: Int) {
+        i = n.coerceIn(0, fields.size - 1)
+        val t = fields[i]
+        onGo(t.widgets.first().pageIndex)
+        vm.focusedFieldId = t.id
+        if (t.kind == FieldKind.TEXT || t.kind == FieldKind.MULTILINE || t.kind == FieldKind.DATE) vm.activateField(t) else vm.inlineFieldId = null
+    }
     Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
         IconButton(onClick = { go(idx - 1) }, enabled = idx > 0) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Vorheriges Feld") }
         Column(
             Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).background(FaColors.Card).clickable {
                 go(idx)
-                if (f.kind == FieldKind.SIGNATURE) vm.signatureFieldPrompt = f else vm.editingField = f
+                vm.activateField(f)
             }.padding(horizontal = 12.dp, vertical = 6.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {

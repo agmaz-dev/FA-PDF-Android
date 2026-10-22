@@ -63,6 +63,21 @@ fun SettingsScreen(appVm: AppViewModel, onBack: (() -> Unit)?, onProfiles: () ->
                 GroupRow("Familienprofile", "Daten für das automatische Ausfüllen von Formularen", Icons.Outlined.People, onClick = onProfiles)
                 GroupRow("Unterschriften", "Gespeicherte Unterschriften verwalten", Icons.Outlined.Draw, showDivider = false, onClick = onSignatures)
             }
+            SectionTitle("Darstellung")
+            GroupCard {
+                de.fapdf.data.ThemeMode.entries.forEachIndexed { i, m ->
+                    GroupRow(
+                        m.title,
+                        when (m) {
+                            de.fapdf.data.ThemeMode.SYSTEM -> "Folgt der Einstellung des Geräts"
+                            de.fapdf.data.ThemeMode.LIGHT -> "Helles Design"
+                            de.fapdf.data.ThemeMode.DARK -> "Dunkles Design – schont die Augen bei wenig Licht"
+                        },
+                        showDivider = i < de.fapdf.data.ThemeMode.entries.size - 1,
+                        trailing = { androidx.compose.material3.RadioButton(selected = s.themeMode == m, onClick = { scope.launch { repo.setTheme(m) } }) },
+                    ) { scope.launch { repo.setTheme(m) } }
+                }
+            }
             SectionTitle("Datenschutz")
             GroupCard {
                 GroupRow(

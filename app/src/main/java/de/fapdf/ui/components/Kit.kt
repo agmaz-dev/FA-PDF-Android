@@ -249,7 +249,7 @@ fun ChoiceBoxes(options: List<String>, selected: Int, modifier: Modifier = Modif
             val sel = i == selected
             Column(
                 Modifier.weight(1f).clip(RoundedCornerShape(10.dp))
-                    .background(if (sel) FaColors.AccentLight else Color.White)
+                    .background(if (sel) FaColors.AccentLight else FaColors.Surface)
                     .border(if (sel) 1.5.dp else 1.dp, if (sel) FaColors.Accent else FaColors.CardBorder, RoundedCornerShape(10.dp))
                     .clickable { onSelect(i) }.padding(horizontal = 10.dp, vertical = 12.dp),
                 horizontalAlignment = if (subtitles == null) Alignment.CenterHorizontally else Alignment.Start,
@@ -368,7 +368,7 @@ fun ThinDivider(modifier: Modifier = Modifier) = HorizontalDivider(modifier.padd
 fun CheckMark(checked: Boolean, modifier: Modifier = Modifier) {
     Box(
         modifier.size(22.dp).clip(CircleShape)
-            .background(if (checked) FaColors.Accent else Color.White)
+            .background(if (checked) FaColors.Accent else FaColors.Surface)
             .border(1.5.dp, if (checked) FaColors.Accent else Color(0xFFB0B5BF), CircleShape),
         contentAlignment = Alignment.Center,
     ) { if (checked) Text("✓", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold) }

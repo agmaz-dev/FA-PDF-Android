@@ -249,6 +249,7 @@ private val Context.dataStore by preferencesDataStore(name = "settings")
 class SettingsRepository(private val context: Context, private val crypto: CryptoManager) {
     private object Keys {
         val BIOMETRIC = booleanPreferencesKey("biometric_lock")
+        val THEME = stringPreferencesKey("theme_mode")
         val PROVIDER = stringPreferencesKey("ai_provider")
         val MODEL = stringPreferencesKey("ai_model")
         val KEY = stringPreferencesKey("ai_key_enc")
@@ -257,6 +258,7 @@ class SettingsRepository(private val context: Context, private val crypto: Crypt
     val settings: Flow<AppSettings> = context.dataStore.data.map { p ->
         val provider = p[Keys.PROVIDER]?.let { runCatching { AiProvider.valueOf(it) }.getOrNull() } ?: AiProvider.ANTHROPIC
         AppSettings(
+            themeMode = p[Keys.THEME]?.let { runCatching { ThemeMode.valueOf(it) }.getOrNull() } ?: ThemeMode.SYSTEM,
             biometricLock = p[Keys.BIOMETRIC] ?: false,
             aiProvider = provider,
             aiModel = p[Keys.MODEL] ?: provider.defaultModel,
@@ -267,6 +269,8 @@ class SettingsRepository(private val context: Context, private val crypto: Crypt
     suspend fun current(): AppSettings = settings.first()
 
     suspend fun setBiometric(on: Boolean) = context.dataStore.edit { it[Keys.BIOMETRIC] = on }
+
+    suspend fun setTheme(mode: ThemeMode) = context.dataStore.edit { it[Keys.THEME] = mode.name }
 
     suspend fun setAi(provider: AiProvider, model: String) = context.dataStore.edit {
         it[Keys.PROVIDER] = provider.name

@@ -110,7 +110,7 @@ fun PageThumb(
     renderWidth: Int = 300,
     onClick: (() -> Unit)? = null,
 ) {
-    val key = "${src.file.absolutePath}/$page/$renderWidth"
+    val key = "${src.file.absolutePath}@${System.identityHashCode(src)}/$page/$renderWidth"
     val img by produceState<ImageBitmap?>(PreviewSources.thumbs.get(key)?.asImageBitmap(), key) {
         if (value == null) {
             value = withContext(Dispatchers.IO) {
@@ -126,7 +126,7 @@ fun PageThumb(
     Column(modifier.let { if (onClick != null) it.clickable(onClick = onClick) else it }, horizontalAlignment = Alignment.CenterHorizontally) {
         Box(
             Modifier.fillMaxWidth().aspectRatio(0.78f).clip(RoundedCornerShape(6.dp))
-                .background(if (selected) FaColors.AccentLight else Color(0xFFEDEDF0))
+                .background(if (selected) FaColors.AccentLight else FaColors.Card)
                 .border(if (selected || accent != null) 3.dp else 1.dp, border, RoundedCornerShape(6.dp)),
             contentAlignment = Alignment.Center,
         ) {

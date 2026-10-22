@@ -9,6 +9,12 @@ import androidx.fragment.app.FragmentActivity
 import de.fapdf.ui.AppNav
 import de.fapdf.ui.AppViewModel
 import de.fapdf.ui.theme.FaPdfTheme
+import de.fapdf.ui.theme.FaColors
+import de.fapdf.data.ThemeMode
+import androidx.activity.SystemBarStyle
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 
 /** FragmentActivity (statt ComponentActivity), weil BiometricPrompt sie benötigt. */
 class MainActivity : FragmentActivity() {
@@ -18,7 +24,20 @@ class MainActivity : FragmentActivity() {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         if (savedInstanceState == null) appVm.handleIncoming(intent)
-        setContent { FaPdfTheme { AppNav(appVm) } }
+        setContent {
+            val settings by appVm.container.settings.settings.collectAsState(initial = null)
+            val mode = settings?.themeMode ?: ThemeMode.SYSTEM
+            FaPdfTheme(mode) {
+                // Statusleisten-Symbole passend zum gewählten Design
+                val dark = FaColors.dark
+                LaunchedEffect(dark) {
+                    val style = if (dark) SystemBarStyle.dark(android.graphics.Color.TRANSPARENT)
+                    else SystemBarStyle.light(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT)
+                    enableEdgeToEdge(statusBarStyle = style, navigationBarStyle = style)
+                }
+                if (settings != null) AppNav(appVm)
+            }
+        }
     }
 
     override fun onNewIntent(intent: Intent) {

@@ -538,7 +538,7 @@ private fun PageChip(p: Int) {
 @Composable
 private fun SummaryCard(text: String) {
     Column(
-        Modifier.padding(16.dp).fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Color.White)
+        Modifier.padding(16.dp).fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(FaColors.Surface)
             .border(1.dp, FaColors.CardBorder, RoundedCornerShape(14.dp)).padding(14.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -579,7 +579,7 @@ private fun QuizCards(quiz: List<QuizQuestion>) {
         Text("${i + 1} / ${quiz.size}", style = MaterialTheme.typography.labelLarge, color = FaColors.SecondaryLabel)
     }
     Column(
-        Modifier.padding(horizontal = 16.dp).fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Color.White)
+        Modifier.padding(horizontal = 16.dp).fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(FaColors.Surface)
             .border(1.dp, FaColors.CardBorder, RoundedCornerShape(14.dp)).padding(14.dp)
     ) {
         Text(q.question, style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(bottom = 6.dp))
@@ -589,7 +589,7 @@ private fun QuizCards(quiz: List<QuizQuestion>) {
             val wrong = shown && picked && k != q.correct
             Row(
                 Modifier.padding(vertical = 2.dp).fillMaxWidth().clip(RoundedCornerShape(8.dp))
-                    .background(when { correct -> Color(0xFFE3F7F2); wrong -> Color(0xFFFDEAE6); picked -> FaColors.AccentLight; else -> Color.Transparent })
+                    .background(when { correct -> FaColors.EditTile; wrong -> FaColors.DestructiveLight; picked -> FaColors.AccentLight; else -> Color.Transparent })
                     .clickable { chosen[i] = k }.padding(horizontal = 4.dp, vertical = 2.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -652,7 +652,7 @@ private fun ChatView(messages: List<ChatMessage>, modifier: Modifier, enabled: B
                         val (clean, pages) = if (mine) m.content to emptyList() else m.content to pageRef.findAll(m.content).mapNotNull { it.groupValues[1].toIntOrNull() }.distinct().toList()
                         Column(
                             Modifier.widthIn(max = 300.dp).clip(RoundedCornerShape(14.dp))
-                                .background(if (mine) FaColors.AccentLight else Color.White)
+                                .background(if (mine) FaColors.AccentLight else FaColors.Surface)
                                 .border(if (mine) 0.dp else 1.dp, if (mine) Color.Transparent else FaColors.CardBorder, RoundedCornerShape(14.dp))
                                 .padding(12.dp)
                         ) {

@@ -131,7 +131,7 @@ fun HomeScreen(vm: AppViewModel, nav: HomeNav) {
     Scaffold(
         containerColor = FaColors.Background,
         bottomBar = {
-            NavigationBar(containerColor = Color.White, tonalElevation = 0.dp, modifier = Modifier.shadow(8.dp)) {
+            NavigationBar(containerColor = FaColors.Surface, tonalElevation = 0.dp, modifier = Modifier.shadow(8.dp)) {
                 listOf(
                     Triple("Dokumente", Icons.Outlined.Description, Icons.Filled.Description),
                     Triple("Werkzeuge", Icons.Outlined.GridView, Icons.Filled.GridView),
@@ -214,7 +214,7 @@ private fun ToolsHome(onOpen: () -> Unit, onScan: () -> Unit, onProfile: () -> U
                 leadingIcon = { Icon(Icons.Outlined.Search, null) }, placeholder = { Text("Werkzeug suchen") },
                 shape = RoundedCornerShape(12.dp),
                 colors = OutlinedTextFieldDefaults.colors(
-                    unfocusedContainerColor = FaColors.Card, focusedContainerColor = Color.White,
+                    unfocusedContainerColor = FaColors.Card, focusedContainerColor = FaColors.Surface,
                     unfocusedBorderColor = FaColors.CardBorder,
                 ),
             )
@@ -235,7 +235,8 @@ private fun ToolsHome(onOpen: () -> Unit, onScan: () -> Unit, onProfile: () -> U
                 if (hits.isEmpty()) Text("Kein Werkzeug gefunden.", color = FaColors.SecondaryLabel)
                 TileGrid(hits, cols, onTool)
             } else {
-                ToolCategory.entries.forEach { cat ->
+                // Scannen ist bereits oben als eigene Schaltfläche erreichbar – kein doppelter Scanner-Bereich
+                ToolCategory.entries.filter { it != ToolCategory.SCAN }.forEach { cat ->
                     Row(Modifier.padding(top = 22.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                         Icon(cat.headerIcon, null, tint = cat.color, modifier = Modifier.size(26.dp))
                         Spacer(Modifier.width(10.dp))
@@ -244,7 +245,6 @@ private fun ToolsHome(onOpen: () -> Unit, onScan: () -> Unit, onProfile: () -> U
                     val tools = Tool.byCategory(cat)
                     when (cat) {
                         ToolCategory.SIGN -> TileGrid(tools, ((cols + 1) / 2).coerceAtLeast(2), onTool)
-                        ToolCategory.SCAN -> TileGrid(tools, cols, onTool, horizontal = true)
                         else -> TileGrid(tools, cols, onTool)
                     }
                 }

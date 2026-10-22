@@ -22,6 +22,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -104,6 +106,9 @@ fun ScreenScaffold(
 ) {
     Scaffold(
         containerColor = FaColors.Background,
+        // Tastatur: Inhalt schrumpft, damit das aktive Eingabefeld sichtbar bleibt
+        contentWindowInsets = androidx.compose.material3.ScaffoldDefaults.contentWindowInsets
+            .union(androidx.compose.foundation.layout.WindowInsets.ime),
         topBar = {
             TopAppBar(
                 title = { Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleMedium) },

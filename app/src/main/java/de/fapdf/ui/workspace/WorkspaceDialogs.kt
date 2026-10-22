@@ -408,7 +408,7 @@ fun EditMoreSheet(
     highlightActive: Boolean, onDismiss: () -> Unit, onOcr: () -> Unit, onFont: () -> Unit,
     onHighlight: () -> Unit, onSign: () -> Unit, onMore: () -> Unit,
 ) {
-    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = Color.White) {
+    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = FaColors.Surface) {
         Column(Modifier.padding(horizontal = 20.dp).navigationBarsPadding()) {
             Text("Weitere Bearbeitungswerkzeuge", style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(8.dp))
@@ -466,7 +466,7 @@ fun SignatureSheet(vm: WorkspaceViewModel, onDismiss: () -> Unit, onNew: () -> U
         }
     }
     val sheetState = androidx.compose.material3.rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState, containerColor = Color.White) {
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState, containerColor = FaColors.Surface) {
         Column(Modifier.padding(horizontal = 4.dp).navigationBarsPadding()) {
             Text("Unterschrift erstellen", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(horizontal = 16.dp))
             Spacer(Modifier.height(8.dp))
@@ -499,7 +499,7 @@ fun SignatureSheet(vm: WorkspaceViewModel, onDismiss: () -> Unit, onNew: () -> U
                     val preview = remember(typed, color) { de.fapdf.ui.components.SignatureRender.typed(typed, color) }
                     Box(
                         Modifier.padding(16.dp).fillMaxWidth().height(110.dp).clip(RoundedCornerShape(14.dp))
-                            .background(Color(0xFFF7F8FA)),
+                            .background(FaColors.Card),
                         contentAlignment = Alignment.Center,
                     ) {
                         if (preview != null) Image(preview.asImageBitmap(), "Vorschau", Modifier.padding(12.dp))
@@ -510,7 +510,7 @@ fun SignatureSheet(vm: WorkspaceViewModel, onDismiss: () -> Unit, onNew: () -> U
                 3 -> {
                     Box(
                         Modifier.padding(horizontal = 16.dp).fillMaxWidth().height(150.dp).clip(RoundedCornerShape(14.dp))
-                            .background(Color(0xFFF7F8FA)).clickable {
+                            .background(FaColors.Card).clickable {
                                 photoPicker.launch(androidx.activity.result.PickVisualMediaRequest(androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly))
                             },
                         contentAlignment = Alignment.Center,
@@ -571,7 +571,7 @@ private fun SignatureRow(vm: WorkspaceViewModel, s: SignatureEntity, showThumb: 
         Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable(onClick = onClick).padding(vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(Modifier.size(width = 110.dp, height = 48.dp).clip(RoundedCornerShape(8.dp)).background(Color(0xFFF2F2F7)), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(width = 110.dp, height = 48.dp).clip(RoundedCornerShape(8.dp)).background(FaColors.Card), contentAlignment = Alignment.Center) {
             val t = thumb
             if (t != null) Image(t.asImageBitmap(), contentDescription = s.name, modifier = Modifier.padding(4.dp))
             else Text("Geschützt", color = FaColors.SecondaryLabel, style = MaterialTheme.typography.bodySmall)

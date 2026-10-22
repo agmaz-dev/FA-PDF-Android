@@ -140,6 +140,42 @@ class WorkspaceViewModel(app: Application, val docId: Long, initialMode: Workspa
     val pendingValues = mutableStateMapOf<String, FieldValue>()
     var editingField by mutableStateOf<FormFieldInfo?>(null)
     var focusedFieldId by mutableStateOf<String?>(null)
+    /** Feld, in das gerade direkt auf der Seite getippt wird. */
+    var inlineFieldId by mutableStateOf<String?>(null)
+    /** Freitext, der gerade direkt auf der Seite eingegeben wird: Seite, u, v. */
+    var inlineNewText by mutableStateOf<Triple<Int, Float, Float>?>(null)
+
+    fun editableFields(): List<FormFieldInfo> = formInfo?.fields.orEmpty().filter { !it.readOnly && it.widgets.isNotEmpty() }
+
+    private fun isTextKind(k: FieldKind) = k == FieldKind.TEXT || k == FieldKind.MULTILINE || k == FieldKind.DATE
+
+    fun currentChecked(f: FormFieldInfo): Boolean = (pendingValues[f.id] as? FieldValue.Bool)?.checked ?: f.checked
+
+    fun currentChoice(f: FormFieldInfo): String = (pendingValues[f.id] as? FieldValue.Choice)?.value ?: f.value
+
+    /**
+     * Direkte Eingabe: Textfelder werden auf der Seite selbst bearbeitet, Kontrollkästchen und
+     * Optionsfelder per Antippen umgeschaltet. Nur Auswahllisten öffnen eine Liste.
+     */
+    fun activateField(f: FormFieldInfo, widget: de.fapdf.pdf.WidgetInfo? = null) {
+        focusedFieldId = f.id
+        inlineFieldId = null
+        when {
+            f.readOnly -> {}
+            f.kind == FieldKind.SIGNATURE -> signatureFieldPrompt = f
+            isTextKind(f.kind) -> { inlineNewText = null; inlineFieldId = f.id }
+            f.kind == FieldKind.CHECKBOX -> setPending(f.id, FieldValue.Bool(!currentChecked(f)))
+            f.kind == FieldKind.RADIO && widget?.onValue != null -> setPending(f.id, FieldValue.Choice(widget.onValue))
+            else -> editingField = f
+        }
+    }
+
+    /** Nächstes Textfeld (für die „Weiter“-Taste der Tastatur); null am Ende. */
+    fun nextTextField(after: String): FormFieldInfo? {
+        val list = editableFields()
+        val i = list.indexOfFirst { it.id == after }
+        return list.drop(i + 1).firstOrNull { isTextKind(it.kind) }
+    }
     var formPrompt by mutableStateOf(false)
     var profilePrompt by mutableStateOf(false)
     var autofillPreview by mutableStateOf<Pair<PersonProfile, List<AutofillSuggestion>>?>(null)

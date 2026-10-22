@@ -4,6 +4,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -101,7 +104,7 @@ fun MergeToolV2(appVm: AppViewModel, runner: ToolRunner, docs: List<DocumentEnti
         modifier = Modifier.padding(horizontal = 16.dp),
     ) { d, i, dragMod, _ ->
         Row(
-            Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Color.White)
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(FaColors.Surface)
                 .border(1.dp, FaColors.CardBorder, RoundedCornerShape(12.dp)).then(dragMod).padding(horizontal = 8.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -208,22 +211,21 @@ fun SplitToolV2(doc: DocumentEntity, runner: ToolRunner, onChange: () -> Unit) {
 
 @Composable
 fun RotateToolV2(doc: DocumentEntity, runner: ToolRunner, onChange: () -> Unit) {
-    var page by remember(doc.id) { mutableIntStateOf(0) }
-    var delta by remember(doc.id) { mutableIntStateOf(0) }
+    var delta by remember(doc.id, doc.modifiedAt) { mutableIntStateOf(0) }
     var allPages by remember { mutableStateOf(true) }
     val src = rememberDocSource(doc, runner.password) { runner.askPassword = {} }
     DocCard(doc, onChange = onChange)
     if (src != null) {
         val count = src.pageCount
-        val p = page.coerceIn(0, count - 1)
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = { page = (p - 1).coerceAtLeast(0) }, enabled = p > 0) {
-                Icon(Icons.AutoMirrored.Outlined.KeyboardArrowLeft, "Vorherige Seite")
-            }
-            LargePagePreview(src, p, Modifier.weight(1f), extraRotation = delta, maxHeight = 360.dp)
-            IconButton(onClick = { page = (p + 1).coerceAtMost(count - 1) }, enabled = p < count - 1) {
-                Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, "Nächste Seite")
-            }
+        // Durchgehend wischbare Seitenansicht (statt Pfeilen); die Nachbarseiten ragen sichtbar herein
+        val pager = rememberPagerState(pageCount = { count })
+        val p = pager.currentPage.coerceIn(0, count - 1)
+        HorizontalPager(
+            state = pager, contentPadding = PaddingValues(horizontal = 48.dp), pageSpacing = 4.dp,
+            modifier = Modifier.fillMaxWidth().height(380.dp), beyondViewportPageCount = 1,
+        ) { i ->
+            val rot = if (allPages || i == p) delta else 0
+            LargePagePreview(src, i, extraRotation = rot, maxHeight = 360.dp)
         }
         Text("Seite ${p + 1} von $count", Modifier.fillMaxWidth(), textAlign = TextAlign.Center, style = MaterialTheme.typography.bodySmall, color = FaColors.SecondaryLabel)
         Row(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -235,12 +237,10 @@ fun RotateToolV2(doc: DocumentEntity, runner: ToolRunner, onChange: () -> Unit) 
         RadioRow(!allPages, "Nur ausgewählte Seite (Seite ${p + 1})") { allPages = false }
         FaButton("Speichern", icon = Icons.Outlined.Refresh, enabled = delta != 0) {
             val d = delta; val all = allPages; val only = p
-            runner.run("Seiten werden gedreht …") {
-                val out = runner.tmp("rotate")
+            runner.runInPlace("Seiten werden gedreht …", doc, if (all) "Alle Seiten gedreht" else "Seite ${only + 1} gedreht") { out ->
                 PdfIo.transform(doc.file(), out, runner.password) { pd ->
                     PdfOps.rotate(pd, if (all) (0 until pd.numberOfPages).toList() else listOf(only), d)
                 }
-                listOf(out to outName(doc, "gedreht"))
             }
         }
         if (delta == 0) Text("Wählen Sie zuerst eine Drehrichtung.", Modifier.fillMaxWidth(), textAlign = TextAlign.Center, style = MaterialTheme.typography.bodySmall, color = FaColors.SecondaryLabel)
@@ -296,10 +296,9 @@ fun DeletePagesTool(doc: DocumentEntity, runner: ToolRunner, onChange: () -> Uni
                     onClick = {
                         confirm = false
                         val pages = selected.toList()
-                        runner.run("Seiten werden gelöscht …") {
-                            val out = runner.tmp("delete")
+                        val n = pages.size
+                        runner.runInPlace("Seiten werden gelöscht …", doc, if (n == 1) "1 Seite gelöscht" else "$n Seiten gelöscht") { out ->
                             PdfIo.transform(doc.file(), out, runner.password) { pd -> PdfOps.deletePages(pd, pages) }
-                            listOf(out to outName(doc, "bearbeitet"))
                         }
                         selected.clear()
                     },
@@ -386,10 +385,10 @@ private data class OrgItem(val uid: Int, val ref: PageRef)
 
 @Composable
 fun OrganizeToolV2(appVm: AppViewModel, doc: DocumentEntity, runner: ToolRunner, docs: List<DocumentEntity>, onChange: () -> Unit) {
-    var uid by remember(doc.id) { mutableIntStateOf(doc.pageCount) }
-    val items = remember(doc.id) { mutableStateListOf<OrgItem>().apply { addAll((0 until doc.pageCount).map { OrgItem(it, PageRef(doc.id, it)) }) } }
+    var uid by remember(doc.id, doc.modifiedAt) { mutableIntStateOf(doc.pageCount) }
+    val items = remember(doc.id, doc.modifiedAt) { mutableStateListOf<OrgItem>().apply { addAll((0 until doc.pageCount).map { OrgItem(it, PageRef(doc.id, it)) }) } }
     var choose by remember { mutableStateOf(false) }
-    val extraDocs = remember(doc.id) { mutableStateListOf<Long>() }
+    val extraDocs = remember(doc.id, doc.modifiedAt) { mutableStateListOf<Long>() }
     DocCard(doc, onChange = onChange)
     InfoCard("Zum Sortieren gedrückt halten und Seiten verschieben.")
     val mainSrc = rememberDocSource(doc, runner.password) { runner.askPassword = {} }
@@ -402,7 +401,7 @@ fun OrganizeToolV2(appVm: AppViewModel, doc: DocumentEntity, runner: ToolRunner,
         val src = if (item.ref.source == doc.id) mainSrc else rememberDocSource(srcDoc, null)
         var menu by remember { mutableStateOf(false) }
         Row(
-            Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Color.White)
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(FaColors.Surface)
                 .border(1.dp, FaColors.CardBorder, RoundedCornerShape(12.dp)).then(dragMod).padding(horizontal = 8.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -436,10 +435,8 @@ fun OrganizeToolV2(appVm: AppViewModel, doc: DocumentEntity, runner: ToolRunner,
         val refs = items.map { it.ref }
         val sources = (listOf(doc) + extraDocs.mapNotNull { id -> docs.firstOrNull { it.id == id } }).associate { it.id to it.file() }
         val pw = runner.password
-        runner.run("Neue Seitenfolge wird gespeichert …") {
-            val out = runner.tmp("organize")
+        runner.runInPlace("Neue Seitenfolge wird gespeichert …", doc, "Neue Seitenfolge gespeichert") { out ->
             PdfOps.compose(sources, refs, out, mapOf(doc.id to pw))
-            listOf(out to outName(doc, "organisiert"))
         }
     }
     if (choose) DocChooserSheet(
