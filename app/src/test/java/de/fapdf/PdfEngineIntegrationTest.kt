@@ -18,7 +18,7 @@ import java.io.File
  */
 class PdfEngineIntegrationTest {
     private val assets = File("src/main/assets")
-    private val fonts = FontLibrary { path -> File(assets, path).inputStream() }
+    private val fonts = FontLibrary(open = { path: String -> File(assets, path).inputStream() })
     private val out = File("build/test-pdf-out").apply { mkdirs() }
 
     private fun fixture(name: String): File =
