@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Stilisierte Siebensegment-Ziffer "4" mit Eurozeichen, rot auf schwarz -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- unbeleuchtete Segmente -->
+    <path android:fillColor="#3A0808" android:pathData="M42,30 L66,30 L63,34 L45,34 Z" />
+    <path android:fillColor="#3A0808" android:pathData="M42,78 L66,78 L63,74 L45,74 Z" />
+    <path android:fillColor="#3A0808" android:pathData="M40,57 L43,56 L43,73 L40,76 Z" />
+    <!-- beleuchtete Segmente: 4 -->
+    <path android:fillColor="#FF2B2B" android:pathData="M40,32 L43,35 L43,52 L40,55 Z" />
+    <path android:fillColor="#FF2B2B" android:pathData="M68,32 L65,35 L65,52 L68,55 Z" />
+    <path android:fillColor="#FF2B2B" android:pathData="M42,54 L45,52 L63,52 L66,54 L63,56 L45,56 Z" />
+    <path android:fillColor="#FF2B2B" android:pathData="M68,57 L65,56 L65,73 L68,76 Z" />
+    <!-- Komma -->
+    <path android:fillColor="#FF2B2B" android:pathData="M72,74 L76,74 L76,78 L73,82 L72,82 L73,78 L72,78 Z" />
+</vector>

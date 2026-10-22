@@ -1,0 +1,50 @@
+name: Debug-APK bauen
+
+# Manuell auslösbar (GitHub → Actions → "Debug-APK bauen" → "Run workflow") und automatisch bei Push auf main
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Quellcode auschecken
+        uses: actions/checkout@v4
+
+      - name: JDK 17 einrichten
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Gradle einrichten
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Unit-Tests ausführen
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon testDebugUnitTest
+
+      - name: Debug-APK bauen
+        run: ./gradlew --no-daemon assembleDebug
+
+      - name: APK-Pfad anzeigen
+        run: ls -la app/build/outputs/apk/debug/
+
+      - name: APK als Artefakt bereitstellen
+        uses: actions/upload-artifact@v4
+        with:
+          name: FA-Taximeter-debug-apk
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+
+      - name: Testberichte bereitstellen
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: FA-Taximeter-testberichte
+          path: app/build/reports/tests/
+          if-no-files-found: ignore

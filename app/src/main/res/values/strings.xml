@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">FA Taximeter</string>
+    <string name="channel_trip">Laufende Fahrt</string>
+    <string name="channel_trip_desc">Zeigt an, dass während einer Fahrt der Standort gemessen wird.</string>
+</resources>
