@@ -77,7 +77,7 @@ fun HistoryScreen(
                             fontWeight = FontWeight.Bold,
                         )
                         Text(
-                            "${Format.km(r.distanceM)} · ${Format.duration(r.durationMs)} · Zuschläge ${Money.formatEuro(r.surchargeTotal)}",
+                            "${Format.km(r.distanceM)} · ${Format.duration(r.durationMs)} · Zuschläge ${Money.formatEuro(r.surchargeTotal)} · ${r.payment.label}",
                             color = MeterColors.Inactive,
                             fontSize = 13.sp,
                         )

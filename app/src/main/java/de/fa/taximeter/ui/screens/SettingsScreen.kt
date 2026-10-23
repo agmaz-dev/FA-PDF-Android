@@ -51,6 +51,8 @@ import java.util.Locale
 class SettingsActions(
     val setOrientation: (OrientationMode) -> Unit,
     val setKeepScreenOn: (Boolean) -> Unit,
+    val setSumupKey: (String) -> Unit,
+    val appId: String,
     val setTestMode: (Boolean) -> Unit,
     val saveCustomTariff: (Int, TariffProfile) -> Unit,
     val removeCustomTariff: (Int) -> Unit,
@@ -132,6 +134,9 @@ fun SettingsScreen(settings: Settings, phase: Phase, actions: SettingsActions) {
                 color = MeterColors.Inactive,
                 fontSize = 12.sp,
             )
+
+            SectionTitle("Kartenzahlung (SumUp)")
+            SumUpSection(settings.sumupKey, actions)
 
             SectionTitle("Testmodus")
             SwitchRow(
@@ -334,5 +339,45 @@ private fun CustomTariffEditor(
                 onSave(TariffCatalog.customCopy(official, b, bands, w, today))
             }
         }, color = MeterColors.Warn)
+    }
+}
+
+@Composable
+private fun SumUpSection(savedKey: String, actions: SettingsActions) {
+    var key by remember(savedKey) { mutableStateOf(savedKey) }
+    var visible by remember { mutableStateOf(false) }
+    Text(
+        if (savedKey.isBlank()) "Noch kein Schlüssel eingetragen." else "Schlüssel ist gespeichert.",
+        color = if (savedKey.isBlank()) MeterColors.Warn else MeterColors.White,
+        fontSize = 14.sp,
+    )
+    Text(
+        "In STOPP auf KASSE tippen: Die SumUp-App öffnet sich mit der Summe. Nach erfolgreicher Zahlung wird die Fahrt " +
+            "als Kartenzahlung gespeichert und der Zähler steht auf FREI. Bar: einfach FREI drücken.",
+        color = MeterColors.Inactive,
+        fontSize = 12.sp,
+    )
+    Text(
+        "App-ID für den Affiliate Key bei SumUp: ${actions.appId}",
+        color = MeterColors.White,
+        fontSize = 12.sp,
+    )
+    OutlinedTextField(
+        value = key,
+        onValueChange = { key = it.trim().take(100) },
+        label = { Text("SumUp Affiliate Key") },
+        singleLine = true,
+        visualTransformation = if (visible) androidx.compose.ui.text.input.VisualTransformation.None
+        else androidx.compose.ui.text.input.PasswordVisualTransformation(),
+        modifier = Modifier.fillMaxWidth(),
+    )
+    Row(Modifier.padding(top = 6.dp)) {
+        MeterButton("SPEICHERN", { actions.setSumupKey(key) })
+        Spacer(Modifier.width(8.dp))
+        MeterButton(if (visible) "VERBERGEN" else "ANZEIGEN", { visible = !visible }, color = MeterColors.Inactive)
+        if (savedKey.isNotBlank()) {
+            Spacer(Modifier.width(8.dp))
+            MeterButton("LÖSCHEN", { key = ""; actions.setSumupKey("") }, color = MeterColors.Inactive)
+        }
     }
 }

@@ -184,6 +184,19 @@ fun TaximeterRoot(
                                 if (state.phase == Phase.FREI) repo.message("Keine Fahrt aktiv.")
                                 else repo.pressStopp()
                             },
+                            onKasse = {
+                                when (state.phase) {
+                                    Phase.STOPP -> repo.prepareCardPayment()?.let { intent ->
+                                        try {
+                                            context.startActivity(intent)
+                                        } catch (e: android.content.ActivityNotFoundException) {
+                                            repo.cardPaymentNotStarted("SumUp-App nicht gefunden – bitte installieren und anmelden.")
+                                        }
+                                    }
+                                    Phase.BESETZT -> repo.message("Erst STOPP drücken.")
+                                    else -> Unit
+                                }
+                            },
                             onHistory = { screen = Screen.HISTORY },
                             onSettings = { screen = Screen.SETTINGS },
                             onRequestPermission = requestPermissions,
@@ -216,6 +229,11 @@ fun TaximeterRoot(
                     actions = SettingsActions(
                         setOrientation = { repo.settings.setOrientation(it) },
                         setKeepScreenOn = { repo.settings.setKeepScreenOn(it) },
+                        setSumupKey = {
+                            repo.settings.setSumupKey(it)
+                            repo.message(if (it.isBlank()) "SumUp-Schlüssel entfernt" else "SumUp-Schlüssel gespeichert")
+                        },
+                        appId = context.packageName,
                         setTestMode = {
                             repo.settings.setTestMode(it)
                             repo.onSettingsChanged()

@@ -150,6 +150,7 @@ private fun Details(r: TripRecord, small: TextUnit) {
         add("Start ${Format.dateTime(r.startWallMs)} · Ende ${Format.time(r.endWallMs)}")
         add("Strecke ${Format.km(r.distanceM)} · Dauer ${Format.duration(r.durationMs)} · berechnete Wartezeit ${Format.duration(r.waitingMs)}")
         add("Zuschläge gesamt ${Money.formatEuro(r.surchargeTotal)}")
+        add("Bezahlt: ${r.payment.label}" + (r.paymentRef?.let { " · SumUp-Transaktion $it" } ?: ""))
         if (r.gaps.isEmpty()) {
             add("Messlücken: keine")
         } else {

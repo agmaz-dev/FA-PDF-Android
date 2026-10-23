@@ -10,6 +10,7 @@ import de.fa.taximeter.domain.tariff.MeterState
 import de.fa.taximeter.domain.tariff.TariffProfile
 import de.fa.taximeter.domain.tariff.TariffSource
 import de.fa.taximeter.domain.trip.MeterMachineState
+import de.fa.taximeter.domain.trip.PaymentMethod
 import de.fa.taximeter.domain.trip.Phase
 import de.fa.taximeter.domain.trip.SurchargeDef
 import de.fa.taximeter.domain.trip.SurchargeSelection
@@ -197,6 +198,8 @@ object Codecs {
         "restored" to r.restoredAfterProcessDeath,
         "fareFloor" to r.fareFloor.toPlainString(),
         "showTotal" to r.showTotal,
+        "pendingPaymentId" to r.pendingPaymentId,
+        "paymentAttempts" to r.paymentAttempts,
     )
 
     private fun runFromMap(m: Map<String, Any?>) = TripRun(
@@ -211,6 +214,8 @@ object Codecs {
         restoredAfterProcessDeath = m.bool("restored"),
         fareFloor = m.strOrNull("fareFloor")?.let { BigDecimal(it) } ?: BigDecimal.ZERO,
         showTotal = m.bool("showTotal"),
+        pendingPaymentId = m.strOrNull("pendingPaymentId"),
+        paymentAttempts = (m["paymentAttempts"] as? MiniJson.JsonNumber)?.toInt() ?: 0,
     )
 
     fun recordToMap(r: TripRecord): Map<String, Any?> = linkedMapOf(
@@ -230,6 +235,8 @@ object Codecs {
         "gaps" to r.gaps.map { gapToMap(it) },
         "simulation" to r.simulation,
         "restored" to r.restoredAfterProcessDeath,
+        "payment" to r.payment.name,
+        "paymentRef" to r.paymentRef,
     )
 
     fun recordFromMap(m: Map<String, Any?>) = TripRecord(
@@ -248,6 +255,8 @@ object Codecs {
         gaps = m.objList("gaps").map { gapFromMap(it) },
         simulation = m.bool("simulation"),
         restoredAfterProcessDeath = m.bool("restored"),
+        payment = m.strOrNull("payment")?.let { runCatching { PaymentMethod.valueOf(it) }.getOrNull() } ?: PaymentMethod.BAR,
+        paymentRef = m.strOrNull("paymentRef"),
     )
 
     // ------------------------------------------------------------------ Gesamtzustand

@@ -21,6 +21,8 @@ data class Settings(
     val useCustom: Set<Int> = emptySet(),
     val customSurcharges: List<SurchargeDef> = emptyList(),
     val lastTariffNumber: Int = 4,
+    /** SumUp Affiliate Key (nur lokal gespeichert). */
+    val sumupKey: String = "",
 ) {
     /** Profil, das für eine neue Fahrt mit dieser Anzeige-Nummer gilt. */
     fun profileFor(number: Int): TariffProfile {
@@ -65,6 +67,7 @@ class AppSettings(context: Context) {
             useCustom = listOf(3, 4).filter { prefs.getBoolean("useCustom_$it", false) }.toSet(),
             customSurcharges = surcharges,
             lastTariffNumber = prefs.getInt("lastTariffNumber", 4),
+            sumupKey = prefs.getString("sumupKey", "") ?: "",
         )
     }
 
@@ -82,6 +85,7 @@ class AppSettings(context: Context) {
         }
         e.putString("customSurcharges", Codecs.surchargesToJson(s.customSurcharges))
         e.putInt("lastTariffNumber", s.lastTariffNumber)
+        e.putString("sumupKey", s.sumupKey)
         e.apply()
     }
 
@@ -89,6 +93,7 @@ class AppSettings(context: Context) {
     fun setKeepScreenOn(v: Boolean) = update { it.copy(keepScreenOn = v) }
     fun setTestMode(v: Boolean) = update { it.copy(testMode = v) }
     fun setLastTariff(n: Int) = update { it.copy(lastTariffNumber = n) }
+    fun setSumupKey(key: String) = update { it.copy(sumupKey = key.trim()) }
 
     fun saveCustomTariff(number: Int, profile: TariffProfile) =
         update { it.copy(customTariffs = it.customTariffs + (number to profile)) }

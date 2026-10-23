@@ -30,7 +30,13 @@ data class TripRun(
     val fareFloor: BigDecimal = BigDecimal.ZERO,
     /** Nach dem ersten STOPP zeigt die große Anzeige die Summe inkl. Zuschlägen (KASSE). */
     val showTotal: Boolean = false,
+    /** Laufende Kartenzahlung (SumUp foreign-tx-id), null = keine. */
+    val pendingPaymentId: String? = null,
+    /** Zähler für eindeutige Zahlungs-IDs je Versuch. */
+    val paymentAttempts: Int = 0,
 )
+
+enum class PaymentMethod(val label: String) { BAR("Bar"), KARTE("Karte (SumUp)") }
 
 /** Abgeschlossene Fahrt (KASSE). Fahrpreis, Zuschläge und Gesamtbetrag stammen aus diesem einen Datensatz. */
 data class TripRecord(
@@ -49,6 +55,9 @@ data class TripRecord(
     val gaps: List<GapRecord>,
     val simulation: Boolean,
     val restoredAfterProcessDeath: Boolean,
+    val payment: PaymentMethod = PaymentMethod.BAR,
+    /** SumUp-Transaktionscode bei Kartenzahlung. */
+    val paymentRef: String? = null,
 ) {
     val hasGaps: Boolean get() = gaps.isNotEmpty()
 }
@@ -131,7 +140,10 @@ object MeterMachine {
                 val run = s.run!!
                 // Neu verankern: Die während STOPP zurückgelegte Strecke wird nicht nachberechnet.
                 CommandResult(
-                    s.copy(phase = Phase.BESETZT, run = run.copy(tracker = DistanceTracker.seed(fix!!, nowMs)))
+                    s.copy(
+                        phase = Phase.BESETZT,
+                        run = run.copy(tracker = DistanceTracker.seed(fix!!, nowMs), pendingPaymentId = null),
+                    )
                 )
             }
         }
@@ -297,14 +309,63 @@ object MeterMachine {
     fun resetSurcharges(s: MeterMachineState): CommandResult = withSelection(s) { SurchargeSelection() }
 
     /** FREI: aus STOPP wird die Fahrt abgeschlossen (Datensatz in [CommandResult.state].completed) und geleert. */
-    fun pressFrei(s: MeterMachineState, nowWallMs: Long): Pair<CommandResult, TripRecord?> = when (s.phase) {
+    fun pressFrei(s: MeterMachineState, nowWallMs: Long): Pair<CommandResult, TripRecord?> =
+        finish(s, nowWallMs, PaymentMethod.BAR, null)
+
+    /** Schließt die Fahrt aus STOPP ab (Bar oder Karte) und leert den Zähler. */
+    fun finish(s: MeterMachineState, nowWallMs: Long, payment: PaymentMethod, paymentRef: String?): Pair<CommandResult, TripRecord?> = when (s.phase) {
         Phase.STOPP -> {
-            val rec = pressKasse(s, nowWallMs).state.completed!!
+            val rec = pressKasse(s, nowWallMs).state.completed!!.copy(payment = payment, paymentRef = paymentRef)
             CommandResult(MeterMachineState(phase = Phase.FREI, selectedTariff = s.selectedTariff, savedWallMs = s.savedWallMs)) to rec
         }
         Phase.KASSE -> newTrip(s) to null
         Phase.BESETZT -> CommandResult(s, "Fahrt läuft – erst STOPP drücken.", changed = false) to null
         Phase.FREI -> CommandResult(s, null, changed = false) to null
+    }
+
+    // ---------------------------------------------------------------- Kartenzahlung (SumUp)
+
+    /** Daten für eine Kartenzahlung: Betrag = Summe aus Fahrpreis und Zuschlägen. */
+    data class CardRequest(val paymentId: String, val amount: BigDecimal, val title: String)
+
+    /** Startet eine Kartenzahlung (nur in STOPP). Jeder Versuch bekommt eine eigene ID. */
+    fun startCardPayment(s: MeterMachineState): Pair<CommandResult, CardRequest?> {
+        if (s.phase != Phase.STOPP) {
+            val msg = if (s.phase == Phase.BESETZT) "Erst STOPP drücken." else null
+            return CommandResult(s, msg, changed = false) to null
+        }
+        val run = s.run!!
+        val attempt = run.paymentAttempts + 1
+        val id = run.tripId.take(24) + "-" + attempt
+        val amount = Money.cents(liveFare(s).add(run.surcharges.total))
+        if (amount.signum() <= 0) return CommandResult(s, "Kein Betrag zu kassieren.", changed = false) to null
+        val updated = s.copy(run = run.copy(pendingPaymentId = id, paymentAttempts = attempt))
+        return CommandResult(updated) to CardRequest(id, amount, "Taxifahrt Tarif ${run.profile.displayNumber}")
+    }
+
+    /**
+     * Rückmeldung von SumUp. Nur eine erfolgreiche Zahlung mit passender ID schließt die Fahrt ab;
+     * sonst bleibt das Taximeter in STOPP.
+     */
+    fun onCardResult(
+        s: MeterMachineState,
+        success: Boolean,
+        paymentId: String?,
+        txCode: String?,
+        nowWallMs: Long,
+    ): Pair<CommandResult, TripRecord?> {
+        val run = s.run
+        if (s.phase != Phase.STOPP || run == null || run.pendingPaymentId == null) {
+            return CommandResult(s, if (success) "SumUp-Zahlung gehört zu keiner offenen Fahrt – bitte in SumUp prüfen." else null, changed = false) to null
+        }
+        if (paymentId != null && paymentId != run.pendingPaymentId) {
+            return CommandResult(s, "SumUp-Rückmeldung passt nicht zur aktuellen Fahrt – bitte in SumUp prüfen.", changed = false) to null
+        }
+        if (!success) {
+            return CommandResult(s.copy(run = run.copy(pendingPaymentId = null)), "Kartenzahlung nicht erfolgt – Betrag weiterhin offen.") to null
+        }
+        val (r, rec) = finish(s, nowWallMs, PaymentMethod.KARTE, txCode)
+        return r.copy(message = "Kartenzahlung erfolgreich") to rec
     }
 
     // ---------------------------------------------------------------- Tunnel-/GPS-Lücken-Schätzung

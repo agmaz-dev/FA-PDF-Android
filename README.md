@@ -54,6 +54,19 @@ Zuschlag, Summe, Strecke, Dauer und Messlücken.
 Zurück-Taste während einer Fahrt beendet nichts: erster Druck zeigt einen Hinweis, ein zweiter innerhalb von
 2,5 s schickt die App in den Hintergrund (die Fahrt läuft über den Foreground-Service weiter).
 
+### Kartenzahlung mit SumUp
+
+1. Einmalig: Auf me.sumup.com unter Einstellungen → Für Entwickler → Toolkit → Affiliate Keys einen Schlüssel für die
+   App-ID `de.fa.taximeter.debug` erstellen und in der App unter EINSTELLUNGEN → Kartenzahlung eintragen.
+   Der Schlüssel wird nur lokal auf dem Gerät gespeichert, nicht im Code.
+2. Die SumUp-App muss auf demselben Gerät installiert und angemeldet sein.
+3. Ablauf: STOPP → **KASSE** antippen → SumUp öffnet sich mit der Summe → Zahlung → Rückkehr ins Taximeter.
+   Erfolgreich: Fahrt wird als „Karte (SumUp)“ mit Transaktionscode gespeichert, Zähler auf FREI.
+   Abgebrochen/abgelehnt: Taximeter bleibt auf STOPP, erneut KASSE oder bar mit FREI.
+4. Jeder Zahlungsversuch hat eine eigene ID (foreign-tx-id); fremde oder verspätete Rückmeldungen werden ignoriert.
+5. Technik: SumUp „Payment Switch“ (`sumupmerchant://pay/1.0`), Rückruf `fataximeter://sumup-callback`.
+   SumUp entwickelt den Payment Switch nicht mehr aktiv weiter, er funktioniert aber.
+
 ### Tunnel / kein GPS-Empfang
 
 1. Nach 3 s ohne Messung zählt die App mit der **zuletzt gemessenen Geschwindigkeit** weiter (höchstens 100 km/h,

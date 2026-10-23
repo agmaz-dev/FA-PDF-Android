@@ -21,6 +21,9 @@ class MainActivity : ComponentActivity() {
         )
         super.onCreate(savedInstanceState)
         applyOrientation(repo.settings.current.orientation)
+        // Nicht erneut verarbeiten, wenn die Activity neu aufgebaut oder aus dem Verlauf gestartet wird
+        val fromHistory = (intent.flags and android.content.Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) != 0
+        if (savedInstanceState == null && !fromHistory) handleSumUp(intent)
         setContent {
             TaximeterRoot(
                 repo = repo,
@@ -29,6 +32,19 @@ class MainActivity : ComponentActivity() {
                 onLeaveToBackground = { moveTaskToBack(true) },
             )
         }
+    }
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleSumUp(intent)
+    }
+
+    /** Rückkehr aus der SumUp-App (fataximeter://sumup-callback?...). */
+    private fun handleSumUp(intent: android.content.Intent?) {
+        val result = de.fa.taximeter.location.SumUpPayment.parse(intent) ?: return
+        repo.onCardResult(result)
+        intent?.data = null // nicht doppelt verarbeiten (z. B. nach Drehung)
     }
 
     override fun onStart() {

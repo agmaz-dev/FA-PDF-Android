@@ -63,6 +63,7 @@ class MeterActions(
     val onFrei: () -> Unit,
     val onBesetzt: () -> Unit,
     val onStopp: () -> Unit,
+    val onKasse: () -> Unit,
     val onHistory: () -> Unit,
     val onSettings: () -> Unit,
     val onRequestPermission: () -> Unit,
@@ -216,13 +217,21 @@ fun MeterScreen(ui: MeterUi, actions: MeterActions) {
                     maxLines = 1,
                 )
                 Spacer(Modifier.width((28f * scale).dp))
-                Text(
-                    "KASSE",
-                    color = if (running && ui.showsTotal) MeterColors.Label else MeterColors.Inactive,
-                    fontSize = labelSize,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                )
+                Box(
+                    Modifier
+                        .heightIn(min = 48.dp)
+                        .widthIn(min = 110.dp)
+                        .clickable(role = Role.Button, onClickLabel = "Mit Karte bezahlen (SumUp)", onClick = actions.onKasse),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        "KASSE",
+                        color = if (running && ui.showsTotal) MeterColors.Label else MeterColors.Inactive,
+                        fontSize = labelSize,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                    )
+                }
                 Spacer(Modifier.weight(1f))
                 GpsDots(ui, smallSize)
             }

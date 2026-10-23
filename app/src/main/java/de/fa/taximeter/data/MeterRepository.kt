@@ -174,6 +174,48 @@ class MeterRepository(private val app: Context) {
         }
     }
 
+    /**
+     * KASSE in STOPP: bereitet eine SumUp-Kartenzahlung vor. Liefert den Intent zum Öffnen der SumUp-App
+     * oder null (dann wurde ein Hinweis angezeigt).
+     */
+    fun prepareCardPayment(): android.content.Intent? {
+        val key = settings.current.sumupKey
+        if (_state.value.phase == Phase.STOPP && key.isBlank()) {
+            message("SumUp-Schlüssel fehlt – bitte unter EINSTELLUNGEN → Kartenzahlung eintragen.")
+            return null
+        }
+        val (r, req) = MeterMachine.startCardPayment(_state.value)
+        apply(r)
+        if (req == null) return null
+        return de.fa.taximeter.location.SumUpPayment.buildIntent(req, key, app.packageName)
+    }
+
+    /** SumUp konnte nicht geöffnet werden: offene Zahlung verwerfen. */
+    fun cardPaymentNotStarted(reason: String) {
+        val (r, _) = MeterMachine.onCardResult(_state.value, false, null, null, System.currentTimeMillis())
+        apply(r.copy(message = reason))
+    }
+
+    /** Rückmeldung der SumUp-App. */
+    fun onCardResult(result: de.fa.taximeter.location.SumUpPayment.Result) {
+        val (r, rec) = MeterMachine.onCardResult(
+            _state.value, result.success, result.paymentId, result.txCode, System.currentTimeMillis(),
+        )
+        if (rec != null) {
+            _history.value = listOf(rec) + _history.value.filterNot { it.id == rec.id }
+            store.saveHistory(_history.value)
+        }
+        if (r.changed && r.state.phase == Phase.FREI) {
+            val fresh = r.state.copy(selectedTariff = settings.current.profileFor(r.state.selectedTariff.displayNumber))
+            apply(CommandResult(fresh, r.message))
+            gpsHub.setSimulation(isSimulationActive(fresh))
+            MeterService.stop(app)
+        } else {
+            val extra = result.message?.takeIf { !result.success && it.isNotBlank() }?.let { " ($it)" } ?: ""
+            apply(r.copy(message = r.message?.plus(extra)))
+        }
+    }
+
     fun addSurchargeStep() = apply(MeterMachine.addSurchargeStep(_state.value))
 
     fun resetSurcharges() {
