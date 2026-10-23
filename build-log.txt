@@ -1,0 +1,8 @@
+warning: [options] bootstrap class path not set in conjunction with -source 8
+Note: Some input files use or override a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+1 warning
+Unsignierte APK: build/aligned.apk. Für eine installierbare Update-APK den vorhandenen Signierschlüssel angeben.
+PASS: Parser, alternative Taxinummern, Normalisierung, Eingabevalidierung und getrennte Aufrufschlüssel
+PASS: refresh gate, 15s same-date cooldown, changed date, HTTP backoff across dates
+PASS: 45-minute deadline, pause/resume, sleep/process restoration, clock correction, reboot fallback, expiry, restart/reset
