@@ -1,0 +1,312 @@
+[
+  {
+    "path": "AENDERUNGEN_1.6.8.md",
+    "bytes": 2432,
+    "sha256": "1c2797e38d1d9bdd5af38284aed72d90acc171583fa0d29cad021d5131c0f8be"
+  },
+  {
+    "path": "Dokumentation/01_AUFBAU_UND_DESIGN.md",
+    "bytes": 6258,
+    "sha256": "f00f2c3e9f8d31540a869e8e35b89471878c5d56caaf9c1690897cf81ae3ab87"
+  },
+  {
+    "path": "Dokumentation/02_APK_ERSTELLEN.md",
+    "bytes": 5157,
+    "sha256": "0d00eb61e744d92eef102e5148c7503dfce69010535d19b7664dc7a12eaaf4e6"
+  },
+  {
+    "path": "Dokumentation/03_AUFTRAG_FUER_CLAUDE.md",
+    "bytes": 3354,
+    "sha256": "2d00f12984e7e6d0d2fde46feee19bedf402ccaf08f2e37d98f381e30065d4a3"
+  },
+  {
+    "path": "Dokumentation/04_WARTUNG_UND_PRUEFUNG.md",
+    "bytes": 5505,
+    "sha256": "7be62d1ad566acb12329c23e8eafb7ad8f3d3093963fd7663dc90d88fd16880c"
+  },
+  {
+    "path": "README.txt",
+    "bytes": 36265,
+    "sha256": "9597e468f832ff836930d34ac4ee5c8836a477c1621d058501b6b221f1b2532d"
+  },
+  {
+    "path": "START_HIER.md",
+    "bytes": 2218,
+    "sha256": "615febba3a08a94e635399d6a8000499ed334e710f6d6c8903bae948a37e223a"
+  },
+  {
+    "path": "app/src/main/AndroidManifest.xml",
+    "bytes": 1222,
+    "sha256": "26f637231261df0eb5a4e9258a49e4cdb9354f54302fc1ec219f80329581592d"
+  },
+  {
+    "path": "app/src/main/assets/index.html",
+    "bytes": 89104,
+    "sha256": "45bd342042eddcb28e1fadffce0c066bcf7bd96cb2eec185f92d649f953057ec"
+  },
+  {
+    "path": "app/src/main/assets/prayer_berlin.json",
+    "bytes": 6381,
+    "sha256": "6df0a0a9a9d7a7e89ff8d580df2575ff550054093f60fd49e08b048584e30e09"
+  },
+  {
+    "path": "app/src/main/java/de/taxil150/app/Alerts.java",
+    "bytes": 4330,
+    "sha256": "f0e9e6f623d8ceb8c0b74f5f5290f79e60ec844cb295b09adc5029e50c7e5b72"
+  },
+  {
+    "path": "app/src/main/java/de/taxil150/app/CallHistory.java",
+    "bytes": 1844,
+    "sha256": "6b401d711b5ad4d39bbe3746402d98fe27602402e9d2b38c8b8ec5e9f89a6428"
+  },
+  {
+    "path": "app/src/main/java/de/taxil150/app/Config.java",
+    "bytes": 505,
+    "sha256": "cb1e479f7bf03f530c1c11d752b500d35f5a778ad2dec8a5aa968e896c61b635"
+  },
+  {
+    "path": "app/src/main/java/de/taxil150/app/CountdownState.java",
+    "bytes": 1116,
+    "sha256": "41e5c2968b068735eab3539201b05965e934815ea7a93a551119f88315d517f8"
+  },
+  {
+    "path": "app/src/main/java/de/taxil150/app/CountdownStore.java",
+    "bytes": 1690,
+    "sha256": "c6bdc29c15b883e6b09eb0f366a634bc345eb668bbaeb4a2f17e0bce4e22e98a"
+  },
+  {
+    "path": "app/src/main/java/de/taxil150/app/FlightParser.java",
+    "bytes": 3333,
+    "sha256": "a896a2c28abc1d299e29597ea1326faf8c4c0c3c654cba76136993271ef08bd4"
+  },
+  {
+    "path": "app/src/main/java/de/taxil150/app/FlightRefreshGate.java",
+    "bytes": 281,
+    "sha256": "4f188c2b3abb376fe4ecdc7adc30f73a2910a1da5dbc116f0cdc2f397111423e"
+  },
+  {
+    "path": "app/src/main/java/de/taxil150/app/FlightRepository.java",
+    "bytes": 5787,
+    "sha256": "2570d6a12306295ac8b8c48fcf91c9539af327efda490ebf59975a9c04a6bac9"
+  },
+  {
+    "path": "app/src/main/java/de/taxil150/app/MainActivity.java",
+    "bytes": 11012,
+    "sha256": "7b99fae7ce61df429535d546ab40d932fe9cb23bdc392216ffc088cdbdb7e042"
+  },
+  {
+    "path": "app/src/main/java/de/taxil150/app/MonitorService.java",
+    "bytes": 5121,
+    "sha256": "131cdd2cbb0b2e91c40ce7e660a72ac977b145fd146659566b9bdd3f813416a4"
+  },
+  {
+    "path": "app/src/main/java/de/taxil150/app/Parser.java",
+    "bytes": 2045,
+    "sha256": "9654140352b88e5ad16a0a1621f834f80a8e550f8f3aff10e07b8908a50821a7"
+  },
+  {
+    "path": "app/src/main/java/de/taxil150/app/PrayerParser.java",
+    "bytes": 3625,
+    "sha256": "592f5af2cab8dc3379a7e43aae59409cf8bb00e5e73fbcfa2843d4451c827b88"
+  },
+  {
+    "path": "app/src/main/java/de/taxil150/app/PrayerRepository.java",
+    "bytes": 3034,
+    "sha256": "57897fe80dae98b52b3c9b07f7a0014412bf3b8058d707e727d45b57b8fc6a61"
+  },
+  {
+    "path": "app/src/main/java/de/taxil150/app/WeatherParser.java",
+    "bytes": 1755,
+    "sha256": "12e9b5313c55da9f26d155b5509fd4b6723b80f88819d4b2bed0541082bc44a5"
+  },
+  {
+    "path": "app/src/main/java/de/taxil150/app/WeatherRepository.java",
+    "bytes": 2608,
+    "sha256": "7b17e4dc124c45c77e1b601435fc43bb3164a257a1677c8a62fb6eacbd468caa"
+  },
+  {
+    "path": "app/src/main/java/de/taxil150/app/WindowAppearance.java",
+    "bytes": 3021,
+    "sha256": "9ab248157cc7416a193eed7c5156d3d315baa3bad4cdf12bc88a6501cd79cb34"
+  },
+  {
+    "path": "app/src/main/res/drawable/taxi_launcher_foreground.png",
+    "bytes": 108946,
+    "sha256": "15c8cd7f30c298665ecda31c224ce4ecf0187576f3e7d18dc11189af8bd89fb7"
+  },
+  {
+    "path": "app/src/main/res/mipmap-anydpi-v26/taxi_launcher.xml",
+    "bytes": 206,
+    "sha256": "4080f522b514691d85ed8783983203f8e3d358f6acb21255f20fa6bbd614646f"
+  },
+  {
+    "path": "app/src/main/res/mipmap-xxxhdpi/taxi_launcher.png",
+    "bytes": 31384,
+    "sha256": "39bca43a9915be82213a9e52cf544ce312e33262e3c8fb8b392caa2d6110a0cb"
+  },
+  {
+    "path": "app/src/main/res/raw/globalsign_root_r46.pem",
+    "bytes": 1915,
+    "sha256": "dcc1a6246e13880ca5b73ef547e082dd0401e4d8837b6d211be82f7be791ac65"
+  },
+  {
+    "path": "app/src/main/res/raw/gong.wav",
+    "bytes": 22094,
+    "sha256": "095da5530a85cbdf2557efb4e237f768887830d23d6314da317a55f2f2c825fc"
+  },
+  {
+    "path": "app/src/main/res/raw/sectigo_public_root_r46.pem",
+    "bytes": 2000,
+    "sha256": "570878e9850a836c223561726deb23dab48d440f7af822cc48c6aa82a491cfe9"
+  },
+  {
+    "path": "app/src/main/res/raw/zurna.mp3",
+    "bytes": 258853,
+    "sha256": "09eef080f99acb413f8f10e1bc064b5fabdbde76ca909f8526cc6311825cfd55"
+  },
+  {
+    "path": "app/src/main/res/values/colors.xml",
+    "bytes": 158,
+    "sha256": "ec55e8c232cfd89458d9a763ed00755be51fba29d20d67ce0f4e8942b8c20db3"
+  },
+  {
+    "path": "app/src/main/res/values/public.xml",
+    "bytes": 71,
+    "sha256": "0868447f986fac4e757d97399d9cb3ed1e818c3d178645585f272d5e64121371"
+  },
+  {
+    "path": "app/src/main/res/values/styles.xml",
+    "bytes": 619,
+    "sha256": "ace67330924d01e51c48c6d9d764265eb39fa265384f2b4c05f9770603158d6d"
+  },
+  {
+    "path": "app/src/main/res/xml/network_security_config.xml",
+    "bytes": 852,
+    "sha256": "0d154a516e5d82eec99bdd32b23974482050d351015c4c919391717754e207ef"
+  },
+  {
+    "path": "build-manual.sh",
+    "bytes": 2486,
+    "sha256": "616abecc65114d5b3a32a2b175700d56facdcf3e6a5d5f0acd3fd24703a43017"
+  },
+  {
+    "path": "design/tesla_taxi_LN-IB-26E.png",
+    "bytes": 1541586,
+    "sha256": "f1acdb3b112940fedeedeee4e959d340fd3d0b0d7ef1ad0502a10ba0c3a2f7cc"
+  },
+  {
+    "path": "design/vorschau_1.6.8.png",
+    "bytes": 321009,
+    "sha256": "354d99d45145f14f9d3951d95fd35c0f3d879ea6238c6b1dc95f8d63efa569c2"
+  },
+  {
+    "path": "tests/ArrivalUiTest.cjs",
+    "bytes": 8993,
+    "sha256": "d4027a164b403d3810882180031fc3490f39a42d86483210ccd6d8996d1021c1"
+  },
+  {
+    "path": "tests/CallHistorySqlTest.py",
+    "bytes": 1565,
+    "sha256": "7c0cc44d34034be9468b85e58bf6de52dcb95d56944834b9e33e1be7c39e3493"
+  },
+  {
+    "path": "tests/CertificateCompatibilityTest.py",
+    "bytes": 3346,
+    "sha256": "63eba86a62b349c56ad2de63debc2416dae83f1e716f8808505b49aaf7ebca75"
+  },
+  {
+    "path": "tests/CountdownStateTest.java",
+    "bytes": 1692,
+    "sha256": "8fe2da01e27fbc13a4fcac4f84286e51ade2eb9b8a37dab542162f2a94abc8cf"
+  },
+  {
+    "path": "tests/CountdownUiTest.cjs",
+    "bytes": 3614,
+    "sha256": "299206de875301a8aa1f90f816703c8417573b09d4cda3c1661cc6851720bce3"
+  },
+  {
+    "path": "tests/FareCalculatorTest.cjs",
+    "bytes": 1888,
+    "sha256": "e0c41d8f2f1c41e16e83309a35598156149bdcc9fc594c02a70ee2f7b906df5a"
+  },
+  {
+    "path": "tests/FareUiTest.cjs",
+    "bytes": 4293,
+    "sha256": "6b239bf5d39ccf7a9dee37185493b6a20651f3c514263f2ad098ce6f3e93337b"
+  },
+  {
+    "path": "tests/FirstTaxiPointsRenderTest.cjs",
+    "bytes": 2021,
+    "sha256": "ce15aa335a46af669a5a82a8070f7d191d8b5db7f306ade938c504b09ba3e008"
+  },
+  {
+    "path": "tests/FirstTaxiPointsUiTest.cjs",
+    "bytes": 3571,
+    "sha256": "badebc6bbd0285832938cfd03abcd7f23c09946cdb0279054c7043868ac69d27"
+  },
+  {
+    "path": "tests/FlightParserTest.java",
+    "bytes": 3518,
+    "sha256": "322e3541845019a3742356cd78dfc43c7b158713995d5630dcb16074a02941b3"
+  },
+  {
+    "path": "tests/FlightRefreshGateTest.java",
+    "bytes": 701,
+    "sha256": "37fc42554281508efc6711258b8dd8de974075eb7111efde2256f7d182ad3cd7"
+  },
+  {
+    "path": "tests/FlightRefreshUiTest.cjs",
+    "bytes": 4147,
+    "sha256": "e50e1a4311ed2bc44766e9e34b4d10dc005c3dc8c00389e721ec62b101c84bb5"
+  },
+  {
+    "path": "tests/ParserTest.java",
+    "bytes": 3252,
+    "sha256": "f2b0b66196862a4b59e6283bf97da2072266217718c5190091b7fc328a9608b7"
+  },
+  {
+    "path": "tests/PrayerHistoryUiTest.cjs",
+    "bytes": 6205,
+    "sha256": "0498567d487f1c995d3a9500d7fce7b765c3ec8cfad561f35b8ae6c447c8a8d2"
+  },
+  {
+    "path": "tests/PrayerParserTest.java",
+    "bytes": 1978,
+    "sha256": "0816a4ab8b44993cc23d94a271e99decf775424c669b4bbf2a4b3680ee8d400a"
+  },
+  {
+    "path": "tests/UiScriptTest.cjs",
+    "bytes": 6569,
+    "sha256": "9f541336b77ee4e55ec3bc7599a9a4bb46411dfde3d8138287185f73ca8f69f6"
+  },
+  {
+    "path": "tests/WeatherParserTest.java",
+    "bytes": 1649,
+    "sha256": "6f2bb68a5bddda7b5ef4a687db4ed779785ccf6a5087db0e6315bb191b2837f4"
+  },
+  {
+    "path": "tests/tls-fixtures/apcoa-leaf.pem",
+    "bytes": 2316,
+    "sha256": "af5707ed396424a7c98d02f515a01ff8d07485bf636f0ef07f001163dddb80f4"
+  },
+  {
+    "path": "tests/tls-fixtures/ber-leaf.pem",
+    "bytes": 2560,
+    "sha256": "db39ab55a10bf8dfd71db1ee93a076cfa20bd87dcb457f3c38ed386c754accab"
+  },
+  {
+    "path": "tests/tls-fixtures/globalsign-alphassl-r46.pem",
+    "bytes": 1984,
+    "sha256": "b314c40d0ca50a24b0ee099ea1bbcfb35944be291240808a5479e6ed91637c62"
+  },
+  {
+    "path": "tests/tls-fixtures/legacy-usertrust-rsa.pem",
+    "bytes": 2116,
+    "sha256": "19b600c85972668ab0438e1284ade90f51f148ee5dde1378b5c9ef6959966890"
+  },
+  {
+    "path": "tests/tls-fixtures/sectigo-dv-r36.pem",
+    "bytes": 2268,
+    "sha256": "ec84a26216d7d7d11d539d90025f3b81c0a99553065c2d2d350ec06f8ab26869"
+  }
+]

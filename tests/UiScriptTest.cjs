@@ -1,0 +1,48 @@
+const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
+const path=require('path'),fs=require('fs'),assert=require('node:assert/strict');
+const qa=process.env.UI_QA_DIR||path.resolve(__dirname,'../build/ui-qa');fs.mkdirSync(qa,{recursive:true});
+(async()=>{
+ const browser=await chromium.launch({executablePath:process.env.CHROME_BIN,args:['--no-sandbox']});
+ const page=await browser.newPage({viewport:{width:412,height:915},deviceScaleFactor:1});
+ const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.addInitScript(()=>{window.bridgeCalls=[];window.TaxiAndroid=Object.fromEntries(['saveNumber','startMonitor','stopMonitor','settings','testAlarm','confirmCall','testCall','showFlights','hideFlights','refreshFlights','officialFlights','weatherSource'].map(k=>[k,(...args)=>window.bridgeCalls.push([k,...args])]));});
+ await page.goto('file://'+path.resolve(__dirname,'../app/src/main/assets/index.html'));
+ const data={number:'L150',state:'Wartend',rank:'145',points:'2',total:'149',lCount:'87',mCount:'62',connection:'Verbunden',time:'19.10.2026 22:00',monitor:'Aktiv',tone:'Zurna',vibration:'Ein',alertStatus:'Benachrichtigungen erlaubt',testAlarm:'–',lastDetected:'–',lastAlarm:'–',updatedAt:Date.now(),acknowledged:false};
+ await page.evaluate(d=>renderNative(d),data);
+ assert.equal(await page.locator('#lCount').textContent(),'87');assert.equal(await page.locator('#mCount').textContent(),'62');
+ for(const width of [320,360,412,768]){
+  await page.setViewportSize({width,height:width===768?1024:915});
+  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'Horizontal overflow at '+width);
+  assert.equal(await page.locator('#called').isVisible(),false);
+  await page.screenshot({path:path.join(qa,'waiting-'+width+'.png'),fullPage:true});
+ }
+ await page.setViewportSize({width:412,height:915});
+ await page.locator('#edit').click();await page.locator('#number').fill(' m200 ');await page.locator('#save').click();
+ assert.deepEqual((await page.evaluate(()=>bridgeCalls)).pop(),['saveNumber','M200']);
+ await page.locator('#edit').click();await page.locator('#number').fill('M 200');await page.locator('#save').click();assert.match(await page.locator('#formerror').textContent(),/gültige/);
+ await page.locator('#number').fill('L150');await page.locator('#save').click();
+ await page.evaluate(d=>renderNative(d),data);await page.locator('#toggle').click();assert.deepEqual((await page.evaluate(()=>bridgeCalls)).pop(),['stopMonitor']);
+ await page.evaluate(d=>renderNative({...d,monitor:'Aus'}),data);await page.locator('#toggle').click();assert.deepEqual((await page.evaluate(()=>bridgeCalls)).pop(),['startMonitor']);
+ assert.equal(await page.locator('nav').count(),0);await page.locator('#topsettings').click();assert.equal(await page.locator('#preferences').isVisible(),true);await page.locator('#settings').click();await page.locator('#settingstest').click();
+ assert.deepEqual((await page.evaluate(()=>bridgeCalls)).slice(-2),[['settings'],['testAlarm']]);
+ await page.screenshot({path:path.join(qa,'settings.png'),fullPage:true});
+ await page.locator('#back').click();assert.equal(await page.locator('#overview').isVisible(),true);await page.locator('#topsettings').click();assert.equal(await page.evaluate(()=>window.closeSettings()),true);assert.equal(await page.evaluate(()=>window.closeSettings()),false);
+ await page.evaluate(d=>renderNative({...d,state:'AUFGERUFEN!',target:'1N'}),data);assert.equal(await page.locator('#called').isVisible(),true);assert.equal(await page.locator('#waiting').isVisible(),false);assert.equal(await page.locator('#calltarget').textContent(),'1N');
+ await page.locator('#confirm').click();assert.deepEqual((await page.evaluate(()=>bridgeCalls)).pop(),['confirmCall']);
+ await page.screenshot({path:path.join(qa,'called.png'),fullPage:true});
+ await page.evaluate(d=>renderNative({...d,state:'AUFGERUFEN!',target:'1S',acknowledged:true}),data);assert.equal(await page.locator('#confirm').isDisabled(),true);
+ await page.evaluate(d=>renderNative({...d,connection:'Fehler – Werte veraltet: HTTP 503'}),data);assert.equal(await page.locator('#stale').isVisible(),true);
+ await page.evaluate(()=>{document.getElementById('number').focus();document.getElementById('number').value='M999';});await page.evaluate(d=>renderNative(d),data);assert.equal(await page.locator('#number').inputValue(),'M999');
+ await page.evaluate(d=>renderNative({...d,monitor:'Aus',updatedAt:0,lCount:undefined,mCount:undefined}),data);
+ assert.equal(await page.locator('#toggletext').textContent(),'Überwachung starten');assert.match(await page.locator('#stale').textContent(),/Gespeicherte Werte/);
+ await page.evaluate(d=>renderNative({...d,lCount:'0',mCount:'121',total:'121'}),data);
+ assert.equal(await page.locator('#lCount').textContent(),'0');assert.equal(await page.locator('#mCount').textContent(),'121');assert.equal(await page.locator('#stale').isVisible(),false);assert.doesNotMatch(await page.locator('#freshness').textContent(),/Noch kein/);
+ await page.locator('#number').fill('L150');await page.locator('#save').click();await page.locator('#calltest').click();assert.deepEqual((await page.evaluate(()=>bridgeCalls)).pop(),['testCall']);
+ await page.evaluate(d=>renderNative({...d,previewPending:true}),data);assert.equal(await page.locator('#previewStatus').isVisible(),true);
+ await page.evaluate(d=>renderNative({...d,state:'AUFGERUFEN!',target:'1N',preview:true}),data);assert.equal(await page.locator('#calltitletext').textContent(),'TESTAUFRUF');assert.equal(await page.locator('#confirmtext').textContent(),'Test beenden');assert.match(await page.locator('#calltime').textContent(),/kein echter/);assert.equal(await page.locator('#calltest').isVisible(),false);
+ await page.screenshot({path:path.join(qa,'test-call.png'),fullPage:true});
+ await page.locator('#confirm').click();assert.deepEqual((await page.evaluate(()=>bridgeCalls)).pop(),['confirmCall']);
+ await page.evaluate(d=>renderNative({...d,state:'AUFGERUFEN!',target:'1S',preview:false}),data);assert.equal(await page.locator('#calltitletext').textContent(),'DU BIST DRAN');assert.equal(await page.locator('#calltarget').textContent(),'1S');
+ assert.deepEqual(errors,[]);console.log('PASS: Real Chromium UI at 320/360/412/768px; number validation, edit persistence, start/stop, navigation, settings, test alarm, call state/acknowledgment, stale values; no script errors. Android bridge simulated.');
+ await browser.close();
+})().catch(e=>{console.error(e);process.exit(1);});

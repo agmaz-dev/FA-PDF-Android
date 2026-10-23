@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="false">tms-info.apcoa.de</domain>
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="@raw/sectigo_public_root_r46" />
+        </trust-anchors>
+    </domain-config>
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="false">ber.berlin-airport.de</domain>
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="@raw/globalsign_root_r46" />
+        </trust-anchors>
+    </domain-config>
+</network-security-config>
