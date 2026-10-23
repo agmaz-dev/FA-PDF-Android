@@ -51,7 +51,7 @@ unset TAXI_SIGNING_PASSWORD
 
 Bei erfolgreichem signiertem Build:
 
-`build/TaxiL150_1.6.8_BER_Zertifikat.apk`
+`build/TaxiL150_1.6.9_BER_Zertifikat.apk`
 
 Ohne Signierangaben entsteht `build/aligned.apk`, eine **unsignierte** APK. Diese ist noch nicht als normale installierbare Auslieferungsdatei zu behandeln. Eine beliebige neue Signatur ersetzt die bestehende Update-Signatur nicht.
 
@@ -70,15 +70,15 @@ bash build-manual.sh
 ## Signatur und Metadaten prüfen
 
 ```bash
-"$ANDROID_SDK_ROOT/build-tools/35.0.0/apksigner" verify --verbose --print-certs build/TaxiL150_1.6.8_BER_Zertifikat.apk
-"$ANDROID_SDK_ROOT/build-tools/35.0.0/aapt" dump badging build/TaxiL150_1.6.8_BER_Zertifikat.apk
+"$ANDROID_SDK_ROOT/build-tools/35.0.0/apksigner" verify --verbose --print-certs build/TaxiL150_1.6.9_BER_Zertifikat.apk
+"$ANDROID_SDK_ROOT/build-tools/35.0.0/aapt" dump badging build/TaxiL150_1.6.9_BER_Zertifikat.apk
 ```
 
 Erwarteter Ausgangsstand:
 
 - Paket: `de.taxil150.app.test164`.
 - Name: `Taxi L150`.
-- versionName: `1.6.8`, versionCode: `27`.
+- versionName: `1.6.9`, versionCode: `28`.
 - minSdkVersion: `26` (Android 8), targetSdkVersion: `35`.
 
 Den Zertifikatsfingerabdruck mit einer bereits installierten/ausgelieferten APK dieser Update-Linie vergleichen. Paket und Signieridentität müssen für ein normales Update übereinstimmen.

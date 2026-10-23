@@ -1,6 +1,6 @@
 # Taxi L150 – vollständige Projektübergabe
 
-Version **1.6.8**, Versionscode **27**. Dokumentation: **23.10.2026**.
+Version **1.6.9**, Versionscode **28**. Dokumentation: **23.10.2026**.
 
 Dieses Archiv enthält den tatsächlichen Android-Quellcode des zuletzt ausgelieferten Stands einschließlich Oberfläche, Design-Ressourcen, Tönen, Zertifikaten und Tests. Der Nutzer hat nach Installation zurückgemeldet: „Geht alles“. Das ist eine Rückmeldung zum getesteten Gerät und keine Zusicherung für jedes Android-Modell.
 

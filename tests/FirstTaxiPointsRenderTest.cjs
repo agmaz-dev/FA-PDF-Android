@@ -2,7 +2,7 @@ const fs=require('fs'),path=require('path'),vm=require('vm'),assert=require('nod
 const html=fs.readFileSync(path.resolve(__dirname,'../app/src/main/assets/index.html'),'utf8');
 for(const match of html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/g))new vm.Script(match[1]);
 const code=html.split('\n').find(line=>line.startsWith('window.renderNative='));
-const nodes=new Map();const $=id=>{if(!nodes.has(id))nodes.set(id,{textContent:'',setAttribute(){}});return nodes.get(id);};
+const nodes=new Map();const $=id=>{if(!nodes.has(id))nodes.set(id,{textContent:'',setAttribute(){},classList:{toggle(){},add(){},remove(){}}});return nodes.get(id);};
 const context={window:{},document:{},latest:{},editing:false,page(){},age(){},$,Date};vm.createContext(context);vm.runInContext(code,context);
 const sample={number:'L150',state:'Wartend',rank:'95',points:'21',firstPoints:'38',total:'121',lCount:'64',mCount:'57',monitor:'Aktiv',connection:'Verbunden',updatedAt:Date.now()};
 context.window.renderNative(sample);assert.equal($('firstpoints').textContent,'38');assert.equal($('points').textContent,'21 Punkte');

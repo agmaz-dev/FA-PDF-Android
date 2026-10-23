@@ -1,8 +1,23 @@
 [
   {
+    "path": ".github/workflows/apk.yml",
+    "bytes": 1491,
+    "sha256": "a13e8f835a6a72baa067030f46bfebba07ae71db5fca41effba3a02e4d92d2fa"
+  },
+  {
+    "path": ".gitignore",
+    "bytes": 26,
+    "sha256": "d616481580615d82c093a3ad4f1c7ad13bd385ec16aa247f803cd767890b9e59"
+  },
+  {
     "path": "AENDERUNGEN_1.6.8.md",
     "bytes": 2432,
     "sha256": "1c2797e38d1d9bdd5af38284aed72d90acc171583fa0d29cad021d5131c0f8be"
+  },
+  {
+    "path": "AENDERUNGEN_1.6.9.md",
+    "bytes": 921,
+    "sha256": "e1eb8dbb09777ecba5afcaeab87cc882b682b843a64366748b0fd52b8d55101c"
   },
   {
     "path": "Dokumentation/01_AUFBAU_UND_DESIGN.md",
@@ -12,7 +27,7 @@
   {
     "path": "Dokumentation/02_APK_ERSTELLEN.md",
     "bytes": 5157,
-    "sha256": "0d00eb61e744d92eef102e5148c7503dfce69010535d19b7664dc7a12eaaf4e6"
+    "sha256": "116b279806a3f2198c071bbb703bb25ba5a8097b9a09780b2c4199ba92a9bae8"
   },
   {
     "path": "Dokumentation/03_AUFTRAG_FUER_CLAUDE.md",
@@ -32,17 +47,17 @@
   {
     "path": "START_HIER.md",
     "bytes": 2218,
-    "sha256": "615febba3a08a94e635399d6a8000499ed334e710f6d6c8903bae948a37e223a"
+    "sha256": "694718bd09f27a29201528e827f51ce49ce759549674615506b0312ae852b8eb"
   },
   {
     "path": "app/src/main/AndroidManifest.xml",
     "bytes": 1222,
-    "sha256": "26f637231261df0eb5a4e9258a49e4cdb9354f54302fc1ec219f80329581592d"
+    "sha256": "92bfcdf54adfb5c79cd20f5e756e09f55d7205b7852c4b6ec95edb6940b50d3d"
   },
   {
     "path": "app/src/main/assets/index.html",
-    "bytes": 89104,
-    "sha256": "45bd342042eddcb28e1fadffce0c066bcf7bd96cb2eec185f92d649f953057ec"
+    "bytes": 92140,
+    "sha256": "79253c4b71c7983d883fc575d1242d6e49f41744947ca2e5a5dbb0cf4bbb47a3"
   },
   {
     "path": "app/src/main/assets/prayer_berlin.json",
@@ -187,7 +202,7 @@
   {
     "path": "build-manual.sh",
     "bytes": 2486,
-    "sha256": "616abecc65114d5b3a32a2b175700d56facdcf3e6a5d5f0acd3fd24703a43017"
+    "sha256": "6799f8bbe089f7c959e5c39cfb0c7abf3472235c3a4f9d2d3c078d854667f255"
   },
   {
     "path": "design/tesla_taxi_LN-IB-26E.png",
@@ -236,8 +251,8 @@
   },
   {
     "path": "tests/FirstTaxiPointsRenderTest.cjs",
-    "bytes": 2021,
-    "sha256": "ce15aa335a46af669a5a82a8070f7d191d8b5db7f306ade938c504b09ba3e008"
+    "bytes": 2063,
+    "sha256": "7790d982b3dfc214c3e645d9537072311df7a2b3335073794616a6cdf6ba84d4"
   },
   {
     "path": "tests/FirstTaxiPointsUiTest.cjs",
@@ -276,8 +291,8 @@
   },
   {
     "path": "tests/UiScriptTest.cjs",
-    "bytes": 6569,
-    "sha256": "9f541336b77ee4e55ec3bc7599a9a4bb46411dfde3d8138287185f73ca8f69f6"
+    "bytes": 7103,
+    "sha256": "4dae1e6c928d8aa2248b2110aa6769ece0f91ea44b1b3ece3a3762a38484ccb5"
   },
   {
     "path": "tests/WeatherParserTest.java",

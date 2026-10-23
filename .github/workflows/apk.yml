@@ -24,7 +24,7 @@ jobs:
           bash build-manual.sh 2>&1 | tee build-log.txt
           bt="$ANDROID_SDK_ROOT/build-tools/35.0.0"
           mkdir -p /tmp/out
-          cp build/aligned.apk /tmp/out/TaxiL150_1.6.8_unsigniert.apk
+          cp build/aligned.apk /tmp/out/TaxiL150_1.6.9_unsigniert.apk
           cp "$bt/lib/apksigner.jar" /tmp/out/apksigner.jar
           "$bt/aapt" dump badging build/aligned.apk > /tmp/out/badging.txt
           cp build-log.txt /tmp/out/

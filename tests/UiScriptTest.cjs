@@ -21,8 +21,8 @@ const qa=process.env.UI_QA_DIR||path.resolve(__dirname,'../build/ui-qa');fs.mkdi
  assert.deepEqual((await page.evaluate(()=>bridgeCalls)).pop(),['saveNumber','M200']);
  await page.locator('#edit').click();await page.locator('#number').fill('M 200');await page.locator('#save').click();assert.match(await page.locator('#formerror').textContent(),/gültige/);
  await page.locator('#number').fill('L150');await page.locator('#save').click();
- await page.evaluate(d=>renderNative(d),data);await page.locator('#toggle').click();assert.deepEqual((await page.evaluate(()=>bridgeCalls)).pop(),['stopMonitor']);
- await page.evaluate(d=>renderNative({...d,monitor:'Aus'}),data);await page.locator('#toggle').click();assert.deepEqual((await page.evaluate(()=>bridgeCalls)).pop(),['startMonitor']);
+ await page.evaluate(d=>renderNative(d),data);await page.locator('#monitorswitch').click();assert.deepEqual((await page.evaluate(()=>bridgeCalls)).pop(),['stopMonitor']);
+ await page.evaluate(d=>renderNative({...d,monitor:'Aus'}),data);await page.locator('#monitorswitch').click();assert.deepEqual((await page.evaluate(()=>bridgeCalls)).pop(),['startMonitor']);assert.equal(await page.locator('#toggle').count(),0,'unterer Überwachungsbutton entfernt');assert.equal(await page.locator('#monitorswitch').getAttribute('aria-checked'),'false');await page.evaluate(d=>renderNative(d),data);assert.equal(await page.locator('#monitorswitch').getAttribute('aria-checked'),'true');assert.equal(await page.locator('#monitorswitch').getAttribute('aria-label'),'Überwachung pausieren');
  assert.equal(await page.locator('nav').count(),0);await page.locator('#topsettings').click();assert.equal(await page.locator('#preferences').isVisible(),true);await page.locator('#settings').click();await page.locator('#settingstest').click();
  assert.deepEqual((await page.evaluate(()=>bridgeCalls)).slice(-2),[['settings'],['testAlarm']]);
  await page.screenshot({path:path.join(qa,'settings.png'),fullPage:true});
@@ -34,7 +34,7 @@ const qa=process.env.UI_QA_DIR||path.resolve(__dirname,'../build/ui-qa');fs.mkdi
  await page.evaluate(d=>renderNative({...d,connection:'Fehler – Werte veraltet: HTTP 503'}),data);assert.equal(await page.locator('#stale').isVisible(),true);
  await page.evaluate(()=>{document.getElementById('number').focus();document.getElementById('number').value='M999';});await page.evaluate(d=>renderNative(d),data);assert.equal(await page.locator('#number').inputValue(),'M999');
  await page.evaluate(d=>renderNative({...d,monitor:'Aus',updatedAt:0,lCount:undefined,mCount:undefined}),data);
- assert.equal(await page.locator('#toggletext').textContent(),'Überwachung starten');assert.match(await page.locator('#stale').textContent(),/Gespeicherte Werte/);
+ assert.equal(await page.locator('#monitorswitch').getAttribute('aria-checked'),'false');assert.equal(await page.locator('#monitorswitch').getAttribute('aria-label'),'Überwachung starten');assert.match(await page.locator('#stale').textContent(),/Gespeicherte Werte/);
  await page.evaluate(d=>renderNative({...d,lCount:'0',mCount:'121',total:'121'}),data);
  assert.equal(await page.locator('#lCount').textContent(),'0');assert.equal(await page.locator('#mCount').textContent(),'121');assert.equal(await page.locator('#stale').isVisible(),false);assert.doesNotMatch(await page.locator('#freshness').textContent(),/Noch kein/);
  await page.locator('#number').fill('L150');await page.locator('#save').click();await page.locator('#calltest').click();assert.deepEqual((await page.evaluate(()=>bridgeCalls)).pop(),['testCall']);

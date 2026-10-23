@@ -14,8 +14,8 @@ mkdir -p build/generated build/classes build/dex
 "$bt/zipalign" -f 4 build/unsigned.apk build/aligned.apk
 if [ -n "${TAXI_SIGNING_KEYSTORE:-}" ]; then
  : "${TAXI_SIGNING_PASSWORD:?Passwort des Signierschlüssels erforderlich}"
- "$bt/apksigner" sign --ks "$TAXI_SIGNING_KEYSTORE" --ks-pass env:TAXI_SIGNING_PASSWORD --out build/TaxiL150_1.6.8_BER_Zertifikat.apk build/aligned.apk
- "$bt/apksigner" verify --verbose build/TaxiL150_1.6.8_BER_Zertifikat.apk
+ "$bt/apksigner" sign --ks "$TAXI_SIGNING_KEYSTORE" --ks-pass env:TAXI_SIGNING_PASSWORD --out build/TaxiL150_1.6.9_BER_Zertifikat.apk build/aligned.apk
+ "$bt/apksigner" verify --verbose build/TaxiL150_1.6.9_BER_Zertifikat.apk
 else
  echo "Unsignierte APK: build/aligned.apk. Für eine installierbare Update-APK den vorhandenen Signierschlüssel angeben."
 fi
