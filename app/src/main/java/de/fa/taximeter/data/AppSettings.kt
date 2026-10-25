@@ -62,7 +62,8 @@ class AppSettings(context: Context) {
             orientation = runCatching { OrientationMode.valueOf(prefs.getString("orientation", "AUTO")!!) }
                 .getOrDefault(OrientationMode.AUTO),
             keepScreenOn = prefs.getBoolean("keepScreenOn", true),
-            testMode = prefs.getBoolean("testMode", false),
+            // Simulation ist im Alltag nicht erreichbar und wird beim Start immer ausgeschaltet.
+            testMode = false,
             customTariffs = customs,
             useCustom = listOf(3, 4).filter { prefs.getBoolean("useCustom_$it", false) }.toSet(),
             customSurcharges = surcharges,
@@ -77,7 +78,7 @@ class AppSettings(context: Context) {
         val e = prefs.edit()
         e.putString("orientation", s.orientation.name)
         e.putBoolean("keepScreenOn", s.keepScreenOn)
-        e.putBoolean("testMode", s.testMode)
+        e.remove("testMode")
         for (n in listOf(3, 4)) {
             val c = s.customTariffs[n]
             if (c != null) e.putString("customTariff_$n", Codecs.tariffToJson(c)) else e.remove("customTariff_$n")

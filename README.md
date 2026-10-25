@@ -187,7 +187,7 @@ Langsame echte Fahrt wird nicht verschluckt: Die Verschiebung wird vom letzten A
 überbrückter Strecke in der Fahrt und in der Abschlussanzeige vermerkt. Es gibt keine nachträgliche Preiskorrektur.
 
 Normale Fahrten starten nur mit brauchbarem Fix (Genauigkeit ≤ 30 m, ≤ 5 s alt, kein simulierter Standort).
-Der **Testmodus** (Einstellungen) erzeugt eine synthetische Fahrt und ist dauerhaft als SIMULATION markiert.
+Ein Simulationsmodus existiert nur noch für automatische Tests; in der App ist er nicht einschaltbar und wird beim Start immer ausgeschaltet.
 
 ---
 

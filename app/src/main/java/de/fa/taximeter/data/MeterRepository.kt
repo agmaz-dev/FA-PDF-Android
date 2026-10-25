@@ -64,6 +64,11 @@ class MeterRepository(private val app: Context) {
         val now = System.currentTimeMillis()
         val initial = when {
             loaded == null -> MeterMachine.initial(settings.current.profileFor(settings.current.lastTariffNumber))
+            // Eine gespeicherte simulierte Fahrt (alter Testmodus) wird verworfen – sie enthält keine echten Werte.
+            loaded.run?.simulation == true || loaded.completed?.simulation == true -> {
+                _restoreNotice.value = "Simulierte Testfahrt verworfen – das Taximeter nutzt jetzt wieder echtes GPS."
+                MeterMachine.initial(settings.current.profileFor(loaded.selectedTariff.displayNumber))
+            }
             loaded.phase == Phase.BESETZT -> {
                 // Der vorige Prozess wurde während einer laufenden Fahrt beendet.
                 val restored = MeterMachine.restoreAfterProcessDeath(loaded, now)

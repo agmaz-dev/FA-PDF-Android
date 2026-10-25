@@ -138,16 +138,6 @@ fun SettingsScreen(settings: Settings, phase: Phase, actions: SettingsActions) {
             SectionTitle("Kartenzahlung (SumUp)")
             SumUpSection(settings.sumupKey, actions)
 
-            SectionTitle("Testmodus")
-            SwitchRow(
-                "Simulation statt GPS",
-                if (phase == Phase.FREI) "Erzeugt eine synthetische Stadtfahrt. Wird dauerhaft als SIMULATION angezeigt und in der Historie gekennzeichnet."
-                else "Nur im Zustand FREI änderbar.",
-                settings.testMode,
-                enabled = phase == Phase.FREI,
-                onChange = actions.setTestMode,
-            )
-
             SectionTitle("Tarife")
             Text(
                 "Tarifänderungen gelten nur für neue Fahrten. Laufende und gespeicherte Fahrten behalten ihre Tarifversion. " +
