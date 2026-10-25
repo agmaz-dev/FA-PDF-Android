@@ -95,7 +95,7 @@ fun arabicStyle(family: FontFamily, size: Float, color: Color, align: TextAlign 
 )
 
 /** Âyet metni: Allah lafızları kırmızı, seçili âyet vurgulu */
-fun paraText(b: Blk.Para, selected: Int?, hl: Color, red: Color, marker: Color): AnnotatedString = buildAnnotatedString {
+fun paraText(b: Blk.Para, selected: Int?, hl: Color, red: Color, marker: Color, brackets: Boolean = false): AnnotatedString = buildAnnotatedString {
     b.ayahs.forEachIndexed { i, ay ->
         val start = length
         ay.ar.split(' ').forEachIndexed { wi, w ->
@@ -104,7 +104,7 @@ fun paraText(b: Blk.Para, selected: Int?, hl: Color, red: Color, marker: Color):
         }
         append(" ")
         val ms = length
-        append(ayahMarker(ay.a))
+        append(if (brackets) "\uFD3F" + arabicDigits(ay.a) + "\uFD3E" else ayahMarker(ay.a))
         addStyle(SpanStyle(color = marker), ms, length)
         val end = length
         if (i < b.ayahs.lastIndex) append(" ")
@@ -127,7 +127,7 @@ private fun arabicHeight(m: TextMeasurer, blocks: List<Blk>, family: FontFamily,
         total += when (b) {
             is Blk.Header -> headerPx
             Blk.Basmala -> m.measure(AnnotatedString(BASMALA), arabicStyle(family, size, Color.Black, TextAlign.Center), constraints = Constraints(maxWidth = w)).size.height
-            is Blk.Para -> m.measure(paraText(b, null, Color.Transparent, Color.Black, Color.Black), arabicStyle(family, size, Color.Black), constraints = Constraints(maxWidth = w)).size.height
+            is Blk.Para -> m.measure(paraText(b, null, Color.Transparent, Color.Black, Color.Black, family == Fonts.husrev), arabicStyle(family, size, Color.Black), constraints = Constraints(maxWidth = w)).size.height
         }
     }
     return total
@@ -169,11 +169,12 @@ fun SurahHeader(s: Surah, pal: Palette, family: FontFamily, height: Dp) {
 }
 
 @Composable
-fun AyahParagraph(b: Blk.Para, style: TextStyle, selected: Int?, pal: Palette, onAyah: (Int) -> Unit, onTap: () -> Unit) {
-    val text = remember(b, selected, pal) { paraText(b, selected, pal.highlight, pal.red, pal.gold) }
+fun AyahParagraph(b: Blk.Para, style: TextStyle, selected: Int?, pal: Palette, onAyah: (Int) -> Unit, onTap: () -> Unit, thin: Int = 0, brackets: Boolean = false) {
+    val text = remember(b, selected, pal, brackets) { paraText(b, selected, pal.highlight, pal.red, pal.gold, brackets) }
     var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
     val onA by rememberUpdatedState(onAyah)
     val onT by rememberUpdatedState(onTap)
+    Box(Modifier.fillMaxWidth()) {
     Text(
         text,
         style = style,
@@ -189,6 +190,8 @@ fun AyahParagraph(b: Blk.Para, style: TextStyle, selected: Int?, pal: Palette, o
             )
         },
     )
+    ThinOverlay(text, style, thin, pal, selected = b.ayahs.firstOrNull { it.idx == selected }?.let { true } ?: false)
+    }
 }
 
 @Composable
@@ -231,13 +234,13 @@ fun MushafPage(
             Modifier.weight(1f).fillMaxWidth().border(3.dp, pal.gold, frame).padding(5.dp).border(1.dp, pal.gold, frame)
                 .padding(horizontal = 8.dp, vertical = 6.dp),
         ) {
-            ArabicContent(q, page, family, pal, if (st.font == "hayrat") 1f else st.arZoom, selected, onAyah, onTap)
+            ArabicContent(q, page, family, pal, if (st.font == "hayrat") 1f else st.arZoom, selected, onAyah, onTap, st.thin, st.font == "husrev")
         }
     }
 }
 
 @Composable
-private fun ArabicContent(q: Quran, page: Int, family: FontFamily, pal: Palette, zoom: Float, selected: Int?, onAyah: (Int) -> Unit, onTap: () -> Unit) {
+private fun ArabicContent(q: Quran, page: Int, family: FontFamily, pal: Palette, zoom: Float, selected: Int?, onAyah: (Int) -> Unit, onTap: () -> Unit, thin: Int = 0, brackets: Boolean = false) {
     val blocks = remember(q, page) { buildBlocks(q, page) }
     val m = rememberTextMeasurer()
     val density = LocalDensity.current
@@ -258,8 +261,11 @@ private fun ArabicContent(q: Quran, page: Int, family: FontFamily, pal: Palette,
             blocks.forEach { b ->
                 when (b) {
                     is Blk.Header -> SurahHeader(b.surah, pal, family, headerH * zoom.coerceIn(1f, 1.6f))
-                    Blk.Basmala -> Text(basm, style = arabicStyle(family, size, pal.ink, TextAlign.Center), modifier = Modifier.fillMaxWidth())
-                    is Blk.Para -> AyahParagraph(b, arabicStyle(family, size, pal.ink), selected, pal, onAyah, onTap)
+                    Blk.Basmala -> Box(Modifier.fillMaxWidth()) {
+                        Text(basm, style = arabicStyle(family, size, pal.ink, TextAlign.Center), modifier = Modifier.fillMaxWidth())
+                        ThinOverlay(basm, arabicStyle(family, size, pal.ink, TextAlign.Center), thin, pal)
+                    }
+                    is Blk.Para -> AyahParagraph(b, arabicStyle(family, size, pal.ink), selected, pal, onAyah, onTap, thin, brackets)
                 }
             }
         }
@@ -295,4 +301,22 @@ fun BookImage(uri: Uri, zoom: Float, modifier: Modifier, fillWidth: Boolean = fa
             }
         }
     }
+}
+
+
+/**
+ * Harfleri inceltir: aynı metni kâğıt renginde ince bir çizgiyle tekrar çizer,
+ * böylece harflerin kenarından biraz silinir ve içlerindeki boşluklar açılır.
+ */
+@Composable
+fun ThinOverlay(text: AnnotatedString, style: TextStyle, thin: Int, pal: Palette, selected: Boolean = false) {
+    if (thin <= 0 || selected) return
+    val density = LocalDensity.current
+    val px = with(density) { style.fontSize.toPx() }
+    val w = px * when (thin) { 1 -> 0.022f; 2 -> 0.036f; else -> 0.052f }
+    Text(
+        AnnotatedString(text.text),
+        style = style.copy(color = pal.paper, drawStyle = androidx.compose.ui.graphics.drawscope.Stroke(width = w)),
+        modifier = Modifier.fillMaxWidth(),
+    )
 }

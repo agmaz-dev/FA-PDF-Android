@@ -48,6 +48,12 @@ class AppState(ctx: Context) {
         get() = _arZoom.floatValue
         set(v) { _arZoom.floatValue = v; sp.edit().putFloat("arZoom", v).apply() }
 
+    /** Arapça harflerin inceltilmesi: 0 = yazı tipinin kendisi, 1–3 = gittikçe ince */
+    private val _thin = mutableIntStateOf(sp.getInt("thin", 2))
+    var thin: Int
+        get() = _thin.intValue
+        set(v) { _thin.intValue = v; sp.edit().putInt("thin", v).apply() }
+
     private val _mealZoom = mutableFloatStateOf(sp.getFloat("mealZoom", 1f))
     var mealZoom: Float
         get() = _mealZoom.floatValue
