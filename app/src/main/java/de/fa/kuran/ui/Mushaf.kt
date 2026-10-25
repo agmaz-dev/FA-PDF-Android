@@ -302,13 +302,15 @@ fun ScanImage(uri: Uri, zoom: Float, modifier: Modifier) {
             CircularProgressIndicator(Modifier.align(Alignment.Center))
         } else {
             val z = zoom.coerceAtLeast(1f)
+            val mw = maxWidth
+            val mh = maxHeight
             Box(
                 Modifier
                     .fillMaxSize()
                     .verticalScroll(rememberScrollState())
                     .horizontalScroll(rememberScrollState()),
             ) {
-                Image(b, contentDescription = "Mushaf sayfası", modifier = Modifier.size(maxWidth * z, maxHeight * z), contentScale = ContentScale.Fit)
+                Image(b, contentDescription = "Mushaf sayfası", modifier = Modifier.size(mw * z, mh * z), contentScale = ContentScale.Fit)
             }
         }
     }
