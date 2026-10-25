@@ -124,9 +124,6 @@ fun SettingsScreen(q: Quran, st: AppState, onBack: () -> Unit) {
                             }
                         }
                     }
-                    Section(pal, "Harf kalınlığı", "Yazı tiplerinde harfleri inceltir; kalın görünen harflerin içi açılır. Kitabın kendi sayfalarını etkilemez.") {
-                        Segmented(pal, listOf(0 to "Normal", 1 to "Biraz ince", 2 to "İnce", 3 to "Çok ince"), st.thin, Modifier.fillMaxWidth()) { st.thin = it }
-                    }
                     Section(pal, "Meal", "Sol sayfada gösterilecek meal.") {
                         MEALLER.forEach { m -> RadioRow(pal, m.name, st.meal == m.id) { st.meal = m.id } }
                     }

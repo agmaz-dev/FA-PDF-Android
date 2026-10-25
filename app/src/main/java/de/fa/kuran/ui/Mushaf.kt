@@ -310,7 +310,8 @@ fun BookImage(uri: Uri, zoom: Float, modifier: Modifier, fillWidth: Boolean = fa
  */
 @Composable
 fun ThinOverlay(text: AnnotatedString, style: TextStyle, thin: Int, pal: Palette, selected: Boolean = false) {
-    if (thin <= 0 || selected) return
+    // Kenar çizgisiyle inceltme, harflerin iç çizgilerini kesip bozduğu için kapatıldı
+    if (true || thin <= 0 || selected) return
     val density = LocalDensity.current
     val px = with(density) { style.fontSize.toPx() }
     val w = px * when (thin) { 1 -> 0.022f; 2 -> 0.036f; else -> 0.052f }
