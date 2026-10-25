@@ -94,18 +94,18 @@ fun App(st: AppState, immersive: (Boolean) -> Unit) {
             st.tefsir == null -> WelcomeScreen(st) { st.tefsir = it }
             screen == Screen.INDEX -> {
                 BackHandler { screen = Screen.READER }
-                IndexScreen(q, st, onGo = { p -> st.lastPage = p; st.jump = p; screen = Screen.READER }, onBack = { screen = Screen.READER })
+                IndexScreen(q!!, st, onGo = { p -> st.lastPage = p; st.jump = p; screen = Screen.READER }, onBack = { screen = Screen.READER })
             }
             screen == Screen.SETTINGS -> {
                 BackHandler { screen = Screen.READER }
-                SettingsScreen(q, st, onBack = { screen = Screen.READER })
+                SettingsScreen(q!!, st, onBack = { screen = Screen.READER })
             }
             else -> {
                 DisposableEffect(Unit) {
                     immersive(true)
                     onDispose { immersive(false) }
                 }
-                ReaderScreen(q, st, onIndex = { screen = Screen.INDEX }, onSettings = { screen = Screen.SETTINGS })
+                ReaderScreen(q!!, st, onIndex = { screen = Screen.INDEX }, onSettings = { screen = Screen.SETTINGS })
             }
         }
     }
