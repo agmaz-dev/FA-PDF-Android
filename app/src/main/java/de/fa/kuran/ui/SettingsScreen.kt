@@ -60,12 +60,11 @@ fun SettingsScreen(q: Quran, st: AppState, onBack: () -> Unit) {
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri: Uri? ->
         if (uri != null) {
             runCatching { ctx.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
-            st.scanUri = uri.toString()
-            st.font = "hat"
+            st.packUri = uri.toString()
         }
     }
     val fonts = listOf(
-        FontOpt("hat", "Osmanlı mushaf hattı", "Kendi taradığınız mushaf sayfaları", null),
+        FontOpt("hayrat", "Hayrat tevâfuklu mushaf", "Kitabın kendi sayfaları, kelime mealiyle", null),
         FontOpt("amiri", "Klasik nesih", "Geleneksel matbaa mushafı görünümü", Fonts.amiri),
         FontOpt("scheherazade", "Büyük ve açık", "İri harekeler, kolay okunur", Fonts.scheherazade),
         FontOpt("naskh", "Sade, modern", "Ekranda en net görünen yazı", Fonts.naskh),
@@ -83,34 +82,47 @@ fun SettingsScreen(q: Quran, st: AppState, onBack: () -> Unit) {
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Column(Modifier.widthIn(max = 880.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(26.dp)) {
-                    Section(pal, "Arapça yazı stili", "Size en kolay okunan yazıyı seçin.") {
+                    Section(pal, "Sayfa paketi", "Kitap sayfaları, Hayrat meali, Elmalılı meali ve Risale-i Nur hâşiyeleri bu klasörde durur.") {
+                        val pk = st.pack
+                        Row(
+                            Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(pal.card).padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    when { st.packLoading -> "Paket yükleniyor…"; pk != null -> "Paket yüklü"; else -> "Paket seçilmedi" },
+                                    fontWeight = FontWeight.Bold, color = pal.ink,
+                                )
+                                Text(pk?.summary ?: "Paketi açtığınız klasörü seçin (içinde h000.webp … dosyaları olmalı).", fontSize = 13.sp, color = pal.muted)
+                            }
+                            SmallButton(pal, if (pk != null) "Klasörü değiştir" else "Klasör seç") { picker.launch(null) }
+                        }
+                    }
+                    Section(pal, "Arapça yazı stili", "Size en kolay okunan yazıyı seçin. Yazı tiplerinde Allah lafızları kırmızıdır.") {
                         fonts.chunked(if (wide) 2 else 1).forEach { row ->
                             Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                                 row.forEach { f ->
-                                    FontCard(pal, f, st.font == f.key, st.scans.size, Modifier.weight(1f), onPick = { picker.launch(null) }) { st.font = f.key }
+                                    FontCard(pal, f, st.font == f.key, st.pack?.images?.size ?: 0, Modifier.weight(1f), onPick = { picker.launch(null) }) { st.font = f.key }
                                 }
                             }
                         }
                     }
-                    Section(pal, "Meal", "Meal sayfasında gösterilecek tercüme.") {
-                        val cur = q.mealId(st.meal)
-                        q.meals.forEach { m -> RadioRow(pal, m.name, cur == m.id) { st.meal = m.id } }
+                    Section(pal, "Meal", "Sol sayfada gösterilecek meal.") {
+                        MEALLER.forEach { m -> RadioRow(pal, m.name, st.meal == m.id) { st.meal = m.id } }
                     }
-                    Section(pal, "Tefsir", "Âyete dokunduğunuzda açılacak tefsir.") {
-                        TEFSIRLER.forEach { t -> RadioRow(pal, "${t.name} – ${t.work}", (st.tefsir ?: "elmalili") == t.id) { st.tefsir = t.id } }
-                    }
+                    Section(pal, "Açıklama", "Âyete dokunup \"Açıklama\"yı açınca Risale-i Nur hâşiyeleri gösterilir (Hayrat baskısının hâşiye bölümünden).") {}
                     Section(pal, "Tema", null) {
                         Segmented(pal, listOf("krem" to "Krem kâğıt", "beyaz" to "Beyaz", "gece" to "Gece"), st.theme, Modifier.fillMaxWidth()) { st.theme = it }
                     }
                     Section(pal, "Yazı boyutu", "Okurken iki parmakla da büyütüp küçültebilirsiniz.") {
                         SizeSlider(pal, "Arapça", st.arZoom, 0.6f..2.5f) { st.arZoom = it }
-                        SizeSlider(pal, "Meal ve tefsir", st.mealZoom, 0.6f..2.2f) { st.mealZoom = it }
+                        SizeSlider(pal, "Meal ve açıklama", st.mealZoom, 0.6f..2.2f) { st.mealZoom = it }
                     }
                     Section(pal, "Kaynaklar", null) {
                         Text(
-                            "Arapça metin: Tanzil Uthmani metni (alquran.cloud). Mealler: ${q.meals.joinToString(", ") { it.name }}. " +
-                                "Yazı tipleri: Amiri Quran, Scheherazade New, Noto Naskh Arabic (SIL Open Font License). " +
-                                "Tefsir metinleri henüz eklenmedi.",
+                            "Arapça metin (yazı tipleri için): Tanzil Uthmani metni. Kitap sayfaları, Hayrat meali ve hâşiyeler: Kur'ân-ı Kerîm ve Muhtasar Kelime Meâli, Hayrat Neşriyat (kişisel kullanım). " +
+                                "Hayrat meali ve hâşiyeler yazı tanıma ile çıkarılıp otomatik düzeltildi; hata görürseniz bildirin. " +
+                                "Yazı tipleri: Amiri Quran, Scheherazade New, Noto Naskh Arabic (SIL Open Font License).",
                             fontSize = 13.sp, color = pal.muted, lineHeight = 19.sp,
                         )
                     }
@@ -187,14 +199,14 @@ private fun FontCard(pal: Palette, f: FontOpt, sel: Boolean, scanCount: Int, mod
             } else {
                 Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
-                        if (scanCount > 0) "$scanCount taranmış sayfa bulundu." else "Henüz taranmış sayfa eklenmedi.",
+                        if (scanCount > 0) "$scanCount kitap sayfası hazır." else "Sayfa paketi seçilmedi.",
                         color = pal.ink, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center,
                     )
                     Text(
-                        "Sayfaları 001.jpg … 604.jpg gibi sayfa numarasıyla adlandırıp bir klasöre koyun ve klasörü seçin. Resmi olmayan sayfalar yazı tipiyle gösterilir.",
+                        "Kitap sayfaları sayfa paketinden gelir. Paket yoksa yazı tipiyle gösterilir.",
                         color = pal.muted, fontSize = 12.sp, textAlign = TextAlign.Center, lineHeight = 17.sp,
                     )
-                    SmallButton(pal, if (scanCount > 0) "Klasörü değiştir" else "Klasör seç", onClick = onPick)
+                    if (scanCount == 0) SmallButton(pal, "Paket klasörü seç", onClick = onPick)
                 }
             }
         }

@@ -136,6 +136,7 @@ fun PaperPage(
     side: Side,
     onTap: () -> Unit,
     onPinch: (Float) -> Unit,
+    padding: Dp = 14.dp,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val shape = when (side) {
@@ -152,7 +153,7 @@ fun PaperPage(
             .background(pal.paper)
             .pinch { zoom(it) }
             .pointerInput(Unit) { detectTapGestures(onTap = { tap() }) }
-            .padding(horizontal = 14.dp, vertical = 12.dp),
+            .padding(horizontal = padding, vertical = if (padding < 10.dp) padding else 12.dp),
         content = content,
     )
 }

@@ -72,22 +72,25 @@ fun IndexScreen(q: Quran, st: AppState, onGo: (Int) -> Unit, onBack: () -> Unit)
     var tab by remember { mutableIntStateOf(0) }
     var query by remember { mutableStateOf("") }
     var detail by remember { mutableIntStateOf(q.ayahsOnPage(st.lastPage).firstOrNull()?.s ?: 1) }
-    val mealId = q.mealId(st.meal)
+    val mealId = st.meal
+    val pack = st.pack
 
     val nq = norm(query.trim())
     val surahs = remember(nq) {
         if (nq.isEmpty()) q.surahs
         else q.surahs.filter { norm(it.tr).contains(nq) || it.n.toString() == nq }
     }
-    val hits = remember(nq, mealId) {
+    val hits = remember(nq, mealId, pack) {
         if (nq.length < 3) emptyList()
         else {
-            val list = q.mealList(mealId)
+            val list = q.ayahs.indices.map { i ->
+                (if (mealId == "hayrat") pack?.hayratMeal?.getOrNull(i) else pack?.elmalili?.get(i)) ?: q.builtinMeal(i)
+            }
             val out = ArrayList<Hit>()
             for (i in list.indices) {
-                if (norm(list[i]).contains(nq)) {
+                if (list[i].isNotEmpty() && norm(list[i]).contains(nq)) {
                     val ay = q.ayahs[i]
-                    out += Hit(i, ay.s, ay.a, ay.page, list[i])
+                    out += Hit(i, ay.s, ay.a, q.pageOf(i), list[i].replace(Regex("⁽\\d+⁾"), ""))
                     if (out.size >= 200) break
                 }
             }
@@ -109,7 +112,7 @@ fun IndexScreen(q: Quran, st: AppState, onGo: (Int) -> Unit, onBack: () -> Unit)
                     Glass(pal) { RoundIcon(pal, Icons.AutoMirrored.Filled.ArrowBack, "Kitaba dön", onClick = onBack) }
                     Column {
                         Text("Fihrist", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = pal.ink)
-                        Text("114 sûre · 30 cüz · 604 sayfa", fontSize = 13.sp, color = pal.muted)
+                        Text("114 sûre · 30 cüz · ${q.pageCount} sayfa", fontSize = 13.sp, color = pal.muted)
                     }
                 }
                 Segmented(pal, listOf(0 to "Sûreler", 1 to "Cüzler", 2 to "Yer imleri"), tab, Modifier.fillMaxWidth()) { tab = it }
@@ -134,7 +137,7 @@ fun IndexScreen(q: Quran, st: AppState, onGo: (Int) -> Unit, onBack: () -> Unit)
                 when (tab) {
                     0 -> LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(bottom = 24.dp)) {
                         items(surahs, key = { "s${it.n}" }) { s ->
-                            SurahRow(s, pal, sel = wide && detail == s.n) { if (wide) detail = s.n else onGo(s.page) }
+                            SurahRow(s, q.pageLabel(q.surahPage(s.n)), pal, sel = wide && detail == s.n) { if (wide) detail = s.n else onGo(q.surahPage(s.n)) }
                         }
                         if (hits.isNotEmpty()) {
                             item(key = "h") {
@@ -148,7 +151,7 @@ fun IndexScreen(q: Quran, st: AppState, onGo: (Int) -> Unit, onBack: () -> Unit)
                                         .clickable { onGo(h.page) }
                                         .padding(vertical = 8.dp, horizontal = 6.dp),
                                 ) {
-                                    Text("${q.surah(h.s).tr} ${h.s}:${h.a} · s. ${h.page}", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = pal.accent)
+                                    Text("${q.surah(h.s).tr} ${h.s}:${h.a} · s. ${q.pageLabel(h.page)}", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = pal.accent)
                                     Text(h.text, fontSize = 14.sp, color = pal.ink, maxLines = 2, overflow = TextOverflow.Ellipsis)
                                 }
                             }
@@ -169,7 +172,7 @@ fun IndexScreen(q: Quran, st: AppState, onGo: (Int) -> Unit, onBack: () -> Unit)
                                     Icon(Icons.Filled.Star, null, tint = pal.gold)
                                     Spacer(Modifier.width(10.dp))
                                     Column(Modifier.weight(1f)) {
-                                        Text("Sayfa $p", fontWeight = FontWeight.Bold, color = pal.ink)
+                                        Text("Sayfa ${q.pageLabel(p)}", fontWeight = FontWeight.Bold, color = pal.ink)
                                         Text(q.surahsOnPage(p).joinToString(" · ") { it.tr }, fontSize = 13.sp, color = pal.muted)
                                     }
                                     RoundIcon(pal, Icons.Filled.Close, "Sil", tint = pal.muted) { st.toggleBookmark(p) }
@@ -187,7 +190,7 @@ fun IndexScreen(q: Quran, st: AppState, onGo: (Int) -> Unit, onBack: () -> Unit)
 }
 
 @Composable
-private fun SurahRow(s: Surah, pal: Palette, sel: Boolean, onClick: () -> Unit) {
+private fun SurahRow(s: Surah, pageLabel: String, pal: Palette, sel: Boolean, onClick: () -> Unit) {
     val fg = if (sel) Color.White else pal.ink
     val sub = if (sel) Color.White.copy(alpha = 0.85f) else pal.muted
     Row(
@@ -207,7 +210,7 @@ private fun SurahRow(s: Surah, pal: Palette, sel: Boolean, onClick: () -> Unit) 
         Column(Modifier.weight(1f)) {
             Row {
                 Text(s.tr, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = fg, modifier = Modifier.weight(1f))
-                Text("s. ${s.page}", fontSize = 13.sp, color = sub)
+                Text("s. $pageLabel", fontSize = 13.sp, color = sub)
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("${s.type} · ${s.ayat} âyet", fontSize = 13.sp, color = sub, modifier = Modifier.weight(1f))
@@ -227,7 +230,7 @@ private fun JuzGrid(q: Quran, pal: Palette, modifier: Modifier, onGo: (Int) -> U
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Text("Cüz $j", fontWeight = FontWeight.Bold, color = pal.ink)
-                Text("s. ${q.juzStartPage[j]}", fontSize = 12.sp, color = pal.muted)
+                Text("s. ${q.pageLabel(q.juzStartPage[j])}", fontSize = 12.sp, color = pal.muted)
             }
         }
     }
@@ -243,12 +246,12 @@ private fun SurahDetail(q: Quran, st: AppState, pal: Palette, s: Surah, onGo: (I
         SurahHeader(s, pal, Fonts.amiri, 110.dp)
         Text("${s.tr} Sûresi", fontSize = 32.sp, fontWeight = FontWeight.Bold, color = pal.ink)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf(s.type, "${s.ayat} âyet", "Cüz ${q.juzOfPage(s.page)}", "Sayfa ${s.page}").forEach {
+            listOf(s.type, "${s.ayat} âyet", "Cüz ${q.juzOfPage(q.surahPage(s.n))}", "Sayfa ${q.pageLabel(q.surahPage(s.n))}").forEach {
                 Text(it, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = pal.ink, modifier = Modifier.clip(RoundedCornerShape(14.dp)).background(pal.chip).padding(horizontal = 12.dp, vertical = 6.dp))
             }
         }
         Box(
-            Modifier.clip(RoundedCornerShape(24.dp)).background(pal.accent).clickable { onGo(s.page) }.padding(horizontal = 24.dp, vertical = 14.dp),
+            Modifier.clip(RoundedCornerShape(24.dp)).background(pal.accent).clickable { onGo(q.surahPage(s.n)) }.padding(horizontal = 24.dp, vertical = 14.dp),
         ) { Text("Okumaya başla", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp) }
         Row(
             Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(pal.card).clickable { onGo(st.lastPage) }.padding(16.dp),
@@ -258,7 +261,7 @@ private fun SurahDetail(q: Quran, st: AppState, pal: Palette, s: Surah, onGo: (I
             Icon(Icons.Filled.Star, null, tint = pal.accent)
             Column(Modifier.weight(1f)) {
                 Text("Kaldığınız yer", fontWeight = FontWeight.Bold, color = pal.ink)
-                Text("Sayfa ${st.lastPage} · ${q.surahsOnPage(st.lastPage).joinToString(" · ") { it.tr }}", fontSize = 13.sp, color = pal.muted)
+                Text("Sayfa ${q.pageLabel(st.lastPage)} · ${q.surahsOnPage(st.lastPage).joinToString(" · ") { it.tr }}", fontSize = 13.sp, color = pal.muted)
             }
             Text("Devam et", color = pal.accent, fontWeight = FontWeight.Bold)
         }

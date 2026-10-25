@@ -85,12 +85,7 @@ def main():
     ids = [e["identifier"] for e in eds if e.get("format") == "text"]
 
     wanted = []
-    bil = [i for i in ids if "bilmen" in i.lower()]
-    if bil:
-        wanted.append((bil[0], MEAL_NAMES["bilmen"]))
-    else:
-        print("UYARI: Bilmen meali bu kaynakta yok.")
-    for ident in ("tr.diyanet", "tr.yazir"):
+    for ident in ("tr.yazir",):
         if ident in ids:
             wanted.append((ident, MEAL_NAMES[ident]))
     if not wanted:

@@ -74,8 +74,8 @@ fun ReaderScreen(q: Quran, st: AppState, onIndex: () -> Unit, onSettings: () -> 
     LaunchedEffect(Unit) { delay(3500); hint = false }
 
     val select: (Int) -> Unit = { idx ->
-        selected = if (selected == idx && st.mode != ReadMode.TEFSIR) null else idx
-        val p = q.ayahs[idx].page
+        selected = if (selected == idx && st.mode != ReadMode.ACIKLAMA) null else idx
+        val p = q.pageOf(idx)
         if (p != page) scope.launch { pager.animateScrollToPage(p - 1) }
     }
     val toggle: () -> Unit = { bars = !bars; hint = false }
@@ -100,7 +100,7 @@ fun ReaderScreen(q: Quran, st: AppState, onIndex: () -> Unit, onSettings: () -> 
 
         // Seçili âyet kartı
         val sel = selected
-        if (sel != null && st.mode != ReadMode.TEFSIR && q.ayahs[sel].page == page) {
+        if (sel != null && st.mode != ReadMode.ACIKLAMA && q.pageOf(sel) == page) {
             val ay = q.ayahs[sel]
             Column(
                 Modifier
@@ -121,12 +121,13 @@ fun ReaderScreen(q: Quran, st: AppState, onIndex: () -> Unit, onSettings: () -> 
                     RoundIcon(pal, Icons.Filled.Close, "Kapat", size = 36.dp) { selected = null }
                 }
                 Text(
-                    q.meal(q.mealId(st.meal), ay.idx),
+                    mealLines(q, st.pack, st.meal, listOf(ay.idx)).firstOrNull()?.text?.replace(Regex("⁽\\d+⁾"), "")
+                        ?: "Bu âyetin meâli bir önceki âyetle birlikte verilmiştir.",
                     fontSize = 16.sp, lineHeight = 22.sp, color = pal.ink,
                     modifier = Modifier.heightIn(max = 160.dp).verticalScroll(rememberScrollState()),
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    SmallButton(pal, "Tefsiri aç") { st.mode = ReadMode.TEFSIR }
+                    SmallButton(pal, "Açıklamayı aç") { st.mode = ReadMode.ACIKLAMA }
                 }
             }
         }
@@ -185,8 +186,8 @@ private fun Spread(
                     Spine(pal)
                     MushafPage(q, page, st, pal, Side.RIGHT, selected, select, toggle, Modifier.weight(1f).fillMaxHeight())
                 }
-                ReadMode.TEFSIR -> {
-                    TefsirPage(q, page, st, pal, Side.LEFT, selected, select, toggle, Modifier.weight(1f).fillMaxHeight())
+                ReadMode.ACIKLAMA -> {
+                    AciklamaPage(q, page, st, pal, Side.LEFT, selected, select, toggle, Modifier.weight(1f).fillMaxHeight())
                     Spine(pal)
                     MushafPage(q, page, st, pal, Side.RIGHT, selected, select, toggle, Modifier.weight(1f).fillMaxHeight())
                 }
@@ -196,7 +197,7 @@ private fun Spread(
             when (st.mode) {
                 ReadMode.MUSHAF -> MushafPage(q, page, st, pal, Side.SINGLE, selected, select, toggle, m)
                 ReadMode.MEAL -> MealPage(q, page, st, pal, Side.SINGLE, selected, select, toggle, m)
-                ReadMode.TEFSIR -> TefsirPage(q, page, st, pal, Side.SINGLE, selected, select, toggle, m)
+                ReadMode.ACIKLAMA -> AciklamaPage(q, page, st, pal, Side.SINGLE, selected, select, toggle, m)
             }
         }
     }
@@ -204,8 +205,8 @@ private fun Spread(
 
 @Composable
 private fun TopBars(q: Quran, st: AppState, pal: Palette, page: Int, wide: Boolean, onIndex: () -> Unit, onSettings: () -> Unit) {
-    val modes = listOf(ReadMode.MEAL to (if (wide) "Meal + Mushaf" else "Meal"), ReadMode.TEFSIR to "Tefsir", ReadMode.MUSHAF to "Mushaf")
-    val title = "Cüz ${q.juzOfPage(page)} · Sayfa $page"
+    val modes = listOf(ReadMode.MEAL to (if (wide) "Meal + Mushaf" else "Meal"), ReadMode.ACIKLAMA to "Açıklama", ReadMode.MUSHAF to "Mushaf")
+    val title = "Cüz ${q.juzOfPage(page)} · Sayfa ${q.pageLabel(page)}"
     val sub = q.surahsOnPage(page).joinToString(" · ") { it.tr }
     val marked = page in st.bookmarks
     Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -278,7 +279,7 @@ private fun BottomBar(q: Quran, st: AppState, pal: Palette, page: Int, wide: Boo
                     modifier = Modifier.weight(1f),
                 )
             }
-            Text("$shown", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = pal.ink, modifier = Modifier.width(36.dp))
+            Text(q.pageLabel(shown), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = pal.ink, modifier = Modifier.width(36.dp))
             RoundIcon(pal, Icons.AutoMirrored.Filled.KeyboardArrowRight, "Önceki sayfa") { goTo(page - 1) }
         }
     }

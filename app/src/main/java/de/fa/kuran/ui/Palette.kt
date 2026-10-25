@@ -66,11 +66,19 @@ fun arabicDigits(n: Int): String = n.toString().map { c -> '٠' + (c - '0') }.jo
 
 fun ayahMarker(n: Int): String = "۝" + arabicDigits(n)
 
-data class TefsirInfo(val id: String, val short: String, val name: String, val work: String)
+data class MealInfo2(val id: String, val short: String, val name: String)
 
-val TEFSIRLER = listOf(
-    TefsirInfo("elmalili", "Elmalılı", "Elmalılı Hamdi Yazır", "Hak Dini Kur'an Dili"),
-    TefsirInfo("bilmen", "Bilmen", "Ömer Nasûhi Bilmen", "Kur'ân-ı Kerîm'in Türkçe Meâl-i Âlîsi ve Tefsiri"),
+val MEALLER = listOf(
+    MealInfo2("hayrat", "Hayrat", "Hayrat Muhtasar Meâli"),
+    MealInfo2("elmalili", "Elmalılı", "Elmalılı Hamdi Yazır Meâli"),
 )
 
-fun tefsirInfo(id: String?): TefsirInfo = TEFSIRLER.firstOrNull { it.id == id } ?: TEFSIRLER[0]
+fun mealInfo(id: String): MealInfo2 = MEALLER.firstOrNull { it.id == id } ?: MEALLER[0]
+
+private val harakat = Regex("[\\u064B-\\u065F\\u0670\\u06D6-\\u06ED\\u0640]")
+
+/** Allah lafzı mı? (الله، لله، بالله، والله، فالله، تالله، اللهم …) */
+fun isAllahWord(w: String): Boolean {
+    val n = harakat.replace(w, "").replace('\u0671', '\u0627')
+    return n.contains("لله") && n.length <= 8
+}

@@ -32,7 +32,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import de.fa.kuran.data.AppState
 import de.fa.kuran.data.Quran
-import de.fa.kuran.data.Scans
+import de.fa.kuran.data.Pack
 import de.fa.kuran.ui.IndexScreen
 import de.fa.kuran.ui.ReaderScreen
 import de.fa.kuran.ui.SettingsScreen
@@ -73,14 +73,32 @@ fun App(st: AppState, immersive: (Boolean) -> Unit) {
             error = e.toString()
         }
     }
-    LaunchedEffect(st.scanUri) {
-        val u = st.scanUri ?: return@LaunchedEffect
-        st.scans = withContext(Dispatchers.IO) { runCatching { Scans.index(ctx, Uri.parse(u)) }.getOrDefault(emptyMap()) }
+    LaunchedEffect(st.packUri, quran) {
+        val u = st.packUri ?: return@LaunchedEffect
+        val base = quran ?: return@LaunchedEffect
+        st.packLoading = true
+        st.pack = withContext(Dispatchers.IO) { runCatching { Pack.load(ctx, Uri.parse(u)) { n -> base.surah(n).firstIdx } }.getOrNull() }
+        st.packLoading = false
     }
 
     MaterialTheme {
         val pal = palette(st.theme)
-        val q = quran
+        val base = quran
+        val pk = st.pack
+        val q = remember(base, pk) {
+            val pages = pk?.pages
+            if (base != null && pages != null && pages.size >= 600) base.withPages(pages, hayrat = true) else base
+        }
+        // sayfalama değişince aynı âyette kal
+        var prevQ by remember { mutableStateOf<Quran?>(null) }
+        LaunchedEffect(q) {
+            val old = prevQ
+            if (old != null && q != null && old.pageCount != q.pageCount) {
+                val idx = old.ayahsOnPage(st.lastPage).firstOrNull()?.idx ?: 0
+                st.lastPage = q.pageOf(idx); st.jump = st.lastPage
+            }
+            prevQ = q
+        }
         when {
             error != null -> Box(Modifier.fillMaxSize().background(pal.app).padding(24.dp), contentAlignment = Alignment.Center) {
                 Text("Kur'an verisi yüklenemedi:\n$error", color = pal.ink)
@@ -91,7 +109,7 @@ fun App(st: AppState, immersive: (Boolean) -> Unit) {
                     Text("Kur'an-ı Kerim yükleniyor…", color = pal.muted)
                 }
             }
-            st.tefsir == null -> WelcomeScreen(st) { st.tefsir = it }
+            !st.welcomed -> WelcomeScreen(st) { st.meal = it; st.welcomed = true }
             screen == Screen.INDEX -> {
                 BackHandler { screen = Screen.READER }
                 IndexScreen(q!!, st, onGo = { p -> st.lastPage = p; st.jump = p; screen = Screen.READER }, onBack = { screen = Screen.READER })
