@@ -73,12 +73,13 @@ fun App(st: AppState, immersive: (Boolean) -> Unit) {
             error = e.toString()
         }
     }
-    LaunchedEffect(st.packUri, quran) {
+    LaunchedEffect(st.packUri, quran, st.packVersion) {
         val base = quran ?: return@LaunchedEffect
         st.packLoading = true
         // önce uygulamanın içindeki paket, yoksa seçilen klasör
         st.pack = withContext(Dispatchers.IO) {
             runCatching { Pack.loadAssets(ctx) { n -> base.surah(n).firstIdx } }.getOrNull()
+                ?: runCatching { Pack.loadDir(java.io.File(ctx.filesDir, "pack")) { n -> base.surah(n).firstIdx } }.getOrNull()
                 ?: st.packUri?.let { u -> runCatching { Pack.load(ctx, Uri.parse(u)) { n -> base.surah(n).firstIdx } }.getOrNull() }
         }
         st.packLoading = false

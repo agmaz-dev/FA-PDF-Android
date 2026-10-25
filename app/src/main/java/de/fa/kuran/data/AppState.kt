@@ -78,6 +78,8 @@ class AppState(ctx: Context) {
     /** Yüklü sayfa paketi */
     var pack by mutableStateOf<Pack?>(null)
     var packLoading by mutableStateOf(false)
+    var packVersion by mutableStateOf(0)
+    var importInfo by mutableStateOf<String?>(null)
 
     /** Fihristten gelen sayfa atlama isteği */
     var jump by mutableStateOf<Int?>(null)

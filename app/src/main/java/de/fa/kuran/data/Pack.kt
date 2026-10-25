@@ -120,6 +120,39 @@ class Pack(
             open(ctx, uri)?.use { BitmapFactory.decodeStream(it, null, opts) }?.asImageBitmap()
         }.getOrNull()
 
+        /** Uygulama içine aktarılmış paket (filesDir/pack) */
+        fun loadDir(dir: java.io.File, surahFirstIdx: (Int) -> Int?): Pack? {
+            val fs = dir.listFiles() ?: return null
+            val images = HashMap<Int, Uri>(); val texts = HashMap<String, String>()
+            for (f in fs) {
+                val m = img.matchEntire(f.name.lowercase())
+                if (m != null) images[m.groupValues[1].toInt()] = Uri.fromFile(f)
+                else if (f.name.endsWith(".json")) texts[f.name.lowercase()] = f.readText(Charsets.UTF_8)
+            }
+            return build(images, texts, surahFirstIdx)
+        }
+
+        /** Seçilen zip dosyalarını uygulamanın içine açar; açılan dosya sayısını döndürür */
+        fun importZips(ctx: Context, uris: List<Uri>, onProgress: (Int) -> Unit): Int {
+            val dir = java.io.File(ctx.filesDir, "pack").apply { mkdirs() }
+            var n = 0
+            for (u in uris) {
+                ctx.contentResolver.openInputStream(u)?.use { ins ->
+                    java.util.zip.ZipInputStream(ins.buffered()).use { z ->
+                        while (true) {
+                            val e = z.nextEntry ?: break
+                            val name = e.name.substringAfterLast('/')
+                            if (!e.isDirectory && name.isNotEmpty() && (img.matches(name.lowercase()) || name.endsWith(".json"))) {
+                                java.io.File(dir, name).outputStream().use { z.copyTo(it) }
+                                n++; onProgress(n)
+                            }
+                        }
+                    }
+                }
+            }
+            return n
+        }
+
         /** Uygulamanın içine gömülü paket (assets/pack/) */
         fun loadAssets(ctx: Context, surahFirstIdx: (Int) -> Int?): Pack? {
             val names = runCatching { ctx.assets.list("pack")?.toList() }.getOrNull() ?: return null

@@ -47,6 +47,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import de.fa.kuran.data.AppState
+import kotlinx.coroutines.launch
 import de.fa.kuran.data.Quran
 
 private const val SAMPLE = "إِذَا ٱلسَّمَآءُ ٱنشَقَّتْ ۝١ وَأَذِنَتْ لِرَبِّهَا وَحُقَّتْ ۝٢"
@@ -61,6 +62,17 @@ fun SettingsScreen(q: Quran, st: AppState, onBack: () -> Unit) {
         if (uri != null) {
             runCatching { ctx.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
             st.packUri = uri.toString()
+        }
+    }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    val zipPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris: List<Uri> ->
+        if (uris.isNotEmpty()) scope.launch {
+            st.importInfo = "Sayfalar aktarılıyor…"
+            val n = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                runCatching { de.fa.kuran.data.Pack.importZips(ctx, uris) { k -> st.importInfo = "Sayfalar aktarılıyor… $k dosya" } }.getOrDefault(-1)
+            }
+            st.importInfo = if (n > 0) "$n dosya aktarıldı. Zip dosyalarını artık silebilirsiniz." else "Aktarma başarısız. Lütfen zip dosyalarını tekrar seçin."
+            st.packVersion++
         }
     }
     val fonts = listOf(
@@ -95,8 +107,10 @@ fun SettingsScreen(q: Quran, st: AppState, onBack: () -> Unit) {
                                 )
                                 Text(pk?.summary ?: "Paketi açtığınız klasörü seçin (içinde h000.webp … dosyaları olmalı).", fontSize = 13.sp, color = pal.muted)
                             }
-                            SmallButton(pal, if (pk != null) "Klasörü değiştir" else "Klasör seç") { picker.launch(null) }
+                            SmallButton(pal, "Zip dosyalarını seç") { zipPicker.launch(arrayOf("application/zip", "application/x-zip-compressed", "application/octet-stream")) }
                         }
+                        st.importInfo?.let { Text(it, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = pal.accent) }
+                        Text("İndirdiğiniz Kuran-Parca zip dosyalarının hepsini birden seçin. Uygulama onları kendisi açar.", fontSize = 13.sp, color = pal.muted)
                     }
                     Section(pal, "Arapça yazı stili", "Size en kolay okunan yazıyı seçin. Yazı tiplerinde Allah lafızları kırmızıdır.") {
                         fonts.chunked(if (wide) 2 else 1).forEach { row ->
