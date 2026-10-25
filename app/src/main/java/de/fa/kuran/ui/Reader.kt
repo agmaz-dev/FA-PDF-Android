@@ -64,8 +64,8 @@ import kotlinx.coroutines.launch
 fun ReaderScreen(q: Quran, st: AppState, onIndex: () -> Unit, onSettings: () -> Unit) {
     BoxWithConstraints(Modifier.fillMaxSize().background(pal0(st))) {
         val wide = maxWidth >= 600.dp
-        // Fold açıkken Mushaf: açık kitap gibi iki sayfa yan yana (sağda tek, solda çift sayfa)
-        val twoUp = wide && st.mode == ReadMode.MUSHAF
+        // Mushaf her zaman tek sayfa, ekranı dolduracak kadar büyük
+        val twoUp = false
         androidx.compose.runtime.key(twoUp) {
             ReaderBody(q, st, wide, twoUp, onIndex, onSettings)
         }

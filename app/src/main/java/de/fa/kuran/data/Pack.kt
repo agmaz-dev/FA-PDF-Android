@@ -153,6 +153,20 @@ class Pack(
             return n
         }
 
+        /** Gömülü paketi filesDir/pack içine kopyalar; böylece sonraki güncellemelerde sayfalar silinmez */
+        fun persistAssets(ctx: Context) {
+            val names = runCatching { ctx.assets.list("pack")?.toList() }.getOrNull() ?: return
+            if (names.isEmpty()) return
+            val dir = java.io.File(ctx.filesDir, "pack").apply { mkdirs() }
+            for (n in names) {
+                val out = java.io.File(dir, n)
+                if (out.exists() && out.length() > 0) continue
+                val tmp = java.io.File(dir, "$n.tmp")
+                ctx.assets.open("pack/$n").use { i -> tmp.outputStream().use { o -> i.copyTo(o) } }
+                tmp.renameTo(out)
+            }
+        }
+
         /** Uygulamanın içine gömülü paket (assets/pack/) */
         fun loadAssets(ctx: Context, surahFirstIdx: (Int) -> Int?): Pack? {
             val names = runCatching { ctx.assets.list("pack")?.toList() }.getOrNull() ?: return null

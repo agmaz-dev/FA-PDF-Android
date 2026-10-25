@@ -95,6 +95,9 @@ fun App(st: AppState, immersive: (Boolean) -> Unit) {
             error = e.toString()
         }
     }
+    LaunchedEffect(Unit) {
+        withContext(Dispatchers.IO) { runCatching { Pack.persistAssets(ctx) } }
+    }
     LaunchedEffect(st.packUri, quran, st.packVersion) {
         val base = quran ?: return@LaunchedEffect
         st.packLoading = true
