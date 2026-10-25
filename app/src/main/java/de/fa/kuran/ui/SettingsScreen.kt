@@ -77,6 +77,9 @@ fun SettingsScreen(q: Quran, st: AppState, onBack: () -> Unit) {
     }
     val fonts = listOf(
         FontOpt("hayrat", "Hayrat tevâfuklu mushaf", "Kitabın kendi sayfaları, kelime mealiyle", null),
+    ) + listOfNotNull(
+        Fonts.husrev?.let { FontOpt("husrev", "Hüsrev hattı", "Hüsrev hattı üslûbunda nesih", it) },
+    ) + listOf(
         FontOpt("amiri", "Klasik nesih", "Geleneksel matbaa mushafı görünümü", Fonts.amiri),
         FontOpt("scheherazade", "Büyük ve açık", "İri harekeler, kolay okunur", Fonts.scheherazade),
         FontOpt("naskh", "Sade, modern", "Ekranda en net görünen yazı", Fonts.naskh),

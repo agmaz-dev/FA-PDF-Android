@@ -53,7 +53,21 @@ object Fonts {
     val scheherazade = FontFamily(Font(R.font.scheherazade))
     val naskh = FontFamily(Font(R.font.noto_naskh))
 
+    /** Hüsrev hattı: sadece kişisel pakette (assets/pack veya filesDir/pack) bulunur */
+    var husrev: FontFamily? = null
+        private set
+
+    fun init(ctx: android.content.Context) {
+        if (husrev != null) return
+        husrev = runCatching {
+            val f = java.io.File(ctx.filesDir, "pack/husrev.ttf")
+            if (f.exists() && f.length() > 0) FontFamily(Font(f))
+            else { ctx.assets.open("pack/husrev.ttf").close(); FontFamily(Font("pack/husrev.ttf", ctx.assets)) }
+        }.getOrNull()
+    }
+
     fun arabic(key: String): FontFamily = when (key) {
+        "husrev" -> husrev ?: amiri
         "scheherazade" -> scheherazade
         "naskh" -> naskh
         else -> amiri
