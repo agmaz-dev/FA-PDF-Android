@@ -88,7 +88,7 @@ fun ReaderScreen(q: Quran, st: AppState, onIndex: () -> Unit, onSettings: () -> 
         CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
             HorizontalPager(
                 state = pager,
-                modifier = Modifier.fillMaxSize().padding(vertical = 6.dp),
+                modifier = Modifier.fillMaxSize().padding(top = if (bars) (if (wide) 84.dp else 132.dp) else 6.dp, bottom = if (bars) 84.dp else 6.dp),
                 beyondViewportPageCount = 1,
                 pageSpacing = 12.dp,
             ) { idx ->
