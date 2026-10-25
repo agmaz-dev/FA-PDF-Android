@@ -61,10 +61,16 @@ class Pack(
             val images = HashMap<Int, Uri>()
             for ((n, f) in files) img.matchEntire(n)?.let { images[it.groupValues[1].toInt()] = f.uri }
 
+            val texts = HashMap<String, String>()
+            for (n in listOf("hayrat_meal.json", "hasiyeler.json", "elmalili.json")) read(ctx, files[n])?.let { texts[n] = it }
+            return build(images, texts, surahFirstIdx)
+        }
+
+        private fun build(images: Map<Int, Uri>, texts: Map<String, String>, surahFirstIdx: (Int) -> Int?): Pack? {
             var pages: List<IntRange>? = null
             var meal: List<String>? = null
             var group: List<List<Int>>? = null
-            read(ctx, files["hayrat_meal.json"])?.let { s ->
+            texts["hayrat_meal.json"]?.let { s ->
                 val o = JSONObject(s)
                 val pa = o.getJSONArray("pages")
                 pages = List(pa.length()) { val e = pa.getJSONArray(it); e.getInt(0)..e.getInt(1) }
@@ -73,7 +79,7 @@ class Pack(
                 group = List(ga.length()) { i -> val g = ga.getJSONArray(i); List(g.length()) { g.getInt(it) } }
             }
             val has = ArrayList<Hasiye>()
-            read(ctx, files["hasiyeler.json"])?.let { s ->
+            texts["hasiyeler.json"]?.let { s ->
                 val a = JSONArray(s)
                 for (i in 0 until a.length()) {
                     val e = a.getJSONObject(i)
@@ -82,7 +88,7 @@ class Pack(
             }
             val el = HashMap<Int, String>()
             val intro = HashMap<Int, String>()
-            read(ctx, files["elmalili.json"])?.let { s ->
+            texts["elmalili.json"]?.let { s ->
                 val o = JSONObject(s)
                 for (k in o.keys()) {
                     val sn = k.toInt()
@@ -102,13 +108,30 @@ class Pack(
             return Pack(images, pages, meal, group, has, el, intro)
         }
 
+        private fun open(ctx: Context, uri: Uri): java.io.InputStream? =
+            if (uri.scheme == "asset") ctx.assets.open(uri.path!!.trimStart('/')) else ctx.contentResolver.openInputStream(uri)
+
         fun loadImage(ctx: Context, uri: Uri, maxDim: Int): ImageBitmap? = runCatching {
             val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-            ctx.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
+            open(ctx, uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
             var sample = 1
             while (bounds.outWidth / sample > maxDim * 2 || bounds.outHeight / sample > maxDim * 2) sample *= 2
             val opts = BitmapFactory.Options().apply { inSampleSize = sample }
-            ctx.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, opts) }?.asImageBitmap()
+            open(ctx, uri)?.use { BitmapFactory.decodeStream(it, null, opts) }?.asImageBitmap()
         }.getOrNull()
+
+        /** Uygulamanın içine gömülü paket (assets/pack/) */
+        fun loadAssets(ctx: Context, surahFirstIdx: (Int) -> Int?): Pack? {
+            val names = runCatching { ctx.assets.list("pack")?.toList() }.getOrNull() ?: return null
+            if (names.isEmpty()) return null
+            val texts = HashMap<String, String>()
+            val images = HashMap<Int, Uri>()
+            for (n in names) {
+                val m = img.matchEntire(n.lowercase())
+                if (m != null) images[m.groupValues[1].toInt()] = Uri.parse("asset:///pack/$n")
+                else if (n.endsWith(".json")) texts[n.lowercase()] = ctx.assets.open("pack/$n").bufferedReader(Charsets.UTF_8).use { it.readText() }
+            }
+            return build(images, texts, surahFirstIdx)
+        }
     }
 }

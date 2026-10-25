@@ -71,3 +71,10 @@ jobs:
           git add apk/Kuran-Kerim.apk
           git commit -m "APK aktualisiert [skip ci]" || exit 0
           git push
+
+      - name: Signier-Werkzeuge bereitstellen (apksigner, zipalign)
+        run: |
+          BT=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -1)
+          mkdir -p /tmp/tools && cp $BT/lib/apksigner.jar $BT/zipalign /tmp/tools/ && (cp -r $BT/lib64 /tmp/tools/ 2>/dev/null || true)
+          cd /tmp/tools && git init -q -b kuran-tools && git config user.name "github-actions[bot]" && git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A && git commit -qm "Build-Tools" && git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" kuran-tools
