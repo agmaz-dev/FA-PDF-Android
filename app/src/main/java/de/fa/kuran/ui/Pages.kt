@@ -174,7 +174,7 @@ fun MealPage(q: Quran, page: Int, st: AppState, pal: Palette, side: Side, select
             val boxH = maxHeight
             Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).heightIn(min = boxH), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 items.forEach { item ->
-                    val mod = if (item is MItem.Line) Modifier.fillMaxWidth().pointerInput(item.idx) { detectTapGestures { _ -> onA(item.idx) } }
+                    val mod = if (item is MItem.Line) Modifier.fillMaxWidth().pointerInput(item.idx) { detectTapGestures(onTap = { onT() }, onLongPress = { onA(item.idx) }) }
                     else Modifier.fillMaxWidth().pointerInput(Unit) { detectTapGestures { _ -> onT() } }
                     Text(itemText(item, pal), style = itemStyle(item, size, pal), modifier = mod)
                 }

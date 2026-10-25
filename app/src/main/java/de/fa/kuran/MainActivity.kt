@@ -46,14 +46,36 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, false)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        @Suppress("DEPRECATION")
+        run {
+            window.statusBarColor = android.graphics.Color.TRANSPARENT
+            window.navigationBarColor = android.graphics.Color.TRANSPARENT
+        }
+        if (android.os.Build.VERSION.SDK_INT >= 29) {
+            window.isNavigationBarContrastEnforced = false
+            window.isStatusBarContrastEnforced = false
+        }
+        if (android.os.Build.VERSION.SDK_INT >= 28) {
+            window.attributes = window.attributes.apply {
+                layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+            }
+        }
+        window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.BLACK))
         val st = AppState(applicationContext)
+        applyImmersive(true)
         setContent { App(st, ::applyImmersive) }
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) applyImmersive(true)
     }
 
     private fun applyImmersive(on: Boolean) {
         val c = WindowCompat.getInsetsController(window, window.decorView)
         c.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-        if (on) c.hide(WindowInsetsCompat.Type.systemBars()) else c.show(WindowInsetsCompat.Type.systemBars())
+        // Telefonun üst ve alt çubukları her ekranda gizli; kenardan kaydırınca kısa süre görünür
+        c.hide(WindowInsetsCompat.Type.systemBars())
     }
 }
 
@@ -116,17 +138,16 @@ fun App(st: AppState, immersive: (Boolean) -> Unit) {
             !st.welcomed -> WelcomeScreen(st) { st.meal = it; st.welcomed = true }
             screen == Screen.INDEX -> {
                 BackHandler { screen = Screen.READER }
+                LaunchedEffect(Unit) { immersive(true) }
                 IndexScreen(q!!, st, onGo = { p -> st.lastPage = p; st.jump = p; screen = Screen.READER }, onBack = { screen = Screen.READER })
             }
             screen == Screen.SETTINGS -> {
                 BackHandler { screen = Screen.READER }
+                LaunchedEffect(Unit) { immersive(true) }
                 SettingsScreen(q!!, st, onBack = { screen = Screen.READER })
             }
             else -> {
-                DisposableEffect(Unit) {
-                    immersive(true)
-                    onDispose { immersive(false) }
-                }
+                LaunchedEffect(Unit) { immersive(true) }
                 ReaderScreen(q!!, st, onIndex = { screen = Screen.INDEX }, onSettings = { screen = Screen.SETTINGS })
             }
         }

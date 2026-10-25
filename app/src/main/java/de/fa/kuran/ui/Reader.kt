@@ -51,6 +51,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.ui.input.pointer.pointerInput
 import de.fa.kuran.data.AppState
 import de.fa.kuran.data.Quran
 import de.fa.kuran.data.ReadMode
@@ -59,41 +62,66 @@ import kotlinx.coroutines.launch
 
 @Composable
 fun ReaderScreen(q: Quran, st: AppState, onIndex: () -> Unit, onSettings: () -> Unit) {
+    BoxWithConstraints(Modifier.fillMaxSize().background(pal0(st))) {
+        val wide = maxWidth >= 600.dp
+        // Fold açıkken Mushaf: açık kitap gibi iki sayfa yan yana (sağda tek, solda çift sayfa)
+        val twoUp = wide && st.mode == ReadMode.MUSHAF
+        androidx.compose.runtime.key(twoUp) {
+            ReaderBody(q, st, wide, twoUp, onIndex, onSettings)
+        }
+    }
+}
+
+@Composable
+private fun pal0(st: AppState) = palette(st.theme).app
+
+@Composable
+private fun ReaderBody(q: Quran, st: AppState, wide: Boolean, twoUp: Boolean, onIndex: () -> Unit, onSettings: () -> Unit) {
     val pal = palette(st.theme)
-    val pager = rememberPagerState(initialPage = (st.lastPage - 1).coerceIn(0, q.pageCount - 1)) { q.pageCount }
+    val count = if (twoUp) (q.pageCount + 1) / 2 else q.pageCount
+    fun toIdx(p: Int) = (if (twoUp) (p - 1) / 2 else p - 1).coerceIn(0, count - 1)
+    fun toPage(i: Int) = if (twoUp) i * 2 + 1 else i + 1
+    val pager = rememberPagerState(initialPage = toIdx(st.lastPage)) { count }
     val scope = rememberCoroutineScope()
     var bars by remember { mutableStateOf(false) }
+    var touch by remember { mutableStateOf(0) }
     var selected by remember { mutableStateOf<Int?>(null) }
     var hint by remember { mutableStateOf(true) }
-    val page = pager.currentPage + 1
+    val page = if (twoUp && (st.lastPage - 1) / 2 == pager.currentPage) st.lastPage else toPage(pager.currentPage)
 
-    LaunchedEffect(pager.currentPage) { st.lastPage = pager.currentPage + 1 }
+    LaunchedEffect(pager.currentPage) {
+        if (!(twoUp && (st.lastPage - 1) / 2 == pager.currentPage)) st.lastPage = toPage(pager.currentPage)
+    }
     LaunchedEffect(st.jump) {
-        st.jump?.let { pager.scrollToPage((it - 1).coerceIn(0, q.pageCount - 1)); st.jump = null }
+        st.jump?.let { pager.scrollToPage(toIdx(it)); st.lastPage = it; st.jump = null }
     }
     LaunchedEffect(Unit) { delay(3500); hint = false }
+    // Menü çubukları bir süre dokunulmazsa kendiliğinden geri çekilir
+    LaunchedEffect(bars, touch, page, st.mode, st.arZoom, st.mealZoom) {
+        if (bars) { delay(6000); bars = false }
+    }
 
     val select: (Int) -> Unit = { idx ->
         selected = if (selected == idx && st.mode != ReadMode.ACIKLAMA) null else idx
         val p = q.pageOf(idx)
-        if (p != page) scope.launch { pager.animateScrollToPage(p - 1) }
+        if (toIdx(p) != pager.currentPage) scope.launch { pager.animateScrollToPage(toIdx(p)) }
     }
     val toggle: () -> Unit = { bars = !bars; hint = false }
-    val goTo: (Int) -> Unit = { p -> scope.launch { pager.animateScrollToPage((p - 1).coerceIn(0, q.pageCount - 1)) } }
+    val goTo: (Int) -> Unit = { p -> touch++; scope.launch { pager.animateScrollToPage(toIdx(p.coerceIn(1, q.pageCount))) } }
+    val step = if (twoUp) 2 else 1
 
-    BoxWithConstraints(Modifier.fillMaxSize().background(pal.app)) {
-        val wide = maxWidth >= 600.dp
-
-        // Kitap: sayfalar sağdan sola çevrilir
+    Box(Modifier.fillMaxSize().background(pal.app)) {
+        // Kitap: sayfalar sağdan sola çevrilir. Çubuklar sayfanın üstünde yüzer, sayfayı küçültmez.
         CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
             HorizontalPager(
                 state = pager,
-                modifier = Modifier.fillMaxSize().padding(top = if (bars) (if (wide) 84.dp else 132.dp) else 6.dp, bottom = if (bars) 84.dp else 6.dp),
+                modifier = Modifier.fillMaxSize().padding(top = if (bars) (if (wide) 80.dp else 128.dp) else 0.dp, bottom = if (bars) 80.dp else 0.dp),
                 beyondViewportPageCount = 1,
-                pageSpacing = 12.dp,
+                pageSpacing = if (twoUp) 0.dp else 12.dp,
             ) { idx ->
                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                    Spread(q, idx + 1, st, pal, wide, selected, select, toggle)
+                    if (twoUp) TwoUp(q, toPage(idx), st, pal, selected, select, toggle)
+                    else Spread(q, idx + 1, st, pal, wide, selected, select, toggle)
                 }
             }
         }
@@ -105,7 +133,7 @@ fun ReaderScreen(q: Quran, st: AppState, onIndex: () -> Unit, onSettings: () -> 
             Column(
                 Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(bottom = if (bars) 92.dp else 20.dp, start = 16.dp, end = 16.dp)
+                    .padding(bottom = if (bars) 96.dp else 20.dp, start = 16.dp, end = 16.dp)
                     .widthIn(max = 560.dp)
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(22.dp))
@@ -134,7 +162,7 @@ fun ReaderScreen(q: Quran, st: AppState, onIndex: () -> Unit, onSettings: () -> 
 
         if (hint && !bars) {
             Text(
-                "Menü için sayfaya dokunun",
+                "Menü için dokunun · âyet için basılı tutun",
                 color = Color.White, fontSize = 12.sp,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
@@ -151,7 +179,9 @@ fun ReaderScreen(q: Quran, st: AppState, onIndex: () -> Unit, onSettings: () -> 
             enter = slideInVertically { -it } + fadeIn(),
             exit = slideOutVertically { -it } + fadeOut(),
         ) {
-            TopBars(q, st, pal, page, wide, onIndex, onSettings)
+            Box(Modifier.pointerInput(Unit) { awaitEachGesture { awaitFirstDown(requireUnconsumed = false); touch++ } }) {
+                TopBars(q, st, pal, page, wide, onIndex, onSettings)
+            }
         }
         AnimatedVisibility(
             visible = bars,
@@ -159,7 +189,9 @@ fun ReaderScreen(q: Quran, st: AppState, onIndex: () -> Unit, onSettings: () -> 
             enter = slideInVertically { it } + fadeIn(),
             exit = slideOutVertically { it } + fadeOut(),
         ) {
-            BottomBar(q, st, pal, page, wide, goTo)
+            Box(Modifier.pointerInput(Unit) { awaitEachGesture { awaitFirstDown(requireUnconsumed = false); touch++ } }) {
+                BottomBar(q, st, pal, page, wide, step, goTo)
+            }
         }
     }
 }
@@ -175,12 +207,10 @@ private fun Spread(
     select: (Int) -> Unit,
     toggle: () -> Unit,
 ) {
-    Row(Modifier.fillMaxSize().padding(horizontal = if (wide) 10.dp else 4.dp)) {
+    Row(Modifier.fillMaxSize().padding(horizontal = if (wide) 6.dp else 2.dp, vertical = 4.dp)) {
         if (wide) {
             when (st.mode) {
-                ReadMode.MUSHAF -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    MushafPage(q, page, st, pal, Side.SINGLE, selected, select, toggle, Modifier.fillMaxHeight().fillMaxWidth(0.64f))
-                }
+                ReadMode.MUSHAF -> MushafPage(q, page, st, pal, Side.SINGLE, selected, select, toggle, Modifier.fillMaxSize())
                 ReadMode.MEAL -> {
                     MealPage(q, page, st, pal, Side.LEFT, selected, select, toggle, Modifier.weight(1f).fillMaxHeight())
                     Spine(pal)
@@ -257,7 +287,7 @@ private fun ZoomControls(st: AppState, pal: Palette) {
 }
 
 @Composable
-private fun BottomBar(q: Quran, st: AppState, pal: Palette, page: Int, wide: Boolean, goTo: (Int) -> Unit) {
+private fun BottomBar(q: Quran, st: AppState, pal: Palette, page: Int, wide: Boolean, step: Int, goTo: (Int) -> Unit) {
     var drag by remember { mutableStateOf<Float?>(null) }
     val shown = drag?.toInt() ?: page
     Row(
@@ -268,7 +298,7 @@ private fun BottomBar(q: Quran, st: AppState, pal: Palette, page: Int, wide: Boo
         if (!wide) Glass(pal) { ZoomControls(st, pal) }
         Glass(pal, Modifier.weight(1f)) {
             // Kitap sağdan sola: sol ok = sonraki sayfa
-            RoundIcon(pal, Icons.AutoMirrored.Filled.KeyboardArrowLeft, "Sonraki sayfa") { goTo(page + 1) }
+            RoundIcon(pal, Icons.AutoMirrored.Filled.KeyboardArrowLeft, "Sonraki sayfa") { goTo(page + step) }
             CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
                 Slider(
                     value = drag ?: page.toFloat(),
@@ -280,8 +310,24 @@ private fun BottomBar(q: Quran, st: AppState, pal: Palette, page: Int, wide: Boo
                 )
             }
             Text(q.pageLabel(shown), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = pal.ink, modifier = Modifier.width(36.dp))
-            RoundIcon(pal, Icons.AutoMirrored.Filled.KeyboardArrowRight, "Önceki sayfa") { goTo(page - 1) }
+            RoundIcon(pal, Icons.AutoMirrored.Filled.KeyboardArrowRight, "Önceki sayfa") { goTo(page - step) }
         }
     }
     Spacer(Modifier.width(0.dp))
+}
+
+
+/** Açık kitap: sağda tek numaralı sayfa, solda bir sonraki sayfa – ekranı tamamen doldurur */
+@Composable
+private fun TwoUp(q: Quran, right: Int, st: AppState, pal: Palette, selected: Int?, select: (Int) -> Unit, toggle: () -> Unit) {
+    val left = right + 1
+    Row(Modifier.fillMaxSize().padding(horizontal = 4.dp, vertical = 4.dp)) {
+        if (left <= q.pageCount) {
+            MushafPage(q, left, st, pal, Side.LEFT, selected, select, toggle, Modifier.weight(1f).fillMaxHeight())
+        } else {
+            Box(Modifier.weight(1f).fillMaxHeight())
+        }
+        Spine(pal)
+        MushafPage(q, right, st, pal, Side.RIGHT, selected, select, toggle, Modifier.weight(1f).fillMaxHeight())
+    }
 }

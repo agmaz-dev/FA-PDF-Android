@@ -177,13 +177,14 @@ fun AyahParagraph(b: Blk.Para, style: TextStyle, selected: Int?, pal: Palette, o
         style = style,
         onTextLayout = { layout = it },
         modifier = Modifier.fillMaxWidth().pointerInput(text) {
-            detectTapGestures { pos ->
-                val l = layout
-                if (l == null) { onT(); return@detectTapGestures }
-                val off = l.getOffsetForPosition(pos)
-                val ann = text.getStringAnnotations("ayah", off, off).firstOrNull()
-                if (ann != null) onA(ann.item.toInt()) else onT()
-            }
+            detectTapGestures(
+                onTap = { onT() },
+                onLongPress = { pos ->
+                    val l = layout ?: return@detectTapGestures
+                    val off = l.getOffsetForPosition(pos)
+                    text.getStringAnnotations("ayah", off, off).firstOrNull()?.let { onA(it.item.toInt()) }
+                },
+            )
         },
     )
 }
