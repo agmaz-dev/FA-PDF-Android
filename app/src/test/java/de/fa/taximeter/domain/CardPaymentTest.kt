@@ -81,3 +81,48 @@ class CardPaymentTest {
         assertEquals(PaymentMethod.BAR, rec!!.payment)
     }
 }
+
+class TipTest {
+    private val cfg = GpsFilterConfig()
+
+    private fun stoppedAt4_30(): MeterMachineState {
+        val (la, lo) = Geo.offset(52.45, 13.45, 0.0, 0.0)
+        val f = GpsFix(la, lo, 5.0, 0, 0, 0.0)
+        val s = MeterMachine.pressBesetzt(MeterMachine.initial(TariffCatalog.BERLIN), f, 0, 0, cfg, false) { "t" }.state
+        return MeterMachine.pressStopp(s, 1000, 1000, cfg).state
+    }
+
+    @Test fun vorschlaegeRundeBetraege() {
+        assertEquals(listOf("65.00", "70.00", "75.00").map { BigDecimal(it) }, MeterMachine.roundSuggestions(BigDecimal("61.00")))
+        assertEquals(listOf("70.00", "75.00", "80.00").map { BigDecimal(it) }, MeterMachine.roundSuggestions(BigDecimal("68.00")))
+        // genau rund -> nächster Schritt
+        assertEquals(BigDecimal("70.00"), MeterMachine.roundSuggestions(BigDecimal("65.00"))[0])
+    }
+
+    @Test fun trinkgeldWirdAufgeschlagenUndGetrenntGespeichert() {
+        val s = stoppedAt4_30()
+        val due = MeterMachine.amountDue(s)!!
+        assertEquals(BigDecimal("4.30"), due)
+        // Kunde: "machen Sie 10" -> Trinkgeld 5,70
+        val tip = BigDecimal("10.00").subtract(due)
+        val (r, req) = MeterMachine.startCardPayment(s, tip)
+        assertEquals(BigDecimal("10.00"), req!!.amount)
+        val (_, rec) = MeterMachine.onCardResult(r.state, true, req.paymentId, "TX", 2)
+        assertEquals(BigDecimal("4.30"), rec!!.total)
+        assertEquals(BigDecimal("5.70"), rec.tip)
+        assertEquals(BigDecimal("10.00"), rec.paid)
+        assertEquals(rec, Codecs.historyFromJson(Codecs.historyToJson(listOf(rec)))[0])
+    }
+
+    @Test fun abbruchVerwirftTrinkgeldUndUngueltigesWirdAbgelehnt() {
+        val s = stoppedAt4_30()
+        val (r, req) = MeterMachine.startCardPayment(s, BigDecimal("2.00"))
+        assertEquals(BigDecimal("2.00"), Codecs.machineFromJson(Codecs.machineToJson(r.state)).run!!.pendingTip)
+        val (after, _) = MeterMachine.onCardResult(r.state, false, req!!.paymentId, null, 1)
+        assertEquals(0, after.state.run!!.pendingTip.signum())
+        assertNull(MeterMachine.startCardPayment(s, BigDecimal("-1")).second)
+        assertNull(MeterMachine.startCardPayment(s, BigDecimal("500")).second)
+        val (_, cash) = MeterMachine.pressFrei(s, 1)
+        assertEquals(0, cash!!.tip.signum())
+    }
+}

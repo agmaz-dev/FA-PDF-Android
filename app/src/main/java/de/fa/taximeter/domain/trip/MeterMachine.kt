@@ -34,6 +34,8 @@ data class TripRun(
     val pendingPaymentId: String? = null,
     /** Zähler für eindeutige Zahlungs-IDs je Versuch. */
     val paymentAttempts: Int = 0,
+    /** Trinkgeld der offenen Kartenzahlung. */
+    val pendingTip: BigDecimal = BigDecimal.ZERO,
 )
 
 enum class PaymentMethod(val label: String) { BAR("Bar"), KARTE("Karte (SumUp)") }
@@ -58,7 +60,12 @@ data class TripRecord(
     val payment: PaymentMethod = PaymentMethod.BAR,
     /** SumUp-Transaktionscode bei Kartenzahlung. */
     val paymentRef: String? = null,
+    /** Trinkgeld (nicht Teil des Fahrpreises). */
+    val tip: BigDecimal = BigDecimal.ZERO,
 ) {
+    /** Tatsächlich bezahlter Betrag = Summe + Trinkgeld. */
+    val paid: BigDecimal get() = Money.cents(total.add(tip))
+
     val hasGaps: Boolean get() = gaps.isNotEmpty()
 }
 
@@ -142,7 +149,7 @@ object MeterMachine {
                 CommandResult(
                     s.copy(
                         phase = Phase.BESETZT,
-                        run = run.copy(tracker = DistanceTracker.seed(fix!!, nowMs), pendingPaymentId = null),
+                        run = run.copy(tracker = DistanceTracker.seed(fix!!, nowMs), pendingPaymentId = null, pendingTip = BigDecimal.ZERO),
                     )
                 )
             }
@@ -313,9 +320,16 @@ object MeterMachine {
         finish(s, nowWallMs, PaymentMethod.BAR, null)
 
     /** Schließt die Fahrt aus STOPP ab (Bar oder Karte) und leert den Zähler. */
-    fun finish(s: MeterMachineState, nowWallMs: Long, payment: PaymentMethod, paymentRef: String?): Pair<CommandResult, TripRecord?> = when (s.phase) {
+    fun finish(
+        s: MeterMachineState,
+        nowWallMs: Long,
+        payment: PaymentMethod,
+        paymentRef: String?,
+        tip: BigDecimal = BigDecimal.ZERO,
+    ): Pair<CommandResult, TripRecord?> = when (s.phase) {
         Phase.STOPP -> {
-            val rec = pressKasse(s, nowWallMs).state.completed!!.copy(payment = payment, paymentRef = paymentRef)
+            val rec = pressKasse(s, nowWallMs).state.completed!!
+                .copy(payment = payment, paymentRef = paymentRef, tip = Money.cents(tip))
             CommandResult(MeterMachineState(phase = Phase.FREI, selectedTariff = s.selectedTariff, savedWallMs = s.savedWallMs)) to rec
         }
         Phase.KASSE -> newTrip(s) to null
@@ -326,10 +340,30 @@ object MeterMachine {
     // ---------------------------------------------------------------- Kartenzahlung (SumUp)
 
     /** Daten für eine Kartenzahlung: Betrag = Summe aus Fahrpreis und Zuschlägen. */
-    data class CardRequest(val paymentId: String, val amount: BigDecimal, val title: String)
+    data class CardRequest(val paymentId: String, val amount: BigDecimal, val title: String, val tip: BigDecimal)
+
+    /** Offene Summe (Fahrpreis + Zuschläge) in STOPP, sonst null. */
+    fun amountDue(s: MeterMachineState): BigDecimal? =
+        if (s.phase == Phase.STOPP && s.run != null) Money.cents(liveFare(s).add(s.run.surcharges.total)) else null
+
+    /** Vorschläge für „machen Sie …“: die nächsten drei runden 5-€-Beträge über der Summe. */
+    fun roundSuggestions(due: BigDecimal): List<BigDecimal> {
+        val five = BigDecimal(5)
+        var next = due.divide(five, 0, java.math.RoundingMode.FLOOR).add(BigDecimal.ONE).multiply(five)
+        val list = mutableListOf<BigDecimal>()
+        repeat(3) {
+            list += next.setScale(2)
+            next = next.add(five)
+        }
+        return list
+    }
+
+    /** Höchstes zulässiges Trinkgeld (Schutz vor Tippfehlern). */
+    val MAX_TIP: BigDecimal = BigDecimal("200.00")
 
     /** Startet eine Kartenzahlung (nur in STOPP). Jeder Versuch bekommt eine eigene ID. */
-    fun startCardPayment(s: MeterMachineState): Pair<CommandResult, CardRequest?> {
+    fun startCardPayment(s: MeterMachineState, tip: BigDecimal = BigDecimal.ZERO): Pair<CommandResult, CardRequest?> {
+        if (tip.signum() < 0 || tip > MAX_TIP) return CommandResult(s, "Ungültiges Trinkgeld.", changed = false) to null
         if (s.phase != Phase.STOPP) {
             val msg = if (s.phase == Phase.BESETZT) "Erst STOPP drücken." else null
             return CommandResult(s, msg, changed = false) to null
@@ -337,10 +371,11 @@ object MeterMachine {
         val run = s.run!!
         val attempt = run.paymentAttempts + 1
         val id = run.tripId.take(24) + "-" + attempt
-        val amount = Money.cents(liveFare(s).add(run.surcharges.total))
-        if (amount.signum() <= 0) return CommandResult(s, "Kein Betrag zu kassieren.", changed = false) to null
-        val updated = s.copy(run = run.copy(pendingPaymentId = id, paymentAttempts = attempt))
-        return CommandResult(updated) to CardRequest(id, amount, "Taxifahrt Tarif ${run.profile.displayNumber}")
+        val due = Money.cents(liveFare(s).add(run.surcharges.total))
+        if (due.signum() <= 0) return CommandResult(s, "Kein Betrag zu kassieren.", changed = false) to null
+        val t = Money.cents(tip)
+        val updated = s.copy(run = run.copy(pendingPaymentId = id, paymentAttempts = attempt, pendingTip = t))
+        return CommandResult(updated) to CardRequest(id, Money.cents(due.add(t)), "Taxifahrt Tarif ${run.profile.displayNumber}", t)
     }
 
     /**
@@ -362,9 +397,9 @@ object MeterMachine {
             return CommandResult(s, "SumUp-Rückmeldung passt nicht zur aktuellen Fahrt – bitte in SumUp prüfen.", changed = false) to null
         }
         if (!success) {
-            return CommandResult(s.copy(run = run.copy(pendingPaymentId = null)), "Kartenzahlung nicht erfolgt – Betrag weiterhin offen.") to null
+            return CommandResult(s.copy(run = run.copy(pendingPaymentId = null, pendingTip = BigDecimal.ZERO)), "Kartenzahlung nicht erfolgt – Betrag weiterhin offen.") to null
         }
-        val (r, rec) = finish(s, nowWallMs, PaymentMethod.KARTE, txCode)
+        val (r, rec) = finish(s, nowWallMs, PaymentMethod.KARTE, txCode, run.pendingTip)
         return r.copy(message = "Kartenzahlung erfolgreich") to rec
     }
 

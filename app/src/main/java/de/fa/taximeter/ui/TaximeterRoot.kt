@@ -66,6 +66,7 @@ fun TaximeterRoot(
         var screen by rememberSaveable { mutableStateOf(Screen.METER) }
         var detailId by rememberSaveable { mutableStateOf<String?>(null) }
         var showTariff by rememberSaveable { mutableStateOf(false) }
+        var showTip by rememberSaveable { mutableStateOf(false) }
         var lastBack by remember { mutableLongStateOf(0L) }
         var permissionTick by remember { mutableIntStateOf(0) }
 
@@ -186,13 +187,8 @@ fun TaximeterRoot(
                             },
                             onKasse = {
                                 when (state.phase) {
-                                    Phase.STOPP -> repo.prepareCardPayment()?.let { intent ->
-                                        try {
-                                            context.startActivity(intent)
-                                        } catch (e: android.content.ActivityNotFoundException) {
-                                            repo.cardPaymentNotStarted("SumUp-App nicht gefunden – bitte installieren und anmelden.")
-                                        }
-                                    }
+                                    Phase.STOPP -> if (repo.hasSumupKey()) showTip = true
+                                    else repo.message("SumUp-Schlüssel fehlt – bitte unter EINSTELLUNGEN → Kartenzahlung eintragen.")
                                     Phase.BESETZT -> repo.message("Erst STOPP drücken.")
                                     else -> Unit
                                 }
@@ -259,6 +255,25 @@ fun TaximeterRoot(
         }
 
         // ------------------------------------------------------------ Dialoge
+        val due = de.fa.taximeter.domain.trip.MeterMachine.amountDue(state)
+        if (showTip && due != null && screen == Screen.METER) {
+            de.fa.taximeter.ui.screens.TipDialog(
+                due = due,
+                onPay = { tip ->
+                    showTip = false
+                    repo.prepareCardPayment(tip)?.let { intent ->
+                        try {
+                            context.startActivity(intent)
+                        } catch (e: android.content.ActivityNotFoundException) {
+                            repo.cardPaymentNotStarted("SumUp-App nicht gefunden – bitte installieren und anmelden.")
+                        }
+                    }
+                },
+                onDismiss = { showTip = false },
+            )
+        } else if (showTip && due == null) {
+            LaunchedEffect(Unit) { showTip = false }
+        }
         if (showTariff && state.phase == Phase.FREI) {
             TariffDialog(
                 options = listOf(settings.profileFor(3), settings.profileFor(4)),

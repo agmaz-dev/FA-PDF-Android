@@ -77,7 +77,7 @@ fun HistoryScreen(
                             fontWeight = FontWeight.Bold,
                         )
                         Text(
-                            "${Format.km(r.distanceM)} · ${Format.duration(r.durationMs)} · Zuschläge ${Money.formatEuro(r.surchargeTotal)} · ${r.payment.label}",
+                            "${Format.km(r.distanceM)} · ${Format.duration(r.durationMs)} · Zuschläge ${Money.formatEuro(r.surchargeTotal)} · ${r.payment.label}" + (if (r.tip.signum() > 0) " · Trinkgeld ${Money.formatEuro(r.tip)}" else ""),
                             color = MeterColors.Inactive,
                             fontSize = 13.sp,
                         )
@@ -89,7 +89,7 @@ fun HistoryScreen(
                         if (flags.isNotEmpty()) Text(flags.joinToString(" · "), color = MeterColors.Warn, fontSize = 12.sp)
                     }
                     Text(
-                        Money.formatEuro(r.total),
+                        Money.formatEuro(r.paid),
                         color = MeterColors.Label,
                         fontSize = 20.sp,
                         fontWeight = FontWeight.Bold,

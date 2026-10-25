@@ -178,13 +178,15 @@ class MeterRepository(private val app: Context) {
      * KASSE in STOPP: bereitet eine SumUp-Kartenzahlung vor. Liefert den Intent zum Öffnen der SumUp-App
      * oder null (dann wurde ein Hinweis angezeigt).
      */
-    fun prepareCardPayment(): android.content.Intent? {
+    fun hasSumupKey(): Boolean = settings.current.sumupKey.isNotBlank()
+
+    fun prepareCardPayment(tip: java.math.BigDecimal = java.math.BigDecimal.ZERO): android.content.Intent? {
         val key = settings.current.sumupKey
         if (_state.value.phase == Phase.STOPP && key.isBlank()) {
             message("SumUp-Schlüssel fehlt – bitte unter EINSTELLUNGEN → Kartenzahlung eintragen.")
             return null
         }
-        val (r, req) = MeterMachine.startCardPayment(_state.value)
+        val (r, req) = MeterMachine.startCardPayment(_state.value, tip)
         apply(r)
         if (req == null) return null
         return de.fa.taximeter.location.SumUpPayment.buildIntent(req, key, app.packageName)

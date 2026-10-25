@@ -200,6 +200,7 @@ object Codecs {
         "showTotal" to r.showTotal,
         "pendingPaymentId" to r.pendingPaymentId,
         "paymentAttempts" to r.paymentAttempts,
+        "pendingTip" to r.pendingTip.toPlainString(),
     )
 
     private fun runFromMap(m: Map<String, Any?>) = TripRun(
@@ -216,6 +217,7 @@ object Codecs {
         showTotal = m.bool("showTotal"),
         pendingPaymentId = m.strOrNull("pendingPaymentId"),
         paymentAttempts = (m["paymentAttempts"] as? MiniJson.JsonNumber)?.toInt() ?: 0,
+        pendingTip = m.strOrNull("pendingTip")?.let { BigDecimal(it) } ?: BigDecimal.ZERO,
     )
 
     fun recordToMap(r: TripRecord): Map<String, Any?> = linkedMapOf(
@@ -237,6 +239,7 @@ object Codecs {
         "restored" to r.restoredAfterProcessDeath,
         "payment" to r.payment.name,
         "paymentRef" to r.paymentRef,
+        "tip" to r.tip.toPlainString(),
     )
 
     fun recordFromMap(m: Map<String, Any?>) = TripRecord(
@@ -257,6 +260,7 @@ object Codecs {
         restoredAfterProcessDeath = m.bool("restored"),
         payment = m.strOrNull("payment")?.let { runCatching { PaymentMethod.valueOf(it) }.getOrNull() } ?: PaymentMethod.BAR,
         paymentRef = m.strOrNull("paymentRef"),
+        tip = m.strOrNull("tip")?.let { BigDecimal(it) } ?: BigDecimal.ZERO,
     )
 
     // ------------------------------------------------------------------ Gesamtzustand

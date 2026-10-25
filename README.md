@@ -63,8 +63,11 @@ Zurück-Taste während einer Fahrt beendet nichts: erster Druck zeigt einen Hinw
 3. Ablauf: STOPP → **KASSE** antippen → SumUp öffnet sich mit der Summe → Zahlung → Rückkehr ins Taximeter.
    Erfolgreich: Fahrt wird als „Karte (SumUp)“ mit Transaktionscode gespeichert, Zähler auf FREI.
    Abgebrochen/abgelehnt: Taximeter bleibt auf STOPP, erneut KASSE oder bar mit FREI.
-4. Jeder Zahlungsversuch hat eine eigene ID (foreign-tx-id); fremde oder verspätete Rückmeldungen werden ignoriert.
-5. Technik: SumUp „Payment Switch“ (`sumupmerchant://pay/1.0`), Rückruf `fataximeter://sumup-callback`.
+4. **Trinkgeld:** Nach KASSE öffnet sich ein Fenster mit der Summe. Sagt der Kunde „machen Sie 65“, tippst du 65 €
+   (Vorschläge: die nächsten drei runden 5-€-Beträge) oder einen anderen Betrag über den Ziffernblock.
+   Trinkgeld = Betrag − Summe; es wird getrennt vom Fahrpreis gespeichert. „Ohne Trinkgeld“ zahlt genau die Summe.
+5. Jeder Zahlungsversuch hat eine eigene ID (foreign-tx-id); fremde oder verspätete Rückmeldungen werden ignoriert.
+6. Technik: SumUp „Payment Switch“ (`sumupmerchant://pay/1.0`), Rückruf `fataximeter://sumup-callback`.
    SumUp entwickelt den Payment Switch nicht mehr aktiv weiter, er funktioniert aber.
 
 ### Tunnel / kein GPS-Empfang
