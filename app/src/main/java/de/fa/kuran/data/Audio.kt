@@ -36,20 +36,28 @@ fun reciterById(id: String): Reciter = RECITERS.firstOrNull { it.id == id } ?: R
 
 private fun code(s: Int, a: Int) = "%03d%03d".format(s, a)
 
-/** Sesli okuma: âyetleri sırayla çalar; dosya telefonda varsa oradan, yoksa internetten */
+/** Sesli okuma: âyetleri sırayla çalar; dosya telefonda varsa oradan, yoksa internetten.
+ *  mode: "ar" = sadece Arapça, "ar_meal" = Arapça + meal, "meal" = sadece meal (telefonun konuşma sesiyle) */
 object Audio {
     var reciter by mutableStateOf("sudais")
+    var mode by mutableStateOf("ar")
     var playing by mutableStateOf<Int?>(null)
     var paused by mutableStateOf(false)
     var loading by mutableStateOf(false)
     var error by mutableStateOf<String?>(null)
+    /** "ar" ya da "meal": şu an ne okunuyor */
+    var phase by mutableStateOf("ar")
+
+    /** Okuma ekranı verir: âyetin seçili mealdeki metni ve dili */
+    var mealOf: (Int) -> String = { "" }
+    var mealLang: String = "tr"
 
     private var app: Context? = null
     private var mp: MediaPlayer? = null
     private var q: Quran? = null
     private var basmalaFirst = false
 
-    fun init(ctx: Context) { app = ctx.applicationContext }
+    fun init(ctx: Context) { app = ctx.applicationContext; Speech.init(ctx) }
 
     fun url(r: Reciter, s: Int, a: Int) = "https://everyayah.com/data/${r.folder}/${code(s, a)}.mp3"
     fun dir(r: Reciter) = File(app!!.filesDir, "audio/${r.folder}")
@@ -59,13 +67,13 @@ object Audio {
         q = quran
         val ay = quran.ayahs[idx]
         basmalaFirst = ay.a == 1 && ay.s != 1 && ay.s != 9
-        start(idx)
+        if (mode == "meal") speakMeal(idx) else start(idx)
     }
 
     private fun start(idx: Int) {
         val quran = q ?: return
-        release()
-        playing = idx; paused = false; error = null; loading = true
+        release(); Speech.stop()
+        playing = idx; paused = false; error = null; loading = true; phase = "ar"
         val ay = quran.ayahs[idx]
         val r = reciterById(reciter)
         val (s, a) = if (basmalaFirst) 1 to 1 else ay.s to ay.a
@@ -78,31 +86,125 @@ object Audio {
             error = "net"; playing = null; loading = false; p.release(); return
         }
         p.setOnPreparedListener { loading = false; if (!paused) it.start() }
-        p.setOnCompletionListener { onDone() }
+        p.setOnCompletionListener { onArabicDone() }
         p.setOnErrorListener { _, _, _ -> error = "net"; loading = false; playing = null; release(); true }
         p.prepareAsync()
         mp = p
     }
 
-    private fun onDone() {
+    private fun onArabicDone() {
         val cur = playing ?: return
         if (basmalaFirst) { basmalaFirst = false; start(cur); return }
+        if (mode == "ar_meal") speakMeal(cur) else next(cur)
+    }
+
+    private fun speakMeal(idx: Int) {
+        release()
+        playing = idx; paused = false; loading = false; phase = "meal"
+        val text = mealOf(idx).replace(Regex("⁽\\d+⁾|\\(\\d+\\)|\\[\\d+\\]"), "").trim()
+        if (text.isBlank()) { next(idx); return }
+        Speech.speak(text, mealLang) { if (playing == idx && phase == "meal" && !paused) next(idx) }
+    }
+
+    private fun next(cur: Int) {
         val quran = q ?: return
-        val next = cur + 1
-        if (next >= quran.ayahs.size) { stop(); return }
-        val ay = quran.ayahs[next]
+        val n = cur + 1
+        if (n >= quran.ayahs.size) { stop(); return }
+        val ay = quran.ayahs[n]
         basmalaFirst = ay.a == 1 && ay.s != 1 && ay.s != 9
-        start(next)
+        if (mode == "meal") speakMeal(n) else start(n)
     }
 
     fun toggle() {
+        val cur = playing ?: return
+        if (phase == "meal") {
+            if (paused) { paused = false; speakMeal(cur) } else { paused = true; Speech.stop() }
+            return
+        }
         val p = mp ?: return
         if (paused) { if (!loading) p.start(); paused = false } else { if (p.isPlaying) p.pause(); paused = true }
     }
 
-    fun stop() { release(); playing = null; paused = false; loading = false }
+    fun stop() { release(); Speech.stop(); playing = null; paused = false; loading = false; phase = "ar" }
 
     private fun release() { mp?.let { runCatching { it.stop() }; it.release() }; mp = null }
+}
+
+/** Telefonun konuşma motoru (meal sesi). Erkek sesi tercih edilir, ses kalınlığı ayarlanabilir. */
+object Speech {
+    data class V(val name: String, val label: String, val male: Boolean)
+
+    var ready by mutableStateOf(false)
+    var voices by mutableStateOf<List<V>>(emptyList())
+    var voiceName by mutableStateOf<String?>(null)
+    var pitch by mutableStateOf(0.8f)
+    var rate by mutableStateOf(0.95f)
+
+    private var tts: android.speech.tts.TextToSpeech? = null
+    private var lang = "tr"
+    private val main = android.os.Handler(android.os.Looper.getMainLooper())
+    private val done = HashMap<String, () -> Unit>()
+    private var n = 0
+
+    fun init(ctx: Context) {
+        if (tts != null) return
+        tts = android.speech.tts.TextToSpeech(ctx.applicationContext) { st ->
+            if (st == android.speech.tts.TextToSpeech.SUCCESS) {
+                tts?.setOnUtteranceProgressListener(object : android.speech.tts.UtteranceProgressListener() {
+                    override fun onStart(id: String) {}
+                    override fun onDone(id: String) { main.post { done.remove(id)?.invoke() } }
+                    @Deprecated("") override fun onError(id: String) { main.post { done.remove(id)?.invoke() } }
+                })
+                main.post { ready = true; loadVoices("tr") }
+            }
+        }
+    }
+
+    private fun locale(l: String) = when (l) { "de" -> java.util.Locale.GERMANY; "en" -> java.util.Locale.US; "ar" -> java.util.Locale("ar"); else -> java.util.Locale("tr", "TR") }
+
+    /** Erkek sesi tahmini: ses adında "male" / Samsung "m00" / Google'ın bilinen erkek kodları */
+    private fun guessMale(name: String): Boolean {
+        val n = name.lowercase()
+        if (n.contains("female") || Regex("smtf\\d|#female").containsMatchIn(n)) return false
+        if (n.contains("male") || Regex("smtm\\d").containsMatchIn(n)) return true
+        return listOf("-x-cfs", "-x-tmc", "-x-mfm", "-x-iom", "-x-iol", "-x-tpd", "-x-gbd", "-x-rjs", "-x-ard", "-x-deb", "-x-arz").any { n.contains(it) }
+    }
+
+    fun loadVoices(l: String) {
+        val t = tts ?: return
+        lang = l
+        val loc = locale(l)
+        val list = runCatching { t.voices?.filter { it.locale.language == loc.language && !it.features.contains("notInstalled") } }.getOrNull().orEmpty()
+            .sortedWith(compareBy({ it.isNetworkConnectionRequired }, { it.name }))
+        var mi = 0; var fi = 0
+        voices = list.map { v ->
+            val m = guessMale(v.name)
+            val lbl = (if (m) "Erkek sesi " + (++mi) else "Ses " + (++fi)) + if (v.isNetworkConnectionRequired) " (internet)" else ""
+            V(v.name, lbl, m)
+        }.let { all -> if (all.any { it.male }) all.filter { it.male } else all }
+    }
+
+    fun speak(text: String, l: String, onDone: () -> Unit) {
+        val t = tts ?: run { onDone(); return }
+        if (l != lang || voices.isEmpty()) loadVoices(l)
+        t.language = locale(l)
+        val chosen = t.voices?.firstOrNull { it.name == voiceName && it.locale.language == locale(l).language }
+            ?: voices.firstOrNull { it.male }?.let { m -> t.voices?.firstOrNull { it.name == m.name } }
+        chosen?.let { t.voice = it }
+        t.setPitch(pitch); t.setSpeechRate(rate)
+        val id = "u" + (++n)
+        done[id] = onDone
+        // uzun metni parçalara böl (motor sınırı)
+        val max = android.speech.tts.TextToSpeech.getMaxSpeechInputLength() - 10
+        val parts = if (text.length <= max) listOf(text) else text.chunked(max)
+        parts.forEachIndexed { i, p ->
+            t.speak(p, if (i == 0) android.speech.tts.TextToSpeech.QUEUE_FLUSH else android.speech.tts.TextToSpeech.QUEUE_ADD, null, if (i == parts.lastIndex) id else "$id-$i")
+        }
+    }
+
+    fun sample(l: String) { speak(when (l) { "de" -> "Im Namen Allahs, des Allerbarmers, des Barmherzigen."; "en" -> "In the name of Allah, the Entirely Merciful, the Especially Merciful."; "ar" -> "بسم الله الرحمن الرحيم"; else -> "Rahmân ve Rahîm olan Allah'ın adıyla." }, l) {} }
+
+    fun stop() { done.clear(); tts?.stop() }
 }
 
 /** Okuyucu seslerini telefona indirir (yarıda kalırsa kaldığı yerden devam eder) */

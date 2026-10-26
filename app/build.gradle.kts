@@ -12,8 +12,8 @@ android {
         applicationId = "de.fa.kuran"
         minSdk = 26
         targetSdk = 35
-        versionCode = 16
-        versionName = "2.1.1"
+        versionCode = 17
+        versionName = "2.2.0"
     }
 
     // Fester Test-Schlüssel, damit Updates ohne Deinstallation klappen.

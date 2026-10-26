@@ -37,6 +37,16 @@ fun Surah.name(): String = when {
 fun Surah.typeName(): String = t(type)
 
 private val DE = mapOf(
+    "Meal sesi" to "Sprachausgabe der Übersetzung",
+    "Okuyucu Arapçayı okuduktan sonra telefon o âyetin mealini sesli okur. Hangi meal seçiliyse o okunur." to "Nach der arabischen Rezitation liest das Telefon die Übersetzung des Verses vor.",
+    "Sadece Arapça" to "Nur Arabisch",
+    "Arapça + meal" to "Arabisch + Übersetzung",
+    "Sadece meal" to "Nur Übersetzung",
+    "Telefonun konuşma motoru hazırlanıyor…" to "Sprachausgabe wird vorbereitet…",
+    "Bu dil için telefonda ses yüklü değil. Telefon Ayarları → Genel yönetim → Metin okuma'dan Google'ın sesini indirebilirsiniz." to "Für diese Sprache ist keine Stimme installiert. Laden Sie in den Telefoneinstellungen unter Text-in-Sprache eine Google-Stimme.",
+    "Ses kalınlığı" to "Stimmtiefe",
+    "Konuşma hızı" to "Sprechtempo",
+    "Örnek dinle" to "Probe anhören",
     "Sesli okuma" to "Vorlesen",
     "Okuyucuyu seçin. Sesleri telefona indirirseniz internetsiz dinlersiniz; indirmezseniz internetten çalınır." to "Wählen Sie einen Rezitator. Heruntergeladen hören Sie offline, sonst wird gestreamt.",
     "Tamamı indirildi" to "Vollständig heruntergeladen",
@@ -172,6 +182,16 @@ private val DE = mapOf(
 )
 
 private val EN = mapOf(
+    "Meal sesi" to "Translation audio",
+    "Okuyucu Arapçayı okuduktan sonra telefon o âyetin mealini sesli okur. Hangi meal seçiliyse o okunur." to "After the Arabic recitation, the phone reads the verse's translation aloud.",
+    "Sadece Arapça" to "Arabic only",
+    "Arapça + meal" to "Arabic + translation",
+    "Sadece meal" to "Translation only",
+    "Telefonun konuşma motoru hazırlanıyor…" to "Preparing text-to-speech…",
+    "Bu dil için telefonda ses yüklü değil. Telefon Ayarları → Genel yönetim → Metin okuma'dan Google'ın sesini indirebilirsiniz." to "No voice installed for this language. Download a Google voice under text-to-speech in your phone settings.",
+    "Ses kalınlığı" to "Voice depth",
+    "Konuşma hızı" to "Speech rate",
+    "Örnek dinle" to "Play sample",
     "Sesli okuma" to "Recitation",
     "Okuyucuyu seçin. Sesleri telefona indirirseniz internetsiz dinlersiniz; indirmezseniz internetten çalınır." to "Choose a reciter. Downloaded recitations play offline; otherwise they stream.",
     "Tamamı indirildi" to "Fully downloaded",
@@ -301,6 +321,16 @@ private val EN = mapOf(
 )
 
 private val AR = mapOf(
+    "Meal sesi" to "صوت التفسير",
+    "Okuyucu Arapçayı okuduktan sonra telefon o âyetin mealini sesli okur. Hangi meal seçiliyse o okunur." to "بعد التلاوة يقرأ الهاتف تفسير الآية بصوت مسموع.",
+    "Sadece Arapça" to "العربية فقط",
+    "Arapça + meal" to "التلاوة + التفسير",
+    "Sadece meal" to "التفسير فقط",
+    "Telefonun konuşma motoru hazırlanıyor…" to "جارٍ تجهيز محرك النطق…",
+    "Bu dil için telefonda ses yüklü değil. Telefon Ayarları → Genel yönetim → Metin okuma'dan Google'ın sesini indirebilirsiniz." to "لا يوجد صوت مثبت لهذه اللغة. نزّل صوت Google من إعدادات تحويل النص إلى كلام.",
+    "Ses kalınlığı" to "عمق الصوت",
+    "Konuşma hızı" to "سرعة النطق",
+    "Örnek dinle" to "استمع إلى مثال",
     "Sesli okuma" to "التلاوة الصوتية",
     "Okuyucuyu seçin. Sesleri telefona indirirseniz internetsiz dinlersiniz; indirmezseniz internetten çalınır." to "اختر القارئ. إذا نزّلت التلاوة استمعت إليها دون إنترنت، وإلا تُشغَّل عبر الإنترنت.",
     "Tamamı indirildi" to "نُزّلت كاملة",

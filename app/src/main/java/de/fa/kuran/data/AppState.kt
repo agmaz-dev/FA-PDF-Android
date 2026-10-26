@@ -29,6 +29,18 @@ class AppState(ctx: Context) {
         get() = _reciter.value
         set(v) { _reciter.value = v; Audio.reciter = v; sp.edit().putString("reciter", v).apply() }
 
+    private val _audioMode = mutableStateOf(sp.getString("audioMode", "ar") ?: "ar").also { Audio.mode = it.value }
+    var audioMode: String
+        get() = _audioMode.value
+        set(v) { _audioMode.value = v; Audio.mode = v; sp.edit().putString("audioMode", v).apply() }
+
+    init {
+        Speech.voiceName = sp.getString("ttsVoice", null)
+        Speech.pitch = sp.getFloat("ttsPitch", 0.8f)
+        Speech.rate = sp.getFloat("ttsRate", 0.95f)
+    }
+    fun saveSpeech() { sp.edit().putString("ttsVoice", Speech.voiceName).putFloat("ttsPitch", Speech.pitch).putFloat("ttsRate", Speech.rate).apply() }
+
     private val _meal = mutableStateOf(sp.getString("meal2", "hayrat") ?: "hayrat")
     var meal: String
         get() = _meal.value

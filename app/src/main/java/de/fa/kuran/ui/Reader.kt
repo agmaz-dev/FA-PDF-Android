@@ -126,6 +126,9 @@ private fun ReaderBody(q: Quran, st: AppState, wide: Boolean, twoUp: Boolean, on
     val audio = de.fa.kuran.data.Audio
     val playIdx = audio.playing
     val hl = playIdx ?: selected
+    // meal sesi için âyetin meali
+    audio.mealOf = { i -> mealLines(q, st.pack, st.meal, listOf(i)).firstOrNull()?.text ?: "" }
+    audio.mealLang = mealSpeechLang(st.meal)
     val onPlay: () -> Unit = {
         if (playIdx == null) audio.play(q, selected ?: q.ayahsOnPage(page).firstOrNull()?.idx ?: 0) else audio.toggle()
     }
@@ -239,7 +242,7 @@ private fun ReaderBody(q: Quran, st: AppState, wide: Boolean, twoUp: Boolean, on
                     }
                 }
                 Text("${ay.s}:${ay.a}", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = pal.ink, maxLines = 1, modifier = Modifier.padding(start = 4.dp))
-                Text(if (audio.loading) "· " + t("Yükleniyor…") else "· $short", fontSize = 13.sp, color = pal.muted, maxLines = 1)
+                Text(if (audio.loading) "· " + t("Yükleniyor…") else if (audio.phase == "meal") "· " + t("Meal") else "· $short", fontSize = 13.sp, color = pal.muted, maxLines = 1)
                 Box(Modifier.size(32.dp).clip(CircleShape).clickable { audio.stop() }, contentAlignment = Alignment.Center) {
                     androidx.compose.material3.Icon(Icons.Filled.Close, t("Durdur"), tint = pal.muted, modifier = Modifier.size(18.dp))
                 }
@@ -465,4 +468,12 @@ fun shareAyah(ctx: android.content.Context, q: Quran, st: AppState, idx: Int) {
         putExtra(android.content.Intent.EXTRA_SUBJECT, ref)
     }
     ctx.startActivity(android.content.Intent.createChooser(send, t("Paylaş")).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+}
+
+
+fun mealSpeechLang(meal: String): String = when {
+    meal.startsWith("de.") -> "de"
+    meal.startsWith("en.") -> "en"
+    meal.startsWith("ar.") -> "ar"
+    else -> "tr"
 }

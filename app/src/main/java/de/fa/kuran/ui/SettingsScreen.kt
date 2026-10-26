@@ -140,6 +140,9 @@ fun SettingsScreen(q: Quran, st: AppState, onBack: () -> Unit) {
                     Section(pal, t("Sesli okuma"), t("Okuyucuyu seçin. Sesleri telefona indirirseniz internetsiz dinlersiniz; indirmezseniz internetten çalınır.")) {
                         AudioSettings(q, st, pal)
                     }
+                    Section(pal, t("Meal sesi"), t("Okuyucu Arapçayı okuduktan sonra telefon o âyetin mealini sesli okur. Hangi meal seçiliyse o okunur.")) {
+                        SpeechSettings(st, pal)
+                    }
                     Section(pal, t("Meal"), t("Sol sayfada gösterilecek meal.")) {
                         MEALLER.forEach { m -> RadioRow(pal, m.name, st.meal == m.id) { st.meal = m.id } }
                     }
@@ -303,4 +306,33 @@ private fun AudioSettings(q: de.fa.kuran.data.Quran, st: AppState, pal: Palette)
             }
         }
     }
+}
+
+
+@Composable
+private fun SpeechSettings(st: AppState, pal: Palette) {
+    val sp = de.fa.kuran.data.Speech
+    val lang = mealSpeechLang(st.meal)
+    androidx.compose.runtime.LaunchedEffect(sp.ready, lang) { if (sp.ready) sp.loadVoices(lang) }
+    Segmented(pal, listOf("ar" to t("Sadece Arapça"), "ar_meal" to t("Arapça + meal"), "meal" to t("Sadece meal")), st.audioMode, Modifier.fillMaxWidth()) { st.audioMode = it }
+    if (!sp.ready) {
+        Text(t("Telefonun konuşma motoru hazırlanıyor…"), fontSize = 13.sp, color = pal.muted)
+    } else if (sp.voices.isEmpty()) {
+        Text(t("Bu dil için telefonda ses yüklü değil. Telefon Ayarları → Genel yönetim → Metin okuma'dan Google'ın sesini indirebilirsiniz."), fontSize = 13.sp, color = pal.red)
+    } else {
+        val current = sp.voiceName?.takeIf { n -> sp.voices.any { it.name == n } } ?: sp.voices.firstOrNull { it.male }?.name ?: sp.voices.first().name
+        sp.voices.forEach { v ->
+            Row(
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(pal.card).clickable { sp.voiceName = v.name; st.saveSpeech() }.padding(14.dp),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Radio(pal, v.name == current)
+                Text(t(v.label), color = pal.ink, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                SmallButton(pal, "▶") { sp.voiceName = v.name; st.saveSpeech(); sp.sample(lang) }
+            }
+        }
+    }
+    SizeSlider(pal, t("Ses kalınlığı"), 2f - sp.pitch, 0.9f..1.6f) { sp.pitch = 2f - it; st.saveSpeech() }
+    SizeSlider(pal, t("Konuşma hızı"), sp.rate, 0.6f..1.4f) { sp.rate = it; st.saveSpeech() }
+    SmallButton(pal, "▶ " + t("Örnek dinle")) { sp.sample(lang) }
 }
