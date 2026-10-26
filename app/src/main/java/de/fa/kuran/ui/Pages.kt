@@ -226,9 +226,9 @@ fun AciklamaPage(q: Quran, page: Int, st: AppState, pal: Palette, side: Side, se
         }
         Spacer(Modifier.height(8.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            SmallButton(pal, t("‹ Önceki âyet"), enabled = cur.idx > 0) { onSelect(cur.idx - 1) }
-            Text(t("Âyete dokunarak değiştirin"), fontSize = 12.sp, color = pal.muted)
-            SmallButton(pal, t("Sonraki âyet ›"), enabled = cur.idx < q.ayahs.lastIndex) { onSelect(cur.idx + 1) }
+            SmallButton(pal, t("‹ Önceki"), enabled = cur.idx > 0) { onSelect(cur.idx - 1) }
+            Spacer(Modifier.weight(1f))
+            SmallButton(pal, t("Sonraki ›"), enabled = cur.idx < q.ayahs.lastIndex) { onSelect(cur.idx + 1) }
         }
     }
 }

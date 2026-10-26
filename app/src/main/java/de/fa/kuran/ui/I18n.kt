@@ -37,6 +37,11 @@ fun Surah.name(): String = when {
 fun Surah.typeName(): String = t(type)
 
 private val DE = mapOf(
+    "‹ Önceki" to "‹ Zurück",
+    "Sonraki ›" to "Weiter ›",
+    "Görünüm" to "Darstellung",
+    "Hakkında ve kaynaklar" to "Info und Quellen",
+    "Ayarlarda ara" to "Einstellungen durchsuchen",
     "Meal sesi" to "Sprachausgabe der Übersetzung",
     "Okuyucu Arapçayı okuduktan sonra telefon o âyetin mealini sesli okur. Hangi meal seçiliyse o okunur." to "Nach der arabischen Rezitation liest das Telefon die Übersetzung des Verses vor.",
     "Sadece Arapça" to "Nur Arabisch",
@@ -182,6 +187,11 @@ private val DE = mapOf(
 )
 
 private val EN = mapOf(
+    "‹ Önceki" to "‹ Previous",
+    "Sonraki ›" to "Next ›",
+    "Görünüm" to "Appearance",
+    "Hakkında ve kaynaklar" to "About and sources",
+    "Ayarlarda ara" to "Search settings",
     "Meal sesi" to "Translation audio",
     "Okuyucu Arapçayı okuduktan sonra telefon o âyetin mealini sesli okur. Hangi meal seçiliyse o okunur." to "After the Arabic recitation, the phone reads the verse's translation aloud.",
     "Sadece Arapça" to "Arabic only",
@@ -321,6 +331,11 @@ private val EN = mapOf(
 )
 
 private val AR = mapOf(
+    "‹ Önceki" to "السابق ›",
+    "Sonraki ›" to "‹ التالي",
+    "Görünüm" to "المظهر",
+    "Hakkında ve kaynaklar" to "حول التطبيق والمصادر",
+    "Ayarlarda ara" to "ابحث في الإعدادات",
     "Meal sesi" to "صوت التفسير",
     "Okuyucu Arapçayı okuduktan sonra telefon o âyetin mealini sesli okur. Hangi meal seçiliyse o okunur." to "بعد التلاوة يقرأ الهاتف تفسير الآية بصوت مسموع.",
     "Sadece Arapça" to "العربية فقط",
