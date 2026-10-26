@@ -28,6 +28,8 @@ val RECITERS = listOf(
     Reciter("maher", "Mâhir el-Muaykılî", "MaherAlMuaiqly128kbps", 750),
     Reciter("rifai", "Hânî er-Rifâî", "Hani_Rifai_192kbps", 1500),
     Reciter("basfar", "Abdullah Basfar", "Abdullah_Basfar_192kbps", 1400),
+    Reciter("afasy", "Mişârî Râşid el-Afâsî", "Alafasy_128kbps", 800),
+    Reciter("husary", "Mahmûd Halîl el-Husarî", "Husary_128kbps", 900),
 )
 
 fun reciterById(id: String): Reciter = RECITERS.firstOrNull { it.id == id } ?: RECITERS[0]
