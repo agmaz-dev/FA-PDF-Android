@@ -37,6 +37,15 @@ fun Surah.name(): String = when {
 fun Surah.typeName(): String = t(type)
 
 private val DE = mapOf(
+    "Osman Taha neshi" to "Uthman-Taha-Naskh",
+    "Kral Fahd · bazı işaretler eksik" to "König Fahd · einige Zeichen fehlen",
+    "Gazete neshi" to "Zeitungs-Naskh",
+    "Rık'a" to "Ruqʿa",
+    "Nesta'lîk" to "Nastaliq",
+    "Modern" to "Modern",
+    "Dekoratif" to "Dekorativ",
+    "Eski kûfî" to "Alt-Kufi",
+    "Kur'an işaretleri eksik olan yazılarda bu işaretler telefonun kendi yazısıyla gösterilir." to "Bei Schriften ohne alle Koranzeichen erscheinen diese in der Systemschrift.",
     "‹ Önceki" to "‹ Zurück",
     "Sonraki ›" to "Weiter ›",
     "Görünüm" to "Darstellung",
@@ -187,6 +196,15 @@ private val DE = mapOf(
 )
 
 private val EN = mapOf(
+    "Osman Taha neshi" to "Uthman Taha naskh",
+    "Kral Fahd · bazı işaretler eksik" to "King Fahd · some marks missing",
+    "Gazete neshi" to "Newspaper naskh",
+    "Rık'a" to "Ruqʿa",
+    "Nesta'lîk" to "Nastaliq",
+    "Modern" to "Modern",
+    "Dekoratif" to "Decorative",
+    "Eski kûfî" to "Early kufi",
+    "Kur'an işaretleri eksik olan yazılarda bu işaretler telefonun kendi yazısıyla gösterilir." to "In fonts missing some Quranic marks, those marks appear in the phone's own font.",
     "‹ Önceki" to "‹ Previous",
     "Sonraki ›" to "Next ›",
     "Görünüm" to "Appearance",
@@ -331,6 +349,15 @@ private val EN = mapOf(
 )
 
 private val AR = mapOf(
+    "Osman Taha neshi" to "نسخ عثمان طه",
+    "Kral Fahd · bazı işaretler eksik" to "مجمع الملك فهد · بعض العلامات ناقصة",
+    "Gazete neshi" to "نسخ الصحف",
+    "Rık'a" to "رقعة",
+    "Nesta'lîk" to "نستعليق",
+    "Modern" to "حديث",
+    "Dekoratif" to "زخرفي",
+    "Eski kûfî" to "كوفي قديم",
+    "Kur'an işaretleri eksik olan yazılarda bu işaretler telefonun kendi yazısıyla gösterilir." to "في الخطوط التي تنقصها بعض علامات المصحف تظهر هذه العلامات بخط الهاتف.",
     "‹ Önceki" to "السابق ›",
     "Sonraki ›" to "‹ التالي",
     "Görünüm" to "المظهر",

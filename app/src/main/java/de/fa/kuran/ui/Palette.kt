@@ -58,6 +58,19 @@ object Fonts {
     val mada = FontFamily(Font(R.font.mada))
     val kufi = FontFamily(Font(R.font.noto_kufi))
     val katibeh = FontFamily(Font(R.font.katibeh))
+    val markazi = FontFamily(Font(R.font.markazi))
+    val reemKufi = FontFamily(Font(R.font.reem_kufi))
+    val kufam = FontFamily(Font(R.font.kufam))
+    val ruqaa = FontFamily(Font(R.font.aref_ruqaa))
+    val gulzar = FontFamily(Font(R.font.gulzar))
+    val nastaliq = FontFamily(Font(R.font.noto_nastaliq))
+    val messiri = FontFamily(Font(R.font.el_messiri))
+    val rakkas = FontFamily(Font(R.font.rakkas))
+    val qahiri = FontFamily(Font(R.font.qahiri))
+
+    /** Osman Taha neshi (Kral Fahd) – kişisel pakette */
+    var taha: FontFamily? = null
+        private set
 
     /** Medine Mushafı yazısı (Kral Fahd Kur'an Matbaası) – kişisel pakette */
     var medina: FontFamily? = null
@@ -76,6 +89,7 @@ object Fonts {
     fun init(ctx: android.content.Context) {
         if (husrev == null) husrev = packFont(ctx, "husrev.ttf")
         if (medina == null) medina = packFont(ctx, "kfgqpc_hafs.ttf")
+        if (taha == null) taha = packFont(ctx, "kfgqpc_taha.otf")
     }
 
     fun arabic(key: String): FontFamily = when (key) {
@@ -89,6 +103,16 @@ object Fonts {
         "mada" -> mada
         "kufi" -> kufi
         "katibeh" -> katibeh
+        "taha" -> taha ?: amiri
+        "markazi" -> markazi
+        "reem_kufi" -> reemKufi
+        "kufam" -> kufam
+        "ruqaa" -> ruqaa
+        "gulzar" -> gulzar
+        "nastaliq" -> nastaliq
+        "messiri" -> messiri
+        "rakkas" -> rakkas
+        "qahiri" -> qahiri
         else -> amiri
     }
 }

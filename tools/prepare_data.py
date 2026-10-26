@@ -156,13 +156,23 @@ def main():
         "mada": "ofl/mada",
         "noto_kufi": "ofl/notokufiarabic",
         "katibeh": "ofl/katibeh",
+        "markazi": "ofl/markazitext",
+        "reem_kufi": "ofl/reemkufi",
+        "kufam": "ofl/kufam",
+        "aref_ruqaa": "ofl/arefruqaa",
+        "gulzar": "ofl/gulzar",
+        "noto_nastaliq": "ofl/notonastaliqurdu",
+        "el_messiri": "ofl/elmessiri",
+        "rakkas": "ofl/rakkas",
+        "qahiri": "ofl/qahiri",
     }
     for key, d in fonts.items():
         items = get_json(f"https://api.github.com/repos/google/fonts/contents/{d}", gh)
         ttfs = [i for i in items if i["name"].lower().endswith(".ttf")]
         if not ttfs:
             sys.exit(f"HATA: {d} içinde ttf yok")
-        pick = next((i for i in ttfs if "regular" in i["name"].lower()), ttfs[0])
+        plain = [i for i in ttfs if "italic" not in i["name"].lower()] or ttfs
+        pick = next((i for i in plain if "regular" in i["name"].lower()), plain[0])
         print(f"Yazı tipi {key}: {pick['name']}")
         data = get(pick["download_url"])
         with open(os.path.join(FONTS, key + ".ttf"), "wb") as f:

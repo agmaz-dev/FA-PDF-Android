@@ -97,6 +97,18 @@ fun SettingsScreen(q: Quran, st: AppState, onBack: () -> Unit) {
         FontOpt("mada", "Mada", t("Sade ve modern"), Fonts.mada),
         FontOpt("kufi", t("Kûfî"), t("Modern kûfî tarz"), Fonts.kufi),
         FontOpt("katibeh", "Katibeh", t("El yazısı havasında"), Fonts.katibeh),
+    ) + listOfNotNull(
+        Fonts.taha?.let { FontOpt("taha", t("Osman Taha neshi"), t("Kral Fahd · bazı işaretler eksik"), it) },
+    ) + listOf(
+        FontOpt("markazi", "Markazi", t("Gazete neshi"), Fonts.markazi),
+        FontOpt("reem_kufi", "Reem Kufi", t("Kûfî"), Fonts.reemKufi),
+        FontOpt("kufam", "Kufam", t("Kûfî"), Fonts.kufam),
+        FontOpt("ruqaa", "Aref Ruqaa", t("Rık'a"), Fonts.ruqaa),
+        FontOpt("gulzar", "Gulzar", t("Nesta'lîk"), Fonts.gulzar),
+        FontOpt("nastaliq", "Noto Nastaliq", t("Nesta'lîk"), Fonts.nastaliq),
+        FontOpt("messiri", "El Messiri", t("Modern"), Fonts.messiri),
+        FontOpt("rakkas", "Rakkas", t("Dekoratif"), Fonts.rakkas),
+        FontOpt("qahiri", "Qahiri", t("Eski kûfî"), Fonts.qahiri),
     )
 
     val cats = listOf(
@@ -224,6 +236,7 @@ fun SettingsScreen(q: Quran, st: AppState, onBack: () -> Unit) {
                                 repeat(perRow - row.size) { Spacer(Modifier.weight(1f)) }
                             }
                         }
+                        Text(t("Kur'an işaretleri eksik olan yazılarda bu işaretler telefonun kendi yazısıyla gösterilir."), fontSize = 12.sp, color = pal.muted)
                     }
                     if (cur == "audio") Section(pal, t("Sesli okuma"), t("Okuyucuyu seçin. Sesleri telefona indirirseniz internetsiz dinlersiniz; indirmezseniz internetten çalınır.")) {
                         AudioSettings(q, st, pal)
