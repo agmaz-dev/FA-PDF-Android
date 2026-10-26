@@ -10,24 +10,29 @@ object L {
     var lang by mutableStateOf("tr")
 }
 
-val LANGS = listOf("tr" to "Türkçe", "de" to "Deutsch", "en" to "English")
+val LANGS = listOf("tr" to "Türkçe", "de" to "Deutsch", "en" to "English", "ar" to "العربية")
 
 /** Dile göre varsayılan meal */
 fun defaultMealFor(lang: String): String = when (lang) {
     "de" -> "de.bubenheim"
     "en" -> "en.sahih"
+    "ar" -> "ar.muyassar"
     else -> "hayrat"
 }
 
 /** Türkçe metni seçili dile çevirir; %1, %2 … yer tutucularını doldurur */
 fun t(s: String, vararg a: Any): String {
-    val m = when (L.lang) { "de" -> DE; "en" -> EN; else -> null }
+    val m = when (L.lang) { "de" -> DE; "en" -> EN; "ar" -> AR; else -> null }
     var r = m?.get(s) ?: s
     a.forEachIndexed { i, v -> r = r.replace("%${i + 1}", v.toString()) }
     return r
 }
 
-fun Surah.name(): String = if (L.lang == "tr" || en.isBlank()) tr else en
+fun Surah.name(): String = when {
+    L.lang == "ar" -> ar.replace(Regex("^سُورَةُ\\s*"), "").trim()
+    L.lang == "tr" || en.isBlank() -> tr
+    else -> en
+}
 
 fun Surah.typeName(): String = t(type)
 
@@ -293,4 +298,133 @@ private val EN = mapOf(
     "Arapça yazı stilini ve sayfa paketini Ayarlar'dan seçebilirsiniz." to "Choose the Arabic script and page pack in Settings.",
     "Kur'an verisi yüklenemedi:\n%1" to "Couldn't load the Quran data:\n%1",
     "Kur'an-ı Kerim yükleniyor…" to "Loading the Quran…",
+)
+
+private val AR = mapOf(
+    "Sesli okuma" to "التلاوة الصوتية",
+    "Okuyucuyu seçin. Sesleri telefona indirirseniz internetsiz dinlersiniz; indirmezseniz internetten çalınır." to "اختر القارئ. إذا نزّلت التلاوة استمعت إليها دون إنترنت، وإلا تُشغَّل عبر الإنترنت.",
+    "Tamamı indirildi" to "نُزّلت كاملة",
+    "%1 / %2 âyet indirildi" to "نُزّل %1 من %2 آية",
+    "İnternetten çalınır · tamamı yaklaşık %1 MB" to "تُشغَّل عبر الإنترنت · المصحف كاملًا نحو %1 ميغابايت",
+    "İndiriliyor… %1 / %2" to "جارٍ التنزيل… %1 / %2",
+    "Durdur" to "إيقاف",
+    "Bu sûreyi indir" to "تنزيل هذه السورة",
+    "Tümünü indir" to "تنزيل الكل",
+    "%1 dosya indirilemedi. İnternet bağlantısını kontrol edip tekrar deneyin." to "تعذّر تنزيل %1 ملف. تحقّق من الاتصال وحاول مرة أخرى.",
+    "Yükleniyor…" to "جارٍ التحميل…",
+    "Ses çalınamadı. İnternet bağlantısını kontrol edin ya da sesleri Ayarlar'dan indirin." to "تعذّر تشغيل الصوت. تحقّق من الاتصال أو نزّل التلاوة من الإعدادات.",
+    "Sesli oku" to "تشغيل التلاوة",
+    "Medine Mushafı" to "مصحف المدينة",
+    "Kral Fahd Kur'an Matbaası'nın yazısı" to "خط مجمع الملك فهد لطباعة المصحف",
+    "Klasik kitap neshi" to "نسخ الكتب الكلاسيكي",
+    "Hint–Sind mushaf üslûbu" to "أسلوب المصاحف الهندية السندية",
+    "Batı Afrika mushaf üslûbu" to "أسلوب مصاحف غرب أفريقيا",
+    "Sade ve modern" to "بسيط وحديث",
+    "Kûfî" to "الكوفي",
+    "Modern kûfî tarz" to "كوفي حديث",
+    "El yazısı havasında" to "بروح الخط اليدوي",
+    "Meal + Mushaf" to "التفسير + المصحف",
+    "Meal" to "التفسير",
+    "Açıklama" to "الحواشي",
+    "Mushaf" to "المصحف",
+    "Cüz %1 · Sayfa %2" to "الجزء %1 · الصفحة %2",
+    "Fihrist" to "الفهرس",
+    "Yer imini kaldır" to "إزالة العلامة",
+    "Yer imi ekle" to "إضافة علامة",
+    "Ayarlar" to "الإعدادات",
+    "Sonraki sayfa" to "الصفحة التالية",
+    "Önceki sayfa" to "الصفحة السابقة",
+    "Kapat" to "إغلاق",
+    "%1 · %2. ÂYET" to "%1 · الآية %2",
+    "Bu âyetin meâli bir önceki âyetle birlikte verilmiştir." to "تفسير هذه الآية مع الآية السابقة.",
+    "Açıklamayı aç" to "فتح الحواشي",
+    "Menü için sayfanın üst kısmına dokunun · âyet için basılı tutun" to "المس أعلى الصفحة لإظهار القائمة · اضغط مطوّلًا على الآية",
+    "Paylaş" to "مشاركة",
+    "%1- %2 SÛRESİ" to "%1 - سورة %2",
+    "[%1 devrinde nâzil olmuştur, %2 âyettir.]" to "[نزلت في %1، وآياتها %2]",
+    "Mekke" to "مكة",
+    "Medîne" to "المدينة",
+    "Rahmân, Rahîm olan Allah'ın ismiyle" to "بسم الله الرحمن الرحيم",
+    "Cüz: %1, Sûre: %2 (%3)" to "الجزء: %1، السورة: %2 (%3)",
+    "Hayrat meali sayfa paketinde – şimdilik Elmalılı meali gösteriliyor." to "ترجمة خيرات في حزمة الصفحات – تُعرض الآن ترجمة إلمالي.",
+    "AÇIKLAMA" to "الحواشي",
+    "Risale-i Nur Hâşiyeleri" to "حواشي رسائل النور",
+    "%1- %2 Sûresi, %3. âyet" to "%1 - سورة %2، الآية %3",
+    "Hâşiyeler sayfa paketinde. Ayarlar'dan paketi seçince burada görünür." to "الحواشي في حزمة الصفحات. اختر الحزمة من الإعدادات.",
+    "Bu âyet ve sayfa için hâşiye yok." to "لا توجد حاشية لهذه الآية والصفحة.",
+    "Bu sayfanın hâşiyeleri" to "حواشي هذه الصفحة",
+    "‹ Önceki âyet" to "الآية السابقة ›",
+    "Âyete dokunarak değiştirin" to "المس آية لتغييرها",
+    "Sonraki âyet ›" to "‹ الآية التالية",
+    "Hâşiyeler sadece Türkçedir." to "الحواشي باللغة التركية فقط.",
+    "Kitap sayfaları için Ayarlar'dan sayfa paketini seçin – şimdilik yazı tipiyle gösteriliyor." to "اختر حزمة الصفحات من الإعدادات – يُعرض النص الآن بالخط.",
+    "Bu sayfanın resmi pakette yok – yazı tipiyle gösteriliyor." to "صورة هذه الصفحة غير موجودة – يُعرض النص بالخط.",
+    "Mushaf sayfası" to "صفحة المصحف",
+    "Mekkî" to "مكية",
+    "Medenî" to "مدنية",
+    "Kitaba dön" to "العودة إلى المصحف",
+    "114 sûre · 30 cüz · %1 sayfa" to "١١٤ سورة · ٣٠ جزءًا · %1 صفحة",
+    "Sûreler" to "السور",
+    "Cüzler" to "الأجزاء",
+    "Yer imleri" to "العلامات",
+    "Sûre adı, numarası veya mealde kelime" to "اسم السورة أو رقمها أو كلمة في التفسير",
+    "Temizle" to "مسح",
+    "Mealde geçen yerler (%1)" to "نتائج في التفسير (%1)",
+    "s. %1" to "ص %1",
+    "Henüz yer imi yok. Okurken üst çubuktaki yıldıza dokunun." to "لا توجد علامات بعد. المس النجمة في الأعلى أثناء القراءة.",
+    "Sayfa %1" to "الصفحة %1",
+    "Sil" to "حذف",
+    "%1 · %2 âyet" to "%1 · %2 آية",
+    "%1 âyet" to "%1 آية",
+    "Cüz %1" to "الجزء %1",
+    "%1. sûre" to "السورة %1",
+    "%1 Sûresi" to "سورة %1",
+    "Okumaya başla" to "ابدأ القراءة",
+    "Kaldığınız yer" to "آخر موضع قراءة",
+    "Devam et" to "متابعة",
+    "Cüze git" to "انتقل إلى جزء",
+    "Geri" to "رجوع",
+    "Dil" to "اللغة",
+    "Menülerin dili. Meal de bu dile geçer, aşağıdan ayrıca değiştirebilirsiniz." to "لغة القوائم. يتغيّر التفسير معها، ويمكنك اختياره بشكل منفصل أدناه.",
+    "Sayfa paketi" to "حزمة الصفحات",
+    "Kitap sayfaları, Hayrat meali, Elmalılı meali ve Risale-i Nur hâşiyeleri bu klasörde durur." to "صفحات المصحف والترجمات التركية وحواشي رسائل النور موجودة في هذه الحزمة.",
+    "Paket yükleniyor…" to "جارٍ تحميل الحزمة…",
+    "Paket yüklü" to "الحزمة محمّلة",
+    "Paket seçilmedi" to "لم تُختر حزمة",
+    "Paketi açtığınız klasörü seçin (içinde h000.webp … dosyaları olmalı)." to "اختر مجلد الحزمة (يحتوي على ملفات h000.webp …).",
+    "Zip dosyalarını seç" to "اختيار ملفات ZIP",
+    "İndirdiğiniz Kuran-Parca zip dosyalarının hepsini birden seçin. Uygulama onları kendisi açar." to "اختر جميع ملفات Kuran-Parca معًا، وسيفكّها التطبيق بنفسه.",
+    "Arapça yazı stili" to "خط المصحف",
+    "Size en kolay okunan yazıyı seçin. Yazı tiplerinde Allah lafızları kırmızıdır." to "اختر الخط الأسهل لك في القراءة. الكلمات الحمراء كما في المصحف.",
+    "Sol sayfada gösterilecek meal." to "التفسير المعروض في الصفحة اليسرى.",
+    "Âyete dokunup \"Açıklama\"yı açınca Risale-i Nur hâşiyeleri gösterilir (Hayrat baskısının hâşiye bölümünden)." to "في «الحواشي» تظهر حواشي رسائل النور (بالتركية فقط).",
+    "Tema" to "المظهر",
+    "Krem kâğıt" to "ورق كريمي",
+    "Beyaz" to "أبيض",
+    "Gece" to "ليلي",
+    "Yazı boyutu" to "حجم الخط",
+    "Okurken iki parmakla da büyütüp küçültebilirsiniz." to "يمكنك التكبير والتصغير بإصبعين أثناء القراءة.",
+    "Arapça" to "العربية",
+    "Meal ve açıklama" to "التفسير والحواشي",
+    "Kaynaklar" to "المصادر",
+    "Paket klasörü seç" to "اختيار مجلد الحزمة",
+    "%1 kitap sayfası hazır." to "%1 صفحة جاهزة.",
+    "Sayfa paketi seçilmedi." to "لم تُختر حزمة الصفحات.",
+    "Kitap sayfaları sayfa paketinden gelir. Paket yoksa yazı tipiyle gösterilir." to "صفحات المصحف من الحزمة، وبدونها يُعرض النص بالخط.",
+    "Hayrat tevâfuklu mushaf" to "مصحف خيرات (التوافق)",
+    "Kitabın kendi sayfaları, kelime mealiyle" to "صفحات المصحف الأصلية مع ترجمة كلمة بكلمة",
+    "Hüsrev hattı" to "خط خسرو",
+    "Hüsrev hattı üslûbunda nesih" to "نسخ على طريقة خسرو",
+    "Klasik nesih" to "نسخ كلاسيكي",
+    "Geleneksel matbaa mushafı görünümü" to "كالمصحف المطبوع التقليدي",
+    "Büyük ve açık" to "كبير وواضح",
+    "İri harekeler, kolay okunur" to "تشكيل كبير، سهل القراءة",
+    "Sade, modern" to "بسيط، حديث",
+    "Ekranda en net görünen yazı" to "الأوضح على الشاشة",
+    "Hangi meali okumak istersiniz?" to "ماذا تريد أن تقرأ بجانب المصحف؟",
+    "Sol sayfada seçtiğiniz meal görünür. İstediğiniz zaman değiştirebilirsiniz." to "يظهر اختيارك في الصفحة اليسرى، ويمكنك تغييره متى شئت.",
+    "%1 meali ile başla" to "ابدأ بـ%1",
+    "Arapça yazı stilini ve sayfa paketini Ayarlar'dan seçebilirsiniz." to "يمكنك اختيار خط المصحف وحزمة الصفحات من الإعدادات.",
+    "Kur'an verisi yüklenemedi:\n%1" to "تعذّر تحميل بيانات القرآن:\n%1",
+    "Kur'an-ı Kerim yükleniyor…" to "جارٍ تحميل القرآن الكريم…",
 )

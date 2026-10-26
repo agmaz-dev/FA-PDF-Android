@@ -52,6 +52,7 @@ fun WelcomeScreen(st: AppState, onDone: (String) -> Unit) {
         "elmalili" to Triple("E", "Elmalılı Muhammed Hamdi Yazır (1878 – 1942)", "Sûre tanıtımlarıyla birlikte"),
         "de.bubenheim" to Triple("D", "Frank Bubenheim & Nadeem Elyas", "Deutsche Übersetzung"),
         "en.sahih" to Triple("EN", "Saheeh International", "English translation"),
+        "ar.muyassar" to Triple("ع", "التفسير الميسر", "مجمع الملك فهد لطباعة المصحف الشريف"),
     )
     BoxWithConstraints(Modifier.fillMaxSize().background(pal.app).windowInsetsPadding(WindowInsets.safeDrawing), contentAlignment = Alignment.Center) {
         val wide = maxWidth >= 600.dp

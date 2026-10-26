@@ -124,6 +124,7 @@ val MEALLER = listOf(
     MealInfo2("elmalili", "Elmalılı", "Elmalılı Hamdi Yazır Meâli"),
     MealInfo2("de.bubenheim", "Bubenheim", "Deutsch – Bubenheim & Elyas"),
     MealInfo2("en.sahih", "Saheeh Intl.", "English – Saheeh International"),
+    MealInfo2("ar.muyassar", "الميسر", "العربية – التفسير الميسر"),
 )
 
 fun mealInfo(id: String): MealInfo2 = MEALLER.firstOrNull { it.id == id } ?: MEALLER[0]

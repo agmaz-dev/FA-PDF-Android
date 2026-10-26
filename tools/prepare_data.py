@@ -123,7 +123,7 @@ def main():
         meal_texts[ident] = texts
 
     # Almanca ve İngilizce mealler
-    for ident, name, alts in (("de.bubenheim", "Bubenheim & Elyas", ("de.aburida",)), ("en.sahih", "Saheeh International", ("en.pickthall",))):
+    for ident, name, alts in (("de.bubenheim", "Bubenheim & Elyas", ("de.aburida",)), ("en.sahih", "Saheeh International", ("en.pickthall",)), ("ar.muyassar", "التفسير الميسر", ("ar.jalalayn",))):
         for cand in (ident,) + alts:
             try:
                 sur = edition(cand)

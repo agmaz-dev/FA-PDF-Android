@@ -114,6 +114,9 @@ fun App(st: AppState, immersive: (Boolean) -> Unit) {
     }
 
     MaterialTheme {
+        androidx.compose.runtime.CompositionLocalProvider(
+            androidx.compose.ui.platform.LocalLayoutDirection provides if (de.fa.kuran.ui.L.lang == "ar") androidx.compose.ui.unit.LayoutDirection.Rtl else androidx.compose.ui.unit.LayoutDirection.Ltr,
+        ) {
         val pal = palette(st.theme)
         val base = quran
         val pk = st.pack
@@ -156,6 +159,7 @@ fun App(st: AppState, immersive: (Boolean) -> Unit) {
                 LaunchedEffect(Unit) { immersive(true) }
                 ReaderScreen(q!!, st, onIndex = { screen = Screen.INDEX }, onSettings = { screen = Screen.SETTINGS })
             }
+        }
         }
     }
 }
