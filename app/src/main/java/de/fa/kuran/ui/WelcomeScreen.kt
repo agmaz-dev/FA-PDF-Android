@@ -50,6 +50,8 @@ fun WelcomeScreen(st: AppState, onDone: (String) -> Unit) {
     val details = mapOf(
         "hayrat" to Triple("H", "Kur'ân-ı Kerîm ve Muhtasar Kelime Meâli", "Tevâfuklu mushaf ile birlikte · Risale-i Nur hâşiyeleri"),
         "elmalili" to Triple("E", "Elmalılı Muhammed Hamdi Yazır (1878 – 1942)", "Sûre tanıtımlarıyla birlikte"),
+        "de.bubenheim" to Triple("D", "Frank Bubenheim & Nadeem Elyas", "Deutsche Übersetzung"),
+        "en.sahih" to Triple("EN", "Saheeh International", "English translation"),
     )
     BoxWithConstraints(Modifier.fillMaxSize().background(pal.app).windowInsetsPadding(WindowInsets.safeDrawing), contentAlignment = Alignment.Center) {
         val wide = maxWidth >= 600.dp
@@ -59,9 +61,10 @@ fun WelcomeScreen(st: AppState, onDone: (String) -> Unit) {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(24.dp),
         ) {
+            Segmented(pal, LANGS, L.lang, Modifier.widthIn(max = 420.dp).fillMaxWidth()) { st.lang = it; choice = defaultMealFor(it) }
             Text("القُرْآنُ الكَرِيمُ", style = TextStyle(fontFamily = Fonts.amiri, fontSize = 40.sp, color = pal.band))
-            Text("Hangi meali okumak istersiniz?", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = pal.ink, textAlign = TextAlign.Center)
-            Text("Sol sayfada seçtiğiniz meal görünür. İstediğiniz zaman değiştirebilirsiniz.", fontSize = 16.sp, color = pal.muted, textAlign = TextAlign.Center)
+            Text(t("Hangi meali okumak istersiniz?"), fontSize = 28.sp, fontWeight = FontWeight.Bold, color = pal.ink, textAlign = TextAlign.Center)
+            Text(t("Sol sayfada seçtiğiniz meal görünür. İstediğiniz zaman değiştirebilirsiniz."), fontSize = 16.sp, color = pal.muted, textAlign = TextAlign.Center)
             val card: @Composable (MealInfo2, Modifier) -> Unit = { m, mod ->
                 val sel = choice == m.id
                 val d = details.getValue(m.id)
@@ -84,12 +87,12 @@ fun WelcomeScreen(st: AppState, onDone: (String) -> Unit) {
                     Text(d.third, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = pal.muted)
                 }
             }
-            if (wide) Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) { MEALLER.forEach { card(it, Modifier.weight(1f)) } }
+            if (wide) MEALLER.chunked(2).forEach { row -> Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) { row.forEach { card(it, Modifier.weight(1f)) } } }
             else MEALLER.forEach { card(it, Modifier.fillMaxWidth()) }
             Box(Modifier.clip(RoundedCornerShape(27.dp)).background(pal.accent).clickable { onDone(choice) }.padding(horizontal = 32.dp, vertical = 16.dp)) {
-                Text("${mealInfo(choice).short} meali ile başla", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 17.sp)
+                Text(t("%1 meali ile başla", mealInfo(choice).short), color = Color.White, fontWeight = FontWeight.Bold, fontSize = 17.sp)
             }
-            Text("Arapça yazı stilini ve sayfa paketini Ayarlar'dan seçebilirsiniz.", fontSize = 13.sp, color = pal.muted, textAlign = TextAlign.Center)
+            Text(t("Arapça yazı stilini ve sayfa paketini Ayarlar'dan seçebilirsiniz."), fontSize = 13.sp, color = pal.muted, textAlign = TextAlign.Center)
         }
     }
 }

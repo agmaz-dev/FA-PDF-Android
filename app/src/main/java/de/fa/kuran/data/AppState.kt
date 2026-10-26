@@ -19,6 +19,11 @@ class AppState(ctx: Context) {
         set(v) { _welcomed.value = v; sp.edit().putBoolean("welcomed2", v).apply() }
 
     /** "hayrat" veya "elmalili" */
+    private val _lang = mutableStateOf(sp.getString("lang", "tr") ?: "tr").also { de.fa.kuran.ui.L.lang = it.value }
+    var lang: String
+        get() = _lang.value
+        set(v) { _lang.value = v; de.fa.kuran.ui.L.lang = v; sp.edit().putString("lang", v).apply() }
+
     private val _meal = mutableStateOf(sp.getString("meal2", "hayrat") ?: "hayrat")
     var meal: String
         get() = _meal.value

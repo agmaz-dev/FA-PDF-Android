@@ -98,7 +98,7 @@ def main():
         n = s["number"]
         typ = "Mekkî" if s.get("revelationType", "").lower().startswith("mec") else "Medenî"
         first_page = s["ayahs"][0]["page"]
-        surahs_out.append([n, TR_NAMES[n - 1], s["name"], len(s["ayahs"]), typ, first_page])
+        surahs_out.append([n, TR_NAMES[n - 1], s["name"], len(s["ayahs"]), typ, first_page, s.get("englishName", "")])
         for a in s["ayahs"]:
             t = a["text"].replace("﻿", "").strip()
             na = a["numberInSurah"]
@@ -121,6 +121,21 @@ def main():
             continue
         meals.append({"id": ident, "name": name})
         meal_texts[ident] = texts
+
+    # Almanca ve İngilizce mealler
+    for ident, name, alts in (("de.bubenheim", "Bubenheim & Elyas", ("de.aburida",)), ("en.sahih", "Saheeh International", ("en.pickthall",))):
+        for cand in (ident,) + alts:
+            try:
+                sur = edition(cand)
+            except SystemExit as e:
+                print(f"UYARI: {cand} indirilemedi: {e}"); continue
+            texts = [a["text"].strip() for s in sur for a in s["ayahs"]]
+            if len(texts) == 6236:
+                meals.append({"id": ident, "name": name, "source": cand})
+                meal_texts[ident] = texts
+                break
+        else:
+            sys.exit(f"HATA: {ident} meali bulunamadı")
 
     out = {"surahs": surahs_out, "ayahs": ayahs_out, "meals": meals, "mealTexts": meal_texts}
     with open(os.path.join(ASSETS, "quran.json"), "w", encoding="utf-8") as f:

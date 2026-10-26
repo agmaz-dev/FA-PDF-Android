@@ -52,6 +52,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.ui.draw.shadow
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.ui.input.pointer.pointerInput
@@ -116,7 +123,7 @@ private fun ReaderBody(q: Quran, st: AppState, wide: Boolean, twoUp: Boolean, on
         CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
             HorizontalPager(
                 state = pager,
-                modifier = Modifier.fillMaxSize().padding(top = if (bars) (if (wide) 146.dp else 194.dp) else 0.dp),
+                modifier = Modifier.fillMaxSize().padding(top = if (bars) (if (wide) 124.dp else 184.dp) else 0.dp),
                 beyondViewportPageCount = 1,
                 pageSpacing = if (twoUp) 0.dp else 12.dp,
             ) { idx ->
@@ -144,26 +151,26 @@ private fun ReaderBody(q: Quran, st: AppState, wide: Boolean, twoUp: Boolean, on
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        "${q.surah(ay.s).tr.uppercase(java.util.Locale("tr"))} · ${ay.a}. ÂYET",
+                        t("%1 · %2. ÂYET", q.surah(ay.s).name().uppercase(java.util.Locale(L.lang)), ay.a),
                         fontSize = 12.sp, fontWeight = FontWeight.Bold, color = pal.accent, modifier = Modifier.weight(1f),
                     )
-                    RoundIcon(pal, Icons.Filled.Close, "Kapat", size = 36.dp) { selected = null }
+                    RoundIcon(pal, Icons.Filled.Close, t("Kapat"), size = 36.dp) { selected = null }
                 }
                 Text(
                     mealLines(q, st.pack, st.meal, listOf(ay.idx)).firstOrNull()?.text?.replace(Regex("⁽\\d+⁾"), "")
-                        ?: "Bu âyetin meâli bir önceki âyetle birlikte verilmiştir.",
+                        ?: t("Bu âyetin meâli bir önceki âyetle birlikte verilmiştir."),
                     fontSize = 16.sp, lineHeight = 22.sp, color = pal.ink,
                     modifier = Modifier.heightIn(max = 160.dp).verticalScroll(rememberScrollState()),
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    SmallButton(pal, "Açıklamayı aç") { st.mode = ReadMode.ACIKLAMA }
+                    SmallButton(pal, t("Açıklamayı aç")) { st.mode = ReadMode.ACIKLAMA }
                 }
             }
         }
 
         if (hint && !bars) {
             Text(
-                "Menü için dokunun · âyet için basılı tutun",
+                t("Menü için dokunun · âyet için basılı tutun"),
                 color = Color.White, fontSize = 12.sp,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
@@ -183,7 +190,7 @@ private fun ReaderBody(q: Quran, st: AppState, wide: Boolean, twoUp: Boolean, on
             // Üstte: menü satırı ve hemen altında sayfa kaydırma çubuğu
             Column(Modifier.pointerInput(Unit) { awaitEachGesture { awaitFirstDown(requireUnconsumed = false); touch++ } }) {
                 TopBars(q, st, pal, page, wide, onIndex, onSettings)
-                Box(Modifier.offset(y = (-10).dp)) { BottomBar(q, st, pal, page, wide, step, goTo) }
+                BottomBar(q, st, pal, page, wide, step, goTo)
             }
         }
     }
@@ -227,84 +234,103 @@ private fun Spread(
 }
 
 @Composable
-private fun TopBars(q: Quran, st: AppState, pal: Palette, page: Int, wide: Boolean, onIndex: () -> Unit, onSettings: () -> Unit) {
-    val modes = listOf(ReadMode.MEAL to (if (wide) "Meal + Mushaf" else "Meal"), ReadMode.ACIKLAMA to "Açıklama", ReadMode.MUSHAF to "Mushaf")
-    val title = "Cüz ${q.juzOfPage(page)} · Sayfa ${q.pageLabel(page)}"
-    val sub = q.surahsOnPage(page).joinToString(" · ") { it.tr }
-    val marked = page in st.bookmarks
-    Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Glass(pal, shape = RoundedCornerShape(26.dp)) { RoundIcon(pal, Icons.Filled.Menu, "Fihrist", onClick = onIndex) }
-            Column(
-                Modifier
-                    .weight(1f)
-                    .clip(RoundedCornerShape(18.dp))
-                    .background(pal.glass)
-                    .padding(horizontal = 12.dp, vertical = 4.dp),
-            ) {
-                Text(title, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = pal.ink, maxLines = 1)
-                Text(sub, fontSize = 12.sp, color = pal.muted, maxLines = 1)
-            }
-            if (wide) {
-                Glass(pal) {
-                    modes.forEach { (m, label) -> TextButtonPill(pal, label, st.mode == m) { st.mode = m } }
-                }
-            }
-            Glass(pal) {
-                RoundIcon(pal, Icons.Filled.Star, if (marked) "Yer imini kaldır" else "Yer imi ekle", tint = if (marked) pal.gold else pal.muted) { st.toggleBookmark(page) }
-                RoundIcon(pal, Icons.Filled.Settings, "Ayarlar", onClick = onSettings)
-            }
-        }
-        if (!wide) {
-            Glass(pal, Modifier.fillMaxWidth()) {
-                modes.forEach { (m, label) ->
-                    Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                        TextButtonPill(pal, label, st.mode == m) { st.mode = m }
-                    }
-                }
-            }
-        }
-    }
+private fun GlassCircle(pal: Palette, icon: androidx.compose.ui.graphics.vector.ImageVector, desc: String, tint: Color = pal.ink, onClick: () -> Unit) {
+    Box(
+        Modifier.size(52.dp).clip(CircleShape).background(pal.glass).border(1.dp, pal.glassLine, CircleShape).clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) { androidx.compose.material3.Icon(icon, contentDescription = desc, tint = tint, modifier = Modifier.size(24.dp)) }
 }
 
 @Composable
-private fun ZoomControls(st: AppState, pal: Palette) {
-    TextButtonPill(pal, "A−") {
-        st.arZoom = (st.arZoom - 0.1f).coerceIn(0.6f, 2.5f); st.mealZoom = (st.mealZoom - 0.1f).coerceIn(0.6f, 2.2f)
-    }
-    Text("${(st.arZoom * 100).toInt()}%", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = pal.ink, modifier = Modifier.padding(horizontal = 4.dp))
-    TextButtonPill(pal, "A+") {
-        st.arZoom = (st.arZoom + 0.1f).coerceIn(0.6f, 2.5f); st.mealZoom = (st.mealZoom + 0.1f).coerceIn(0.6f, 2.2f)
+private fun GlassPill(pal: Palette, modifier: Modifier = Modifier, content: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit) {
+    Row(
+        modifier.height(52.dp).clip(RoundedCornerShape(26.dp)).background(pal.glass).border(1.dp, pal.glassLine, RoundedCornerShape(26.dp)).padding(5.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        content = content,
+    )
+}
+
+@Composable
+private fun ModePill(pal: Palette, text: String, selected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    Box(
+        modifier.fillMaxHeight().clip(RoundedCornerShape(21.dp)).background(if (selected) pal.accent else Color.Transparent).clickable(onClick = onClick).padding(horizontal = 18.dp),
+        contentAlignment = Alignment.Center,
+    ) { Text(text, color = if (selected) Color.White else pal.ink, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1) }
+}
+
+@Composable
+private fun TopBars(q: Quran, st: AppState, pal: Palette, page: Int, wide: Boolean, onIndex: () -> Unit, onSettings: () -> Unit) {
+    val modes = listOf(ReadMode.MEAL to (if (wide) t("Meal + Mushaf") else t("Meal")), ReadMode.ACIKLAMA to t("Açıklama"), ReadMode.MUSHAF to t("Mushaf"))
+    val title = t("Cüz %1 · Sayfa %2", q.juzOfPage(page), q.pageLabel(page))
+    val sub = q.surahsOnPage(page).joinToString(" · ") { it.name() }
+    val marked = page in st.bookmarks
+    Column(Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, top = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            GlassCircle(pal, Icons.Filled.Menu, t("Fihrist"), onClick = onIndex)
+            // başlık ve sûre adı aynı satırda
+            GlassPill(pal, Modifier.weight(1f)) {
+                Spacer(Modifier.width(12.dp))
+                Text(title, fontSize = 17.sp, fontWeight = FontWeight.Bold, color = pal.ink, maxLines = 1, softWrap = false)
+                if (sub.isNotBlank()) {
+                    Box(Modifier.padding(horizontal = 8.dp).size(4.dp).clip(CircleShape).background(pal.muted))
+                    Text(sub, fontSize = 15.sp, color = pal.muted, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                }
+            }
+            if (wide) {
+                GlassPill(pal) { modes.forEach { (m, label) -> ModePill(pal, label, st.mode == m) { st.mode = m } } }
+            }
+            GlassCircle(pal, Icons.Filled.Star, if (marked) t("Yer imini kaldır") else t("Yer imi ekle"), tint = if (marked) pal.gold else pal.ink) { st.toggleBookmark(page) }
+            GlassCircle(pal, Icons.Filled.Settings, t("Ayarlar"), onClick = onSettings)
+        }
+        if (!wide) {
+            GlassPill(pal, Modifier.fillMaxWidth()) {
+                modes.forEach { (m, label) -> ModePill(pal, label, st.mode == m, Modifier.weight(1f)) { st.mode = m } }
+            }
+        }
     }
 }
 
+/** İnce sayfa çubuğu (menünün altında) */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun BottomBar(q: Quran, st: AppState, pal: Palette, page: Int, wide: Boolean, step: Int, goTo: (Int) -> Unit) {
     var drag by remember { mutableStateOf<Float?>(null) }
     val shown = drag?.toInt() ?: page
     Row(
-        Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
+        Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp).height(36.dp)
+            .clip(RoundedCornerShape(18.dp)).background(pal.glass).border(1.dp, pal.glassLine, RoundedCornerShape(18.dp)).padding(horizontal = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Glass(pal, Modifier.weight(1f)) {
-            // Kitap sağdan sola: sol ok = sonraki sayfa
-            RoundIcon(pal, Icons.AutoMirrored.Filled.KeyboardArrowLeft, "Sonraki sayfa") { goTo(page + step) }
-            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
-                Slider(
-                    value = drag ?: page.toFloat(),
-                    onValueChange = { drag = it },
-                    onValueChangeFinished = { drag?.let { goTo(it.toInt()) }; drag = null },
-                    valueRange = 1f..q.pageCount.toFloat(),
-                    colors = SliderDefaults.colors(thumbColor = pal.accent, activeTrackColor = pal.accent),
-                    modifier = Modifier.weight(1f),
-                )
-            }
-            Text(q.pageLabel(shown), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = pal.ink, modifier = Modifier.width(36.dp))
-            RoundIcon(pal, Icons.AutoMirrored.Filled.KeyboardArrowRight, "Önceki sayfa") { goTo(page - step) }
+        // Kitap sağdan sola: sol ok = sonraki sayfa
+        Box(Modifier.size(30.dp).clip(CircleShape).clickable { goTo(page + step) }, contentAlignment = Alignment.Center) {
+            androidx.compose.material3.Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, t("Sonraki sayfa"), tint = pal.muted, modifier = Modifier.size(20.dp))
+        }
+        val range = 1f..q.pageCount.toFloat()
+        val v = drag ?: page.toFloat()
+        CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+            Slider(
+                value = v,
+                onValueChange = { drag = it },
+                onValueChangeFinished = { drag?.let { goTo(it.toInt()) }; drag = null },
+                valueRange = range,
+                modifier = Modifier.weight(1f).height(30.dp),
+                thumb = {
+                    Box(Modifier.size(18.dp).shadow(2.dp, CircleShape).clip(CircleShape).background(Color.White))
+                },
+                track = {
+                    val frac = ((v - range.start) / (range.endInclusive - range.start)).coerceIn(0f, 1f)
+                    Box(Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)).background(pal.muted.copy(alpha = 0.3f))) {
+                        Box(Modifier.fillMaxWidth(frac).fillMaxHeight().clip(RoundedCornerShape(2.dp)).background(pal.accent))
+                    }
+                },
+            )
+        }
+        Text(q.pageLabel(shown), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = pal.ink, modifier = Modifier.width(44.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center, maxLines = 1)
+        Box(Modifier.size(30.dp).clip(CircleShape).clickable { goTo(page - step) }, contentAlignment = Alignment.Center) {
+            androidx.compose.material3.Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, t("Önceki sayfa"), tint = pal.muted, modifier = Modifier.size(20.dp))
         }
     }
-    Spacer(Modifier.width(0.dp))
 }
 
 

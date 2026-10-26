@@ -224,8 +224,8 @@ fun MushafPage(
         Spacer(Modifier.height(4.dp))
         if (st.font == "hayrat") {
             Text(
-                if (st.pack == null) "Kitap sayfaları için Ayarlar'dan sayfa paketini seçin – şimdilik yazı tipiyle gösteriliyor."
-                else "Bu sayfanın resmi pakette yok – yazı tipiyle gösteriliyor.",
+                if (st.pack == null) t("Kitap sayfaları için Ayarlar'dan sayfa paketini seçin – şimdilik yazı tipiyle gösteriliyor.")
+                else t("Bu sayfanın resmi pakette yok – yazı tipiyle gösteriliyor."),
                 fontSize = 11.sp, color = pal.muted, modifier = Modifier.padding(bottom = 4.dp),
             )
         }
@@ -289,14 +289,14 @@ fun BookImage(uri: Uri, zoom: Float, modifier: Modifier, fillWidth: Boolean = fa
             if (z <= 1.01f && fillWidth && boxWider) {
                 // Tek sayfa: ekranın bütün genişliğini doldurur, aşağı kaydırılarak okunur (diziliş değişmez)
                 Box(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-                    Image(b, contentDescription = "Mushaf sayfası", modifier = Modifier.fillMaxWidth().aspectRatio(b.width.toFloat() / b.height), contentScale = ContentScale.FillWidth)
+                    Image(b, contentDescription = t("Mushaf sayfası"), modifier = Modifier.fillMaxWidth().aspectRatio(b.width.toFloat() / b.height), contentScale = ContentScale.FillWidth)
                 }
             } else if (z <= 1.01f) {
-                Image(b, contentDescription = "Mushaf sayfası", modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
+                Image(b, contentDescription = t("Mushaf sayfası"), modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
             } else {
                 Box(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).horizontalScroll(rememberScrollState())) {
                     val w = if (fillWidth && boxWider) mw * z else mw * z
-                    Image(b, contentDescription = "Mushaf sayfası", modifier = Modifier.width(w).aspectRatio(b.width.toFloat() / b.height), contentScale = ContentScale.FillWidth)
+                    Image(b, contentDescription = t("Mushaf sayfası"), modifier = Modifier.width(w).aspectRatio(b.width.toFloat() / b.height), contentScale = ContentScale.FillWidth)
                 }
             }
         }

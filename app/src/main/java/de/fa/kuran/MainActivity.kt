@@ -132,12 +132,12 @@ fun App(st: AppState, immersive: (Boolean) -> Unit) {
         }
         when {
             error != null -> Box(Modifier.fillMaxSize().background(pal.app).padding(24.dp), contentAlignment = Alignment.Center) {
-                Text("Kur'an verisi yüklenemedi:\n$error", color = pal.ink)
+                Text(de.fa.kuran.ui.t("Kur'an verisi yüklenemedi:\n%1", error ?: ""), color = pal.ink)
             }
             q == null -> Box(Modifier.fillMaxSize().background(pal.app), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     CircularProgressIndicator(color = pal.accent)
-                    Text("Kur'an-ı Kerim yükleniyor…", color = pal.muted)
+                    Text(de.fa.kuran.ui.t("Kur'an-ı Kerim yükleniyor…"), color = pal.muted)
                 }
             }
             !st.welcomed -> WelcomeScreen(st) { st.meal = it; st.welcomed = true }

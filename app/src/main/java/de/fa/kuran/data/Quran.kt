@@ -3,7 +3,7 @@ package de.fa.kuran.data
 import android.content.Context
 import org.json.JSONObject
 
-data class Surah(val n: Int, val tr: String, val ar: String, val ayat: Int, val type: String, val firstIdx: Int)
+data class Surah(val n: Int, val tr: String, val ar: String, val ayat: Int, val type: String, val firstIdx: Int, val en: String = "")
 
 data class Ayah(val idx: Int, val s: Int, val a: Int, val juz: Int, val ar: String)
 
@@ -16,6 +16,7 @@ class Quran(
     val surahs: List<Surah>,
     val ayahs: List<Ayah>,
     private val builtinMeal: List<String>,
+    private val extraMeals: Map<String, List<String>> = emptyMap(),
     pages: List<IntRange>,
     val hayrat: Boolean,
 ) {
@@ -33,7 +34,7 @@ class Quran(
         for (ay in ayahs) if (ay.juz in 1..30 && !seen[ay.juz]) { seen[ay.juz] = true; juzStartPage[ay.juz] = pageOfAyahArr[ay.idx] }
     }
 
-    fun withPages(pages: List<IntRange>, hayrat: Boolean) = Quran(surahs, ayahs, builtinMeal, pages, hayrat)
+    fun withPages(pages: List<IntRange>, hayrat: Boolean) = Quran(surahs, ayahs, builtinMeal, extraMeals, pages, hayrat)
 
     fun ayahsOnPage(p: Int): List<Ayah> = pageRanges.getOrNull(p - 1)?.map { ayahs[it] } ?: emptyList()
 
@@ -52,6 +53,11 @@ class Quran(
 
     fun builtinMeal(idx: Int): String = builtinMeal.getOrNull(idx) ?: ""
 
+    fun hasMeal(id: String): Boolean = extraMeals.containsKey(id)
+
+    /** Almanca / İngilizce gibi uygulamaya gömülü mealler */
+    fun mealText(id: String, idx: Int): String = extraMeals[id]?.getOrNull(idx) ?: builtinMeal(idx)
+
     companion object {
         fun load(ctx: Context): Quran {
             val txt = ctx.assets.open("quran.json").bufferedReader(Charsets.UTF_8).use { it.readText() }
@@ -69,19 +75,21 @@ class Quran(
             val sa = o.getJSONArray("surahs")
             val surahs = List(sa.length()) { i ->
                 val e = sa.getJSONArray(i)
-                Surah(e.getInt(0), e.getString(1), e.getString(2), e.getInt(3), e.getString(4), firstIdx[e.getInt(0)] ?: 0)
+                Surah(e.getInt(0), e.getString(1), e.getString(2), e.getInt(3), e.getString(4), firstIdx[e.getInt(0)] ?: 0, e.optString(6, ""))
             }
             val mt = o.getJSONObject("mealTexts")
             val key = if (mt.has("tr.yazir")) "tr.yazir" else mt.keys().next()
             val arr = mt.getJSONArray(key)
             val meal = List(arr.length()) { arr.getString(it) }
+            val extra = HashMap<String, List<String>>()
+            for (k in mt.keys()) if (k != key) { val a = mt.getJSONArray(k); extra[k] = List(a.length()) { a.getString(it) } }
             // Medine sayfalaması
             val pages = ArrayList<IntRange>()
             var start = 0
             for (i in 1..ayahs.size) {
                 if (i == ayahs.size || medina[i] != medina[i - 1]) { pages.add(start until i); start = i }
             }
-            return Quran(surahs, ayahs, meal, pages, hayrat = false)
+            return Quran(surahs, ayahs, meal, extra, pages, hayrat = false)
         }
     }
 }

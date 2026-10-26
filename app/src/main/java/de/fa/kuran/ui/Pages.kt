@@ -58,6 +58,10 @@ fun mealLines(q: Quran, pack: Pack?, source: String, ayahIdx: List<Int>): List<M
             if (t.isBlank()) continue
             val g = pack.hayratGroup?.getOrNull(i) ?: listOf(i)
             out += MealLine(i, g.joinToString(", ") { q.ayahs[it].a.toString() }, t)
+        } else if (q.hasMeal(source)) {
+            val t = q.mealText(source, i)
+            if (t.isBlank()) continue
+            out += MealLine(i, "${ay.a}", t)
         } else {
             val t = pack?.elmalili?.get(i) ?: q.builtinMeal(i)
             if (t.isBlank()) continue
@@ -101,9 +105,9 @@ private fun mealItems(q: Quran, pack: Pack?, page: Int, source: String, selected
     for (ay in ayahs) {
         if (ay.a == 1) {
             val s = q.surah(ay.s)
-            out += MItem.Title("${s.n}- ${s.tr.uppercase(java.util.Locale("tr"))} SÛRESİ")
-            val yer = if (s.type == "Mekkî") "Mekke" else "Medîne"
-            out += MItem.Sub("[$yer devrinde nâzil olmuştur, ${s.ayat} âyettir.]")
+            out += MItem.Title(t("%1- %2 SÛRESİ", s.n, s.name().uppercase(java.util.Locale(L.lang))))
+            val yer = if (s.type == "Mekkî") t("Mekke") else t("Medîne")
+            out += MItem.Sub(t("[%1 devrinde nâzil olmuştur, %2 âyettir.]", yer, s.ayat))
             if (source == "elmalili") pack?.elmaliliIntro?.get(s.n)?.takeIf { it.isNotBlank() }?.let { out += MItem.Intro(it) }
             if (s.n != 1 && s.n != 9) { out += MItem.Basmala; out += MItem.BasmalaTr }
         }
@@ -129,7 +133,7 @@ private fun itemText(it: MItem, pal: Palette): AnnotatedString = when (it) {
     is MItem.Sub -> AnnotatedString(it.text)
     is MItem.Intro -> AnnotatedString(it.text)
     MItem.Basmala -> basmalaText(pal.red)
-    MItem.BasmalaTr -> AnnotatedString("Rahmân, Rahîm olan Allah'ın ismiyle")
+    MItem.BasmalaTr -> AnnotatedString(t("Rahmân, Rahîm olan Allah'ın ismiyle"))
     is MItem.Line -> it.text
 }
 
@@ -158,7 +162,7 @@ fun MealPage(q: Quran, page: Int, st: AppState, pal: Palette, side: Side, select
         val range = if (surahs.size > 1) "${surahs.first().n}–${surahs.last().n}" else "${surahs.firstOrNull()?.n ?: ""}"
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text(q.pageLabel(page), fontSize = 13.sp, fontWeight = FontWeight.Bold, color = pal.ink)
-            Text("Cüz: ${q.juzOfPage(page)}, Sûre: $range (${surahs.joinToString(" – ") { it.tr }})", fontSize = 13.sp, fontStyle = FontStyle.Italic, color = pal.ink, maxLines = 1)
+            Text(t("Cüz: %1, Sûre: %2 (%3)", q.juzOfPage(page), range, surahs.joinToString(" – ") { it.name() }), fontSize = 13.sp, fontStyle = FontStyle.Italic, color = pal.ink, maxLines = 1)
         }
         Box(Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 6.dp).height(1.5.dp).background(pal.ink))
         val items = remember(q, page, source, pack, selected, pal) { mealItems(q, pack, page, source, selected, pal) }
@@ -179,7 +183,7 @@ fun MealPage(q: Quran, page: Int, st: AppState, pal: Palette, side: Side, select
                     Text(itemText(item, pal), style = itemStyle(item, size, pal), modifier = mod)
                 }
                 if (source == "hayrat" && pack?.hayratMeal == null) {
-                    Text("Hayrat meali sayfa paketinde – şimdilik Elmalılı meali gösteriliyor.", fontSize = 11.sp, color = pal.muted)
+                    Text(t("Hayrat meali sayfa paketinde – şimdilik Elmalılı meali gösteriliyor."), fontSize = 11.sp, color = pal.muted)
                 }
             }
         }
@@ -195,35 +199,36 @@ fun AciklamaPage(q: Quran, page: Int, st: AppState, pal: Palette, side: Side, se
     val z = st.mealZoom
     val line = mealLines(q, pack, st.meal, listOf(cur.idx)).firstOrNull()
     PaperPage(pal, modifier, side, onTap, onPinch = { f -> st.mealZoom = (st.mealZoom * f).coerceIn(0.6f, 2.2f) }) {
-        Text("AÇIKLAMA", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = pal.band, letterSpacing = 0.6.sp)
-        Text("Risale-i Nur Hâşiyeleri", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = pal.ink)
+        Text(t("AÇIKLAMA"), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = pal.band, letterSpacing = 0.6.sp)
+        Text(t("Risale-i Nur Hâşiyeleri"), fontSize = 20.sp, fontWeight = FontWeight.Bold, color = pal.ink)
         Text("Kur'ân-ı Kerîm ve Muhtasar Kelime Meâli (Hayrat Neşriyat)", fontSize = 12.sp, fontStyle = FontStyle.Italic, color = pal.muted)
+        if (L.lang != "tr") Text(t("Hâşiyeler sadece Türkçedir."), fontSize = 12.sp, color = pal.accent)
         Box(Modifier.fillMaxWidth().padding(vertical = 8.dp).height(1.5.dp).background(pal.ink))
         Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("${surah.n}- ${surah.tr} Sûresi, ${cur.a}. âyet", fontSize = (15 * z).sp, fontWeight = FontWeight.Bold, color = pal.ink)
+            Text(t("%1- %2 Sûresi, %3. âyet", surah.n, surah.name(), cur.a), fontSize = (15 * z).sp, fontWeight = FontWeight.Bold, color = pal.ink)
             Text(
                 buildAnnotatedString { cur.ar.split(' ').forEachIndexed { i, w -> if (i > 0) append(" "); if (isAllahWord(w) || Tevafuk.isRed(cur.idx, i)) withStyle(SpanStyle(color = pal.red)) { append(w) } else append(w) }; append(" " + ayahMarker(cur.a)) },
                 style = arabicStyle(Fonts.arabic(st.font), 25f, pal.ink, TextAlign.Center), modifier = Modifier.fillMaxWidth(),
             )
             if (line != null) Text(mealAnnotated(line.label, line.text, pal.red, false, pal.highlight), style = mealStyle(15f * z, pal.ink))
             if (pack == null || pack.hasiyeler.isEmpty()) {
-                Note(pal, "Hâşiyeler sayfa paketinde. Ayarlar'dan paketi seçince burada görünür.")
+                Note(pal, t("Hâşiyeler sayfa paketinde. Ayarlar'dan paketi seçince burada görünür."))
             } else {
                 val forAyah = pack.hasiyeForAyah(cur.idx)
                 val onPage = if (q.hayrat) pack.hasiyeForHPage(page - 1).filter { it !in forAyah } else emptyList()
-                if (forAyah.isEmpty() && onPage.isEmpty()) Note(pal, "Bu âyet ve sayfa için hâşiye yok.")
+                if (forAyah.isEmpty() && onPage.isEmpty()) Note(pal, t("Bu âyet ve sayfa için hâşiye yok."))
                 forAyah.forEach { HasiyeCard(pal, "(${it.n})", it.text, z, true) }
                 if (onPage.isNotEmpty()) {
-                    Text("Bu sayfanın hâşiyeleri", fontSize = (14 * z).sp, fontWeight = FontWeight.Bold, color = pal.muted)
+                    Text(t("Bu sayfanın hâşiyeleri"), fontSize = (14 * z).sp, fontWeight = FontWeight.Bold, color = pal.muted)
                     onPage.forEach { HasiyeCard(pal, "(${it.n})", it.text, z, false) }
                 }
             }
         }
         Spacer(Modifier.height(8.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            SmallButton(pal, "‹ Önceki âyet", enabled = cur.idx > 0) { onSelect(cur.idx - 1) }
-            Text("Âyete dokunarak değiştirin", fontSize = 12.sp, color = pal.muted)
-            SmallButton(pal, "Sonraki âyet ›", enabled = cur.idx < q.ayahs.lastIndex) { onSelect(cur.idx + 1) }
+            SmallButton(pal, t("‹ Önceki âyet"), enabled = cur.idx > 0) { onSelect(cur.idx - 1) }
+            Text(t("Âyete dokunarak değiştirin"), fontSize = 12.sp, color = pal.muted)
+            SmallButton(pal, t("Sonraki âyet ›"), enabled = cur.idx < q.ayahs.lastIndex) { onSelect(cur.idx + 1) }
         }
     }
 }

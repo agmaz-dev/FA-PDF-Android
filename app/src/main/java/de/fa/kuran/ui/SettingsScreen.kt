@@ -76,28 +76,31 @@ fun SettingsScreen(q: Quran, st: AppState, onBack: () -> Unit) {
         }
     }
     val fonts = listOf(
-        FontOpt("hayrat", "Hayrat tevâfuklu mushaf", "Kitabın kendi sayfaları, kelime mealiyle", null),
+        FontOpt("hayrat", t("Hayrat tevâfuklu mushaf"), t("Kitabın kendi sayfaları, kelime mealiyle"), null),
     ) + listOfNotNull(
-        Fonts.husrev?.let { FontOpt("husrev", "Hüsrev hattı", "Hüsrev hattı üslûbunda nesih", it) },
+        Fonts.husrev?.let { FontOpt("husrev", t("Hüsrev hattı"), t("Hüsrev hattı üslûbunda nesih"), it) },
     ) + listOf(
-        FontOpt("amiri", "Klasik nesih", "Geleneksel matbaa mushafı görünümü", Fonts.amiri),
-        FontOpt("scheherazade", "Büyük ve açık", "İri harekeler, kolay okunur", Fonts.scheherazade),
-        FontOpt("naskh", "Sade, modern", "Ekranda en net görünen yazı", Fonts.naskh),
+        FontOpt("amiri", t("Klasik nesih"), t("Geleneksel matbaa mushafı görünümü"), Fonts.amiri),
+        FontOpt("scheherazade", t("Büyük ve açık"), t("İri harekeler, kolay okunur"), Fonts.scheherazade),
+        FontOpt("naskh", t("Sade, modern"), t("Ekranda en net görünen yazı"), Fonts.naskh),
     )
 
     BoxWithConstraints(Modifier.fillMaxSize().background(pal.app).windowInsetsPadding(WindowInsets.safeDrawing)) {
         val wide = maxWidth >= 600.dp
         Column(Modifier.fillMaxSize()) {
             Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Glass(pal) { RoundIcon(pal, Icons.AutoMirrored.Filled.ArrowBack, "Geri", onClick = onBack) }
-                Text("Ayarlar", fontSize = 26.sp, fontWeight = FontWeight.Bold, color = pal.ink)
+                Glass(pal) { RoundIcon(pal, Icons.AutoMirrored.Filled.ArrowBack, t("Geri"), onClick = onBack) }
+                Text(t("Ayarlar"), fontSize = 26.sp, fontWeight = FontWeight.Bold, color = pal.ink)
             }
             Column(
                 Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Column(Modifier.widthIn(max = 880.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(26.dp)) {
-                    Section(pal, "Sayfa paketi", "Kitap sayfaları, Hayrat meali, Elmalılı meali ve Risale-i Nur hâşiyeleri bu klasörde durur.") {
+                    Section(pal, "Dil · Sprache · Language", t("Menülerin dili. Meal de bu dile geçer, aşağıdan ayrıca değiştirebilirsiniz.")) {
+                        Segmented(pal, LANGS, L.lang, Modifier.fillMaxWidth()) { st.lang = it; st.meal = defaultMealFor(it) }
+                    }
+                    Section(pal, t("Sayfa paketi"), t("Kitap sayfaları, Hayrat meali, Elmalılı meali ve Risale-i Nur hâşiyeleri bu klasörde durur.")) {
                         val pk = st.pack
                         Row(
                             Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(pal.card).padding(16.dp),
@@ -105,17 +108,17 @@ fun SettingsScreen(q: Quran, st: AppState, onBack: () -> Unit) {
                         ) {
                             Column(Modifier.weight(1f)) {
                                 Text(
-                                    when { st.packLoading -> "Paket yükleniyor…"; pk != null -> "Paket yüklü"; else -> "Paket seçilmedi" },
+                                    when { st.packLoading -> t("Paket yükleniyor…"); pk != null -> t("Paket yüklü"); else -> t("Paket seçilmedi") },
                                     fontWeight = FontWeight.Bold, color = pal.ink,
                                 )
-                                Text(pk?.summary ?: "Paketi açtığınız klasörü seçin (içinde h000.webp … dosyaları olmalı).", fontSize = 13.sp, color = pal.muted)
+                                Text(pk?.summary ?: t("Paketi açtığınız klasörü seçin (içinde h000.webp … dosyaları olmalı)."), fontSize = 13.sp, color = pal.muted)
                             }
-                            SmallButton(pal, "Zip dosyalarını seç") { zipPicker.launch(arrayOf("application/zip", "application/x-zip-compressed", "application/octet-stream")) }
+                            SmallButton(pal, t("Zip dosyalarını seç")) { zipPicker.launch(arrayOf("application/zip", "application/x-zip-compressed", "application/octet-stream")) }
                         }
                         st.importInfo?.let { Text(it, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = pal.accent) }
-                        Text("İndirdiğiniz Kuran-Parca zip dosyalarının hepsini birden seçin. Uygulama onları kendisi açar.", fontSize = 13.sp, color = pal.muted)
+                        Text(t("İndirdiğiniz Kuran-Parca zip dosyalarının hepsini birden seçin. Uygulama onları kendisi açar."), fontSize = 13.sp, color = pal.muted)
                     }
-                    Section(pal, "Arapça yazı stili", "Size en kolay okunan yazıyı seçin. Yazı tiplerinde Allah lafızları kırmızıdır.") {
+                    Section(pal, t("Arapça yazı stili"), t("Size en kolay okunan yazıyı seçin. Yazı tiplerinde Allah lafızları kırmızıdır.")) {
                         fonts.chunked(if (wide) 2 else 1).forEach { row ->
                             Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                                 row.forEach { f ->
@@ -124,18 +127,18 @@ fun SettingsScreen(q: Quran, st: AppState, onBack: () -> Unit) {
                             }
                         }
                     }
-                    Section(pal, "Meal", "Sol sayfada gösterilecek meal.") {
+                    Section(pal, t("Meal"), t("Sol sayfada gösterilecek meal.")) {
                         MEALLER.forEach { m -> RadioRow(pal, m.name, st.meal == m.id) { st.meal = m.id } }
                     }
-                    Section(pal, "Açıklama", "Âyete dokunup \"Açıklama\"yı açınca Risale-i Nur hâşiyeleri gösterilir (Hayrat baskısının hâşiye bölümünden).") {}
-                    Section(pal, "Tema", null) {
-                        Segmented(pal, listOf("krem" to "Krem kâğıt", "beyaz" to "Beyaz", "gece" to "Gece"), st.theme, Modifier.fillMaxWidth()) { st.theme = it }
+                    Section(pal, t("Açıklama"), t("Âyete dokunup \"Açıklama\"yı açınca Risale-i Nur hâşiyeleri gösterilir (Hayrat baskısının hâşiye bölümünden).")) {}
+                    Section(pal, t("Tema"), null) {
+                        Segmented(pal, listOf("krem" to t("Krem kâğıt"), "beyaz" to t("Beyaz"), "gece" to t("Gece")), st.theme, Modifier.fillMaxWidth()) { st.theme = it }
                     }
-                    Section(pal, "Yazı boyutu", "Okurken iki parmakla da büyütüp küçültebilirsiniz.") {
-                        SizeSlider(pal, "Arapça", st.arZoom, 0.6f..2.5f) { st.arZoom = it }
-                        SizeSlider(pal, "Meal ve açıklama", st.mealZoom, 0.6f..2.2f) { st.mealZoom = it }
+                    Section(pal, t("Yazı boyutu"), t("Okurken iki parmakla da büyütüp küçültebilirsiniz.")) {
+                        SizeSlider(pal, t("Arapça"), st.arZoom, 0.6f..2.5f) { st.arZoom = it }
+                        SizeSlider(pal, t("Meal ve açıklama"), st.mealZoom, 0.6f..2.2f) { st.mealZoom = it }
                     }
-                    Section(pal, "Kaynaklar", null) {
+                    Section(pal, t("Kaynaklar"), null) {
                         Text(
                             "Arapça metin (yazı tipleri için): Tanzil Uthmani metni. Kitap sayfaları, Hayrat meali ve hâşiyeler: Kur'ân-ı Kerîm ve Muhtasar Kelime Meâli, Hayrat Neşriyat (kişisel kullanım). " +
                                 "Hayrat meali ve hâşiyeler yazı tanıma ile çıkarılıp otomatik düzeltildi; hata görürseniz bildirin. " +
@@ -216,14 +219,14 @@ private fun FontCard(pal: Palette, f: FontOpt, sel: Boolean, scanCount: Int, mod
             } else {
                 Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
-                        if (scanCount > 0) "$scanCount kitap sayfası hazır." else "Sayfa paketi seçilmedi.",
+                        if (scanCount > 0) t("%1 kitap sayfası hazır.", scanCount) else t("Sayfa paketi seçilmedi."),
                         color = pal.ink, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center,
                     )
                     Text(
-                        "Kitap sayfaları sayfa paketinden gelir. Paket yoksa yazı tipiyle gösterilir.",
+                        t("Kitap sayfaları sayfa paketinden gelir. Paket yoksa yazı tipiyle gösterilir."),
                         color = pal.muted, fontSize = 12.sp, textAlign = TextAlign.Center, lineHeight = 17.sp,
                     )
-                    if (scanCount == 0) SmallButton(pal, "Paket klasörü seç", onClick = onPick)
+                    if (scanCount == 0) SmallButton(pal, t("Paket klasörü seç"), onClick = onPick)
                 }
             }
         }
