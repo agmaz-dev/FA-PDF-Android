@@ -31,6 +31,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Slider
@@ -122,6 +123,18 @@ private fun ReaderBody(q: Quran, st: AppState, wide: Boolean, twoUp: Boolean, on
     val share: (Int) -> Unit = { idx -> shareAyah(ctx, q, st, idx) }
     val goTo: (Int) -> Unit = { p -> touch++; scope.launch { pager.animateScrollToPage(toIdx(p.coerceIn(1, q.pageCount))) } }
     val step = if (twoUp) 2 else 1
+    val audio = de.fa.kuran.data.Audio
+    val playIdx = audio.playing
+    val hl = playIdx ?: selected
+    val onPlay: () -> Unit = {
+        if (playIdx == null) audio.play(q, selected ?: q.ayahsOnPage(page).firstOrNull()?.idx ?: 0) else audio.toggle()
+    }
+    // okunan âyet başka sayfadaysa sayfayı çevir
+    LaunchedEffect(playIdx) {
+        val i = playIdx ?: return@LaunchedEffect
+        val p = toIdx(q.pageOf(i))
+        if (p != pager.currentPage) pager.animateScrollToPage(p)
+    }
 
     Box(Modifier.fillMaxSize().background(pal.app)) {
         // Kitap: sayfalar sağdan sola çevrilir. Çubuklar sayfanın üstünde yüzer, sayfayı küçültmez.
@@ -133,8 +146,8 @@ private fun ReaderBody(q: Quran, st: AppState, wide: Boolean, twoUp: Boolean, on
                 pageSpacing = if (twoUp) 0.dp else 12.dp,
             ) { idx ->
                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                    if (twoUp) TwoUp(q, toPage(idx), st, pal, selected, select, toggle)
-                    else Spread(q, idx + 1, st, pal, wide, selected, select, toggle)
+                    if (twoUp) TwoUp(q, toPage(idx), st, pal, hl, select, toggle)
+                    else Spread(q, idx + 1, st, pal, wide, hl, select, toggle)
                 }
             }
         }
@@ -177,7 +190,7 @@ private fun ReaderBody(q: Quran, st: AppState, wide: Boolean, twoUp: Boolean, on
         if (sel != null && st.mode != ReadMode.MUSHAF && q.pageOf(sel) == page) {
             val ay = q.ayahs[sel]
             Row(
-                Modifier.align(Alignment.BottomCenter).padding(bottom = 22.dp)
+                Modifier.align(Alignment.BottomCenter).padding(bottom = if (playIdx != null) 96.dp else 22.dp)
                     .clip(RoundedCornerShape(26.dp)).background(pal.glass).border(1.dp, pal.glassLine, RoundedCornerShape(26.dp)).padding(5.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -190,6 +203,38 @@ private fun ReaderBody(q: Quran, st: AppState, wide: Boolean, twoUp: Boolean, on
                 }
                 RoundIcon(pal, Icons.Filled.Close, t("Kapat"), size = 44.dp) { selected = null }
             }
+        }
+        // Sesli okuma çubuğu
+        if (playIdx != null) {
+            val ay = q.ayahs[playIdx]
+            Row(
+                Modifier.align(Alignment.BottomCenter).padding(bottom = 22.dp, start = 16.dp, end = 16.dp).widthIn(max = 560.dp).fillMaxWidth()
+                    .clip(RoundedCornerShape(30.dp)).background(pal.glass).border(1.dp, pal.glassLine, RoundedCornerShape(30.dp)).padding(6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Box(Modifier.size(48.dp).clip(CircleShape).background(pal.accent).clickable { audio.toggle() }, contentAlignment = Alignment.Center) {
+                    if (audio.paused) androidx.compose.material3.Icon(Icons.Filled.PlayArrow, t("Devam et"), tint = Color.White, modifier = Modifier.size(28.dp))
+                    else PauseGlyph(Color.White)
+                }
+                Column(Modifier.weight(1f)) {
+                    Text(de.fa.kuran.data.reciterById(audio.reciter).name, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = pal.ink, maxLines = 1)
+                    Text(
+                        (if (audio.loading) t("Yükleniyor…") + " · " else "") + q.surah(ay.s).name() + " " + ay.s + ":" + ay.a,
+                        fontSize = 13.sp, color = pal.muted, maxLines = 1,
+                    )
+                }
+                RoundIcon(pal, Icons.Filled.Close, t("Durdur"), size = 44.dp) { audio.stop() }
+            }
+        }
+        audio.error?.let {
+            LaunchedEffect(it) { delay(4000); audio.error = null }
+            Text(
+                t("Ses çalınamadı. İnternet bağlantısını kontrol edin ya da sesleri Ayarlar'dan indirin."),
+                color = Color.White, fontSize = 13.sp,
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 22.dp, start = 16.dp, end = 16.dp)
+                    .clip(RoundedCornerShape(16.dp)).background(Color(0xE0B03030)).padding(horizontal = 14.dp, vertical = 9.dp),
+            )
         }
         // Üst kısım: sayfa başlığına dokununca menü açılır
         if (!bars) {
@@ -219,7 +264,7 @@ private fun ReaderBody(q: Quran, st: AppState, wide: Boolean, twoUp: Boolean, on
         ) {
             // Üstte: menü satırı ve hemen altında sayfa kaydırma çubuğu
             Column(Modifier.pointerInput(Unit) { awaitEachGesture { awaitFirstDown(requireUnconsumed = false); touch++ } }) {
-                TopBars(q, st, pal, page, wide, onIndex, onSettings)
+                TopBars(q, st, pal, page, wide, onIndex, onSettings, onPlay)
                 BottomBar(q, st, pal, page, wide, step, goTo)
             }
         }
@@ -264,6 +309,26 @@ private fun Spread(
 }
 
 @Composable
+private fun PauseGlyph(color: Color) {
+    Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+        Box(Modifier.size(width = 5.dp, height = 18.dp).clip(RoundedCornerShape(2.dp)).background(color))
+        Box(Modifier.size(width = 5.dp, height = 18.dp).clip(RoundedCornerShape(2.dp)).background(color))
+    }
+}
+
+@Composable
+private fun PlayCircle(pal: Palette, onClick: () -> Unit) {
+    val playing = de.fa.kuran.data.Audio.playing != null && !de.fa.kuran.data.Audio.paused
+    Box(
+        Modifier.size(52.dp).clip(CircleShape).background(pal.glass).border(1.dp, pal.glassLine, CircleShape).clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (playing) PauseGlyph(pal.ink)
+        else androidx.compose.material3.Icon(Icons.Filled.PlayArrow, t("Sesli oku"), tint = pal.ink, modifier = Modifier.size(28.dp))
+    }
+}
+
+@Composable
 private fun GlassCircle(pal: Palette, icon: androidx.compose.ui.graphics.vector.ImageVector, desc: String, tint: Color = pal.ink, onClick: () -> Unit) {
     Box(
         Modifier.size(52.dp).clip(CircleShape).background(pal.glass).border(1.dp, pal.glassLine, CircleShape).clickable(onClick = onClick),
@@ -289,7 +354,7 @@ private fun ModePill(pal: Palette, text: String, selected: Boolean, modifier: Mo
 }
 
 @Composable
-private fun TopBars(q: Quran, st: AppState, pal: Palette, page: Int, wide: Boolean, onIndex: () -> Unit, onSettings: () -> Unit) {
+private fun TopBars(q: Quran, st: AppState, pal: Palette, page: Int, wide: Boolean, onIndex: () -> Unit, onSettings: () -> Unit, onPlay: () -> Unit) {
     val modes = listOf(ReadMode.MEAL to (if (wide) t("Meal + Mushaf") else t("Meal")), ReadMode.ACIKLAMA to t("Açıklama"), ReadMode.MUSHAF to t("Mushaf"))
     val title = t("Cüz %1 · Sayfa %2", q.juzOfPage(page), q.pageLabel(page))
     val sub = q.surahsOnPage(page).joinToString(" · ") { it.name() }
@@ -309,6 +374,7 @@ private fun TopBars(q: Quran, st: AppState, pal: Palette, page: Int, wide: Boole
             if (wide) {
                 GlassPill(pal) { modes.forEach { (m, label) -> ModePill(pal, label, st.mode == m) { st.mode = m } } }
             }
+            PlayCircle(pal, onPlay)
             GlassCircle(pal, Icons.Filled.Star, if (marked) t("Yer imini kaldır") else t("Yer imi ekle"), tint = if (marked) pal.gold else pal.ink) { st.toggleBookmark(page) }
             GlassCircle(pal, Icons.Filled.Settings, t("Ayarlar"), onClick = onSettings)
         }

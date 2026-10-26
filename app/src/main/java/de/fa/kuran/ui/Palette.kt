@@ -52,24 +52,43 @@ object Fonts {
     val amiri = FontFamily(Font(R.font.amiri_quran))
     val scheherazade = FontFamily(Font(R.font.scheherazade))
     val naskh = FontFamily(Font(R.font.noto_naskh))
+    val amiriClassic = FontFamily(Font(R.font.amiri_regular))
+    val lateef = FontFamily(Font(R.font.lateef))
+    val harmattan = FontFamily(Font(R.font.harmattan))
+    val mada = FontFamily(Font(R.font.mada))
+    val kufi = FontFamily(Font(R.font.noto_kufi))
+    val katibeh = FontFamily(Font(R.font.katibeh))
+
+    /** Medine Mushafı yazısı (Kral Fahd Kur'an Matbaası) – kişisel pakette */
+    var medina: FontFamily? = null
+        private set
 
     /** Hüsrev hattı: sadece kişisel pakette (assets/pack veya filesDir/pack) bulunur */
     var husrev: FontFamily? = null
         private set
 
+    private fun packFont(ctx: android.content.Context, name: String): FontFamily? = runCatching {
+        val f = java.io.File(ctx.filesDir, "pack/$name")
+        if (f.exists() && f.length() > 0) FontFamily(Font(f))
+        else { ctx.assets.open("pack/$name").close(); FontFamily(Font("pack/$name", ctx.assets)) }
+    }.getOrNull()
+
     fun init(ctx: android.content.Context) {
-        if (husrev != null) return
-        husrev = runCatching {
-            val f = java.io.File(ctx.filesDir, "pack/husrev.ttf")
-            if (f.exists() && f.length() > 0) FontFamily(Font(f))
-            else { ctx.assets.open("pack/husrev.ttf").close(); FontFamily(Font("pack/husrev.ttf", ctx.assets)) }
-        }.getOrNull()
+        if (husrev == null) husrev = packFont(ctx, "husrev.ttf")
+        if (medina == null) medina = packFont(ctx, "kfgqpc_hafs.ttf")
     }
 
     fun arabic(key: String): FontFamily = when (key) {
         "husrev" -> husrev ?: amiri
         "scheherazade" -> scheherazade
         "naskh" -> naskh
+        "medina" -> medina ?: amiri
+        "amiri_classic" -> amiriClassic
+        "lateef" -> lateef
+        "harmattan" -> harmattan
+        "mada" -> mada
+        "kufi" -> kufi
+        "katibeh" -> katibeh
         else -> amiri
     }
 }

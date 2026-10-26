@@ -36,6 +36,7 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -83,6 +84,15 @@ fun SettingsScreen(q: Quran, st: AppState, onBack: () -> Unit) {
         FontOpt("amiri", t("Klasik nesih"), t("Geleneksel matbaa mushafı görünümü"), Fonts.amiri),
         FontOpt("scheherazade", t("Büyük ve açık"), t("İri harekeler, kolay okunur"), Fonts.scheherazade),
         FontOpt("naskh", t("Sade, modern"), t("Ekranda en net görünen yazı"), Fonts.naskh),
+    ) + listOfNotNull(
+        Fonts.medina?.let { FontOpt("medina", t("Medine Mushafı"), t("Kral Fahd Kur'an Matbaası'nın yazısı"), it) },
+    ) + listOf(
+        FontOpt("amiri_classic", "Amiri", t("Klasik kitap neshi"), Fonts.amiriClassic),
+        FontOpt("lateef", "Lateef", t("Hint–Sind mushaf üslûbu"), Fonts.lateef),
+        FontOpt("harmattan", "Harmattan", t("Batı Afrika mushaf üslûbu"), Fonts.harmattan),
+        FontOpt("mada", "Mada", t("Sade ve modern"), Fonts.mada),
+        FontOpt("kufi", t("Kûfî"), t("Modern kûfî tarz"), Fonts.kufi),
+        FontOpt("katibeh", "Katibeh", t("El yazısı havasında"), Fonts.katibeh),
     )
 
     BoxWithConstraints(Modifier.fillMaxSize().background(pal.app).windowInsetsPadding(WindowInsets.safeDrawing)) {
@@ -126,6 +136,9 @@ fun SettingsScreen(q: Quran, st: AppState, onBack: () -> Unit) {
                                 }
                             }
                         }
+                    }
+                    Section(pal, t("Sesli okuma"), t("Okuyucuyu seçin. Sesleri telefona indirirseniz internetsiz dinlersiniz; indirmezseniz internetten çalınır.")) {
+                        AudioSettings(q, st, pal)
                     }
                     Section(pal, t("Meal"), t("Sol sayfada gösterilecek meal.")) {
                         MEALLER.forEach { m -> RadioRow(pal, m.name, st.meal == m.id) { st.meal = m.id } }
@@ -243,5 +256,51 @@ private fun SizeSlider(pal: Palette, label: String, value: Float, range: ClosedF
             modifier = Modifier.weight(1f),
         )
         Text("${(value * 100).toInt()}%", color = pal.ink, fontWeight = FontWeight.SemiBold)
+    }
+}
+
+
+@Composable
+private fun AudioSettings(q: de.fa.kuran.data.Quran, st: AppState, pal: Palette) {
+    val ver = de.fa.kuran.data.Downloads.version
+    val active = de.fa.kuran.data.Downloads.active
+    val curSurah = q.surahsOnPage(st.lastPage).firstOrNull()?.n ?: 1
+    de.fa.kuran.data.RECITERS.forEach { r ->
+        val sel = st.reciter == r.id
+        val cnt = remember(ver, active, de.fa.kuran.data.Downloads.done / 50) { de.fa.kuran.data.Downloads.count(r) }
+        Column(
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(pal.card).clickable { st.reciter = r.id }.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Radio(pal, sel)
+                Column(Modifier.weight(1f)) {
+                    Text(r.name, color = pal.ink, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        if (cnt >= q.ayahs.size) t("Tamamı indirildi") else if (cnt > 0) t("%1 / %2 âyet indirildi", cnt, q.ayahs.size) else t("İnternetten çalınır · tamamı yaklaşık %1 MB", r.approxMb),
+                        fontSize = 12.sp, color = pal.muted,
+                    )
+                }
+            }
+            if (active == r.id) {
+                val d = de.fa.kuran.data.Downloads.done; val tot = de.fa.kuran.data.Downloads.total
+                androidx.compose.material3.LinearProgressIndicator(
+                    progress = { if (tot > 0) d.toFloat() / tot else 0f },
+                    modifier = Modifier.fillMaxWidth(), color = pal.accent,
+                )
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(t("İndiriliyor… %1 / %2", d, tot), fontSize = 12.sp, color = pal.muted, modifier = Modifier.weight(1f))
+                    SmallButton(pal, t("Durdur")) { de.fa.kuran.data.Downloads.cancel() }
+                }
+            } else {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SmallButton(pal, t("Bu sûreyi indir"), enabled = active == null) { st.reciter = r.id; de.fa.kuran.data.Downloads.start(r, de.fa.kuran.data.Downloads.surahItems(q, curSurah)) }
+                    SmallButton(pal, t("Tümünü indir"), enabled = active == null) { st.reciter = r.id; de.fa.kuran.data.Downloads.start(r, listOf(1 to 1) + de.fa.kuran.data.Downloads.allItems(q)) }
+                    if (cnt > 0) SmallButton(pal, t("Sil")) { de.fa.kuran.data.Downloads.delete(r) }
+                }
+                if (de.fa.kuran.data.Downloads.failed > 0 && de.fa.kuran.data.Downloads.total > 0 && sel)
+                    Text(t("%1 dosya indirilemedi. İnternet bağlantısını kontrol edip tekrar deneyin.", de.fa.kuran.data.Downloads.failed), fontSize = 12.sp, color = pal.red)
+            }
+        }
     }
 }

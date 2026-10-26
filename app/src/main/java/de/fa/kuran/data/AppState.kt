@@ -24,6 +24,11 @@ class AppState(ctx: Context) {
         get() = _lang.value
         set(v) { _lang.value = v; de.fa.kuran.ui.L.lang = v; sp.edit().putString("lang", v).apply() }
 
+    private val _reciter = mutableStateOf(sp.getString("reciter", "sudais") ?: "sudais").also { Audio.reciter = it.value }
+    var reciter: String
+        get() = _reciter.value
+        set(v) { _reciter.value = v; Audio.reciter = v; sp.edit().putString("reciter", v).apply() }
+
     private val _meal = mutableStateOf(sp.getString("meal2", "hayrat") ?: "hayrat")
     var meal: String
         get() = _meal.value

@@ -150,6 +150,12 @@ def main():
         "amiri_quran": "ofl/amiriquran",
         "scheherazade": "ofl/scheherazadenew",
         "noto_naskh": "ofl/notonaskharabic",
+        "amiri_regular": "ofl/amiri",
+        "lateef": "ofl/lateef",
+        "harmattan": "ofl/harmattan",
+        "mada": "ofl/mada",
+        "noto_kufi": "ofl/notokufiarabic",
+        "katibeh": "ofl/katibeh",
     }
     for key, d in fonts.items():
         items = get_json(f"https://api.github.com/repos/google/fonts/contents/{d}", gh)
