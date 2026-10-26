@@ -100,7 +100,7 @@ fun paraText(b: Blk.Para, selected: Int?, hl: Color, red: Color, marker: Color, 
         val start = length
         ay.ar.split(' ').forEachIndexed { wi, w ->
             if (wi > 0) append(" ")
-            if (isAllahWord(w)) { val s = length; append(w); addStyle(SpanStyle(color = red), s, length) } else append(w)
+            if (isAllahWord(w) || Tevafuk.isRed(ay.idx, wi)) { val s = length; append(w); addStyle(SpanStyle(color = red), s, length) } else append(w)
         }
         append(" ")
         val ms = length

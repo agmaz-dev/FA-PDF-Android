@@ -74,6 +74,24 @@ object Fonts {
     }
 }
 
+/** Tevâfuklu mushafta kırmızı yazılan kelimeler (kişisel paketten: pack/tevafuk.json) */
+object Tevafuk {
+    private var red: HashSet<Long> = HashSet()
+    fun init(ctx: android.content.Context) {
+        val txt = runCatching {
+            val f = java.io.File(ctx.filesDir, "pack/tevafuk.json")
+            if (f.exists() && f.length() > 0) f.readText() else ctx.assets.open("pack/tevafuk.json").bufferedReader().use { it.readText() }
+        }.getOrNull() ?: return
+        runCatching {
+            val arr = org.json.JSONObject(txt).getJSONArray("r")
+            val s = HashSet<Long>(arr.length() * 2)
+            for (i in 0 until arr.length()) { val a = arr.getJSONArray(i); s.add(a.getInt(0).toLong() * 1000 + a.getInt(1)) }
+            red = s
+        }
+    }
+    fun isRed(ayahIdx: Int, wordIdx: Int): Boolean = red.contains(ayahIdx.toLong() * 1000 + wordIdx)
+}
+
 const val BASMALA = "بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ"
 
 fun arabicDigits(n: Int): String = n.toString().map { c -> '٠' + (c - '0') }.joinToString("")

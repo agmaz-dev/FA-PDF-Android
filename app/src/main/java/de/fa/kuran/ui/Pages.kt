@@ -202,7 +202,7 @@ fun AciklamaPage(q: Quran, page: Int, st: AppState, pal: Palette, side: Side, se
         Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("${surah.n}- ${surah.tr} Sûresi, ${cur.a}. âyet", fontSize = (15 * z).sp, fontWeight = FontWeight.Bold, color = pal.ink)
             Text(
-                buildAnnotatedString { cur.ar.split(' ').forEachIndexed { i, w -> if (i > 0) append(" "); if (isAllahWord(w)) withStyle(SpanStyle(color = pal.red)) { append(w) } else append(w) }; append(" " + ayahMarker(cur.a)) },
+                buildAnnotatedString { cur.ar.split(' ').forEachIndexed { i, w -> if (i > 0) append(" "); if (isAllahWord(w) || Tevafuk.isRed(cur.idx, i)) withStyle(SpanStyle(color = pal.red)) { append(w) } else append(w) }; append(" " + ayahMarker(cur.a)) },
                 style = arabicStyle(Fonts.arabic(st.font), 25f, pal.ink, TextAlign.Center), modifier = Modifier.fillMaxWidth(),
             )
             if (line != null) Text(mealAnnotated(line.label, line.text, pal.red, false, pal.highlight), style = mealStyle(15f * z, pal.ink))

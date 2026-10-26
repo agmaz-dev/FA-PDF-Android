@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.pager.HorizontalPager
@@ -115,7 +116,7 @@ private fun ReaderBody(q: Quran, st: AppState, wide: Boolean, twoUp: Boolean, on
         CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
             HorizontalPager(
                 state = pager,
-                modifier = Modifier.fillMaxSize().padding(top = if (bars) (if (wide) 80.dp else 128.dp) else 0.dp, bottom = if (bars) 80.dp else 0.dp),
+                modifier = Modifier.fillMaxSize().padding(top = if (bars) (if (wide) 146.dp else 194.dp) else 0.dp),
                 beyondViewportPageCount = 1,
                 pageSpacing = if (twoUp) 0.dp else 12.dp,
             ) { idx ->
@@ -128,12 +129,12 @@ private fun ReaderBody(q: Quran, st: AppState, wide: Boolean, twoUp: Boolean, on
 
         // Seçili âyet kartı
         val sel = selected
-        if (sel != null && st.mode != ReadMode.ACIKLAMA && q.pageOf(sel) == page) {
+        if (sel != null && st.mode == ReadMode.MUSHAF && q.pageOf(sel) == page) {
             val ay = q.ayahs[sel]
             Column(
                 Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(bottom = if (bars) 96.dp else 20.dp, start = 16.dp, end = 16.dp)
+                    .padding(bottom = 20.dp, start = 16.dp, end = 16.dp)
                     .widthIn(max = 560.dp)
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(22.dp))
@@ -179,18 +180,10 @@ private fun ReaderBody(q: Quran, st: AppState, wide: Boolean, twoUp: Boolean, on
             enter = slideInVertically { -it } + fadeIn(),
             exit = slideOutVertically { -it } + fadeOut(),
         ) {
-            Box(Modifier.pointerInput(Unit) { awaitEachGesture { awaitFirstDown(requireUnconsumed = false); touch++ } }) {
+            // Üstte: menü satırı ve hemen altında sayfa kaydırma çubuğu
+            Column(Modifier.pointerInput(Unit) { awaitEachGesture { awaitFirstDown(requireUnconsumed = false); touch++ } }) {
                 TopBars(q, st, pal, page, wide, onIndex, onSettings)
-            }
-        }
-        AnimatedVisibility(
-            visible = bars,
-            modifier = Modifier.align(Alignment.BottomCenter),
-            enter = slideInVertically { it } + fadeIn(),
-            exit = slideOutVertically { it } + fadeOut(),
-        ) {
-            Box(Modifier.pointerInput(Unit) { awaitEachGesture { awaitFirstDown(requireUnconsumed = false); touch++ } }) {
-                BottomBar(q, st, pal, page, wide, step, goTo)
+                Box(Modifier.offset(y = (-10).dp)) { BottomBar(q, st, pal, page, wide, step, goTo) }
             }
         }
     }
@@ -256,7 +249,6 @@ private fun TopBars(q: Quran, st: AppState, pal: Palette, page: Int, wide: Boole
                 Glass(pal) {
                     modes.forEach { (m, label) -> TextButtonPill(pal, label, st.mode == m) { st.mode = m } }
                 }
-                Glass(pal) { ZoomControls(st, pal) }
             }
             Glass(pal) {
                 RoundIcon(pal, Icons.Filled.Star, if (marked) "Yer imini kaldır" else "Yer imi ekle", tint = if (marked) pal.gold else pal.muted) { st.toggleBookmark(page) }
@@ -295,7 +287,6 @@ private fun BottomBar(q: Quran, st: AppState, pal: Palette, page: Int, wide: Boo
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        if (!wide) Glass(pal) { ZoomControls(st, pal) }
         Glass(pal, Modifier.weight(1f)) {
             // Kitap sağdan sola: sol ok = sonraki sayfa
             RoundIcon(pal, Icons.AutoMirrored.Filled.KeyboardArrowLeft, "Sonraki sayfa") { goTo(page + step) }

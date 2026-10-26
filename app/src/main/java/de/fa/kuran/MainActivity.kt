@@ -62,6 +62,7 @@ class MainActivity : ComponentActivity() {
         }
         window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.BLACK))
         de.fa.kuran.ui.Fonts.init(applicationContext)
+        de.fa.kuran.ui.Tevafuk.init(applicationContext)
         val st = AppState(applicationContext)
         applyImmersive(true)
         setContent { App(st, ::applyImmersive) }
