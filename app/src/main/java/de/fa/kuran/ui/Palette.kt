@@ -122,6 +122,8 @@ data class MealInfo2(val id: String, val short: String, val name: String)
 val MEALLER = listOf(
     MealInfo2("hayrat", "Hayrat", "Hayrat Muhtasar Meâli"),
     MealInfo2("elmalili", "Elmalılı", "Elmalılı Hamdi Yazır Meâli"),
+    MealInfo2("tr.diyanet", "Diyanet", "Diyanet İşleri Başkanlığı Meâli"),
+    MealInfo2("tr.golpinarli", "Gölpınarlı", "Abdülbâki Gölpınarlı Meâli"),
     MealInfo2("de.bubenheim", "Bubenheim", "Deutsch – Bubenheim & Elyas"),
     MealInfo2("en.sahih", "Saheeh Intl.", "English – Saheeh International"),
     MealInfo2("ar.muyassar", "الميسر", "العربية – التفسير الميسر"),
