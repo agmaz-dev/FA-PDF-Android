@@ -31,6 +31,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
@@ -114,7 +115,11 @@ private fun ReaderBody(q: Quran, st: AppState, wide: Boolean, twoUp: Boolean, on
         val p = q.pageOf(idx)
         if (toIdx(p) != pager.currentPage) scope.launch { pager.animateScrollToPage(toIdx(p)) }
     }
-    val toggle: () -> Unit = { bars = !bars; hint = false }
+    // Sayfaya dokunmak menüyü açmaz, sadece açıksa kapatır; menü üstteki sayfa başlığına dokununca açılır
+    val toggle: () -> Unit = { if (bars) bars = false; hint = false }
+    val openBars: () -> Unit = { bars = !bars; hint = false }
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val share: (Int) -> Unit = { idx -> shareAyah(ctx, q, st, idx) }
     val goTo: (Int) -> Unit = { p -> touch++; scope.launch { pager.animateScrollToPage(toIdx(p.coerceIn(1, q.pageCount))) } }
     val step = if (twoUp) 2 else 1
 
@@ -163,14 +168,39 @@ private fun ReaderBody(q: Quran, st: AppState, wide: Boolean, twoUp: Boolean, on
                     modifier = Modifier.heightIn(max = 160.dp).verticalScroll(rememberScrollState()),
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SmallButton(pal, t("Paylaş")) { share(ay.idx) }
                     SmallButton(pal, t("Açıklamayı aç")) { st.mode = ReadMode.ACIKLAMA }
                 }
             }
         }
+        // Meal ve açıklamada: seçili âyet için küçük paylaş düğmesi
+        if (sel != null && st.mode != ReadMode.MUSHAF && q.pageOf(sel) == page) {
+            val ay = q.ayahs[sel]
+            Row(
+                Modifier.align(Alignment.BottomCenter).padding(bottom = 22.dp)
+                    .clip(RoundedCornerShape(26.dp)).background(pal.glass).border(1.dp, pal.glassLine, RoundedCornerShape(26.dp)).padding(5.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Row(
+                    Modifier.height(44.dp).clip(RoundedCornerShape(22.dp)).background(pal.accent).clickable { share(ay.idx) }.padding(horizontal = 18.dp),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    androidx.compose.material3.Icon(Icons.Filled.Share, null, tint = Color.White, modifier = Modifier.size(20.dp))
+                    Text(t("Paylaş") + " · " + q.surah(ay.s).name() + " " + ay.s + ":" + ay.a, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                }
+                RoundIcon(pal, Icons.Filled.Close, t("Kapat"), size = 44.dp) { selected = null }
+            }
+        }
+        // Üst kısım: sayfa başlığına dokununca menü açılır
+        if (!bars) {
+            Box(Modifier.align(Alignment.TopCenter).fillMaxWidth().height(64.dp).clickable(
+                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null,
+            ) { openBars() })
+        }
 
         if (hint && !bars) {
             Text(
-                t("Menü için dokunun · âyet için basılı tutun"),
+                t("Menü için sayfanın üst kısmına dokunun · âyet için basılı tutun"),
                 color = Color.White, fontSize = 12.sp,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
@@ -347,4 +377,23 @@ private fun TwoUp(q: Quran, right: Int, st: AppState, pal: Palette, selected: In
         Spine(pal)
         MushafPage(q, right, st, pal, Side.RIGHT, selected, select, toggle, Modifier.weight(1f).fillMaxHeight())
     }
+}
+
+
+/** Âyeti Arapçası ve seçili mealiyle paylaşır (WhatsApp vb.) */
+fun shareAyah(ctx: android.content.Context, q: Quran, st: AppState, idx: Int) {
+    val ay = q.ayahs[idx]
+    val meal = mealLines(q, st.pack, st.meal, listOf(idx)).firstOrNull()?.text?.replace(Regex("⁽\\d+⁾|\\(\\d+\\)"), "")?.trim() ?: ""
+    val ref = q.surah(ay.s).name() + " " + ay.s + ":" + ay.a
+    val text = buildString {
+        append(ay.ar).append(" ﴿").append(arabicDigits(ay.a)).append("﴾")
+        if (meal.isNotBlank()) append("\n\n").append(meal)
+        append("\n\n— ").append(ref)
+    }
+    val send = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+        type = "text/plain"
+        putExtra(android.content.Intent.EXTRA_TEXT, text)
+        putExtra(android.content.Intent.EXTRA_SUBJECT, ref)
+    }
+    ctx.startActivity(android.content.Intent.createChooser(send, t("Paylaş")).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
 }
