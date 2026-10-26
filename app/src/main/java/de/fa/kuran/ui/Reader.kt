@@ -144,7 +144,7 @@ private fun ReaderBody(q: Quran, st: AppState, wide: Boolean, twoUp: Boolean, on
         CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
             HorizontalPager(
                 state = pager,
-                modifier = Modifier.fillMaxSize().padding(top = if (bars) (if (wide) 124.dp else 184.dp) else 0.dp),
+                modifier = Modifier.fillMaxSize().padding(top = if (bars) (if (wide) 124.dp else 184.dp) + (if (playIdx != null) 48.dp else 0.dp) else if (playIdx != null) 52.dp else 0.dp),
                 beyondViewportPageCount = 1,
                 pageSpacing = if (twoUp) 0.dp else 12.dp,
             ) { idx ->
@@ -227,7 +227,7 @@ private fun ReaderBody(q: Quran, st: AppState, wide: Boolean, twoUp: Boolean, on
             val ay = q.ayahs[playIdx]
             val short = de.fa.kuran.data.reciterById(audio.reciter).name.split(' ', '-').last()
             Row(
-                Modifier.align(Alignment.TopCenter).padding(top = if (bars) (if (wide) 128.dp else 188.dp) else 6.dp)
+                Modifier.align(Alignment.TopStart).padding(start = 14.dp, top = if (bars) (if (wide) 128.dp else 188.dp) else 8.dp)
                     .height(40.dp).shadow(4.dp, RoundedCornerShape(20.dp))
                     .clip(RoundedCornerShape(20.dp)).background(pal.glass).border(1.dp, pal.glassLine, RoundedCornerShape(20.dp))
                     .padding(start = 4.dp, end = 2.dp),
