@@ -75,12 +75,16 @@ Zurück-Taste während einer Fahrt beendet nichts: erster Druck zeigt einen Hinw
 1. Nach 3 s ohne Messung zählt die App mit der **zuletzt gemessenen Geschwindigkeit** weiter (höchstens 100 km/h,
    höchstens 3 Minuten; unter 7 km/h – Stau – keine Schätzung). Beispiel Britzer Tunnel (A113) bei 80 km/h:
    etwa alle 3 Sekunden +0,20 €.
-2. Nach der Ausfahrt wird die Strecke im Tunnel aus der gemessenen Position vor und nach dem Tunnel bestimmt
-   (Luftlinie = nachweisbare Mindeststrecke), wenn die Lücke höchstens 10 Minuten dauert und die
-   Durchschnittsgeschwindigkeit plausibel ist (≤ 130 km/h).
-3. Der angezeigte Preis springt dabei **nie zurück**: Lag die Schätzung höher, bleibt der Zähler stehen,
+2. Nach der Ausfahrt wird die Strecke im Tunnel bestimmt: mindestens die Luftlinie zwischen letzter Position vor
+   und erster nach dem Tunnel; passt die Schätzung (letzte Geschwindigkeit × Zeit) dazu, wird sie genommen
+   (höchstens 35 % mehr als die Luftlinie). Voraussetzung: Lücke ≤ 10 Minuten, Durchschnitt ≤ 130 km/h.
+   Die Genauigkeit des ersten Signals nach dem Tunnel spielt keine Rolle mehr (früher ≤ 20 m nötig).
+3. Liefert das Handy im Tunnel „eingefrorene“ Positionen (gleiche Koordinaten), werden sie erkannt:
+   mit gemeldeter Fahrt sofort verworfen (Schätzung läuft weiter), sonst wird die Strecke bei der Ausfahrt
+   vom letzten echten Punkt aus nachgezählt.
+4. Der angezeigte Preis springt dabei **nie zurück**: Lag die Schätzung höher, bleibt der Zähler stehen,
    bis die echte Berechnung ihn eingeholt hat.
-4. Eine Lücke erzeugt nie Wartezeit und wird in der Fahrt vermerkt.
+5. Eine Lücke erzeugt nie Wartezeit und wird in der Fahrt vermerkt.
 
 ## 3. Tarife und Quellen (geprüft am 22.10.2026)
 

@@ -55,7 +55,7 @@ class TunnelAndCashTest {
         assertEquals(1_332.0 + 1_700.0, s.run!!.meter.odometerM, 30.0)
         assertEquals(0L, s.run!!.meter.chargedWaitingMs)
         assertEquals(1, s.run!!.gaps.size)
-        assertEquals(1_700.0, s.run!!.gaps[0].bridgedM, 2.0)
+        assertEquals(1_700.0, s.run!!.gaps[0].bridgedM, 15.0)
     }
 
     @Test fun ohneFahrtImTunnelKeineSchaetzung() {
@@ -126,5 +126,20 @@ class TunnelAndCashTest {
         assertEquals(s, back)
         assertTrue(back.run!!.showTotal)
         assertTrue(back.run!!.fareFloor > BigDecimal.ZERO)
+    }
+
+    @Test fun nachDemTunnelZaehltDerZaehlerSofortWeiter() {
+        var s = drive80()
+        for (t in 61_000L..137_000L step 1_000L) s = MeterMachine.tick(s, t).state // kein GPS im Tunnel
+        val inTunnel = MeterMachine.liveFare(s, 137_000)
+        // Ausfahrt mit ungenauem erstem Signal
+        val (la, lo) = Geo.offset(52.45, 13.45, 0.0, 1_332.0 + 1_700.0)
+        s = MeterMachine.onFix(s, GpsFix(la, lo, 25.0, 138_000, 0, 22.2), 138_000, cfg).state
+        val atExit = MeterMachine.liveFare(s, 138_000)
+        assertTrue(atExit >= inTunnel)
+        // 30 s weiterfahren: Preis muss steigen (kein Stillstand durch zu hohe Schätzung)
+        for (i in 1..30) s = MeterMachine.onFix(s, fix(3_032.0 + i * 22.2, 138_000 + i * 1000L), 138_000 + i * 1000L, cfg).state
+        assertTrue("Zähler steht nach dem Tunnel", MeterMachine.liveFare(s, 168_000) >= atExit.add(BigDecimal("1.20")))
+        assertEquals(3_032.0 + 666.0, s.run!!.meter.odometerM, 40.0)
     }
 }

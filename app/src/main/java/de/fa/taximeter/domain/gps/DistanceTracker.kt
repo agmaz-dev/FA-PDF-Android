@@ -28,7 +28,15 @@ data class GpsFilterConfig(
     /** Ab dieser Doppler-Geschwindigkeit gilt das Fahrzeug als in Bewegung. */
     val movingSpeedMps: Double = 1.0,
     /** Nach so vielen aufeinanderfolgenden "Sprüngen" wird neu verankert (ohne Strecke). */
-    val jumpResetCount: Int = 5,
+    val jumpResetCount: Int = 3,
+    /** Tunnel: Schätzstrecke (letzte Geschwindigkeit × Zeit) darf die Luftlinie um höchstens diesen Faktor übersteigen. */
+    val bridgeMaxDetour: Double = 1.35,
+    /** Tunnel-Schätzung nur ab dieser letzten Geschwindigkeit (7,2 km/h) … */
+    val estimateMinSpeedMps: Double = 2.0,
+    /** … mit höchstens dieser Geschwindigkeit (100 km/h) … */
+    val estimateMaxSpeedMps: Double = 100.0 / 3.6,
+    /** … und höchstens so lange. */
+    val estimateMaxMs: Long = 180_000,
     /** Simulierte Standorte zulassen (nur Testmodus). */
     val allowMock: Boolean = false,
 )
@@ -39,6 +47,7 @@ enum class RejectReason(val label: String) {
     STALE("Veraltet"),
     DUPLICATE("Doppelt/zeitlich rückwärts"),
     JUMP("Unplausibler Sprung"),
+    FROZEN("Eingefrorene Position (z. B. Tunnel)"),
 }
 
 enum class GapReason(val label: String) {
@@ -119,6 +128,13 @@ object DistanceTracker {
         }
 
         val dt = fix.elapsedMs - state.cursorMs
+
+        // Eingefrorene Position: Doppler meldet Fahrt, aber die Koordinaten bleiben exakt gleich.
+        // Das ist physikalisch unmöglich (typisch im Tunnel) -> verwerfen, damit die Tunnel-Schätzung läuft.
+        if (Geo.distanceM(last, fix) < 0.5 && (fix.speedMps ?: 0.0) >= cfg.estimateMinSpeedMps) {
+            return TrackResult(state, rejected = RejectReason.FROZEN)
+        }
+
         val sinceLastS = (fix.elapsedMs - last.elapsedMs) / 1000.0
         val rawFromLast = Geo.distanceM(last, fix)
         val slack = (last.accuracyM ?: cfg.maxAccuracyM) + acc
@@ -129,30 +145,39 @@ object DistanceTracker {
             if (jumps < cfg.jumpResetCount) {
                 return TrackResult(state.copy(consecutiveJumps = jumps), rejected = RejectReason.JUMP)
             }
-            // Der bisherige Anker war offenbar falsch (oder echter Ortswechsel ohne Messung):
-            // neu verankern, Zeit als Messlücke, keine Strecke.
+            // Mehrere übereinstimmende Messungen an neuer Stelle: Entweder lagen die vorigen Positionen
+            // falsch (eingefroren, z. B. im Tunnel) oder der Anker war falsch. Ist die Strecke vom letzten
+            // Anker aus mit plausibler Geschwindigkeit erreichbar, wird sie gezählt (Tunnel), sonst nicht.
+            val straightA = Geo.distanceM(anchor, fix)
+            val elapsedA = fix.elapsedMs - anchor.elapsedMs
+            val plausible = elapsedA in 1..cfg.bridgeMaxGapMs &&
+                straightA / (elapsedA / 1000.0) <= cfg.bridgeMaxSpeedMps
+            val bridged = if (plausible) straightA else 0.0
             val gap = GapRecord(
                 startWallMs = last.wallTimeMs,
                 durationMs = dt,
-                bridgedM = 0.0,
-                straightLineM = Geo.distanceM(anchor, fix),
+                bridgedM = bridged,
+                straightLineM = straightA,
                 reason = GapReason.JUMP_RESET,
             )
             return TrackResult(
                 state = TrackerState(fix, fix, fix.elapsedMs, fix.speedMps, 0),
-                interval = MeterInterval(dt, 0.0, null, measured = false),
+                interval = MeterInterval(dt, bridged, null, measured = false),
                 gap = gap,
             )
         }
 
         if (dt > cfg.gapMs) {
-            // Messlücke: niemals Wartezeit; Überbrückung nur kurz, plausibel und mit guter Genauigkeit.
+            // Messlücke (z. B. Tunnel): niemals Wartezeit. Strecke = Luftlinie vom letzten Anker
+            // (Mindeststrecke); passt die Schätzung aus letzter Geschwindigkeit × Zeit dazu (höchstens
+            // 35 % Umweg), wird diese genommen – so springt der Zähler nach der Ausfahrt nicht zurück.
             val straight = Geo.distanceM(anchor, fix)
             val avgSpeed = straight / (dt / 1000.0)
-            val goodBoth = (anchor.accuracyM ?: Double.MAX_VALUE) <= cfg.goodAccuracyM * 2 &&
-                acc <= cfg.goodAccuracyM * 2
-            val bridge = dt <= cfg.bridgeMaxGapMs && avgSpeed <= cfg.bridgeMaxSpeedMps && goodBoth
-            val bridged = if (bridge) straight else 0.0
+            val bridge = dt <= cfg.bridgeMaxGapMs && avgSpeed <= cfg.bridgeMaxSpeedMps
+            val v = state.lastSpeedMps ?: 0.0
+            val estimate = if (v >= cfg.estimateMinSpeedMps)
+                minOf(v, cfg.estimateMaxSpeedMps) * (minOf(dt, cfg.estimateMaxMs) / 1000.0) else 0.0
+            val bridged = if (bridge) maxOf(straight, minOf(estimate, straight * cfg.bridgeMaxDetour)) else 0.0
             val gap = GapRecord(
                 startWallMs = last.wallTimeMs,
                 durationMs = dt,

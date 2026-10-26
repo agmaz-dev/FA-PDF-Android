@@ -107,9 +107,9 @@ class DistanceTrackerTest {
         val run = Run(DistanceTracker.seed(fix(0.0, 0.0, 0, speed = 0.0), 0))
         // Ab t=1 liegt jede Messung 2 km entfernt (z. B. erster Fix war falsch)
         for (t in 1..6) feed(run, fix(2_000.0, 0.0, t * 1000L, speed = 0.0))
-        assertEquals(4, run.rejects.size)
+        assertEquals(2, run.rejects.size)
         assertEquals(1, run.gaps)
-        assertEquals(0.0, run.distance, 0.0)
+        assertEquals(0.0, run.distance, 0.0) // 2 km in 3 s: unplausibel -> keine Strecke
     }
 
     @Test fun tunnelLueckeWirdPerLuftlinieUeberbrueckt() {
@@ -120,12 +120,12 @@ class DistanceTrackerTest {
         val gap = r.gap!!
         assertEquals(GapReason.GPS_LOST, gap.reason)
         assertEquals(77_000L, gap.durationMs)
-        assertEquals(1_700.0, gap.bridgedM, 1.0)
+        assertEquals(1_700.0, gap.bridgedM, 15.0)
         assertFalse(r.interval!!.measured)                 // Lücke ≠ Stillstand, keine Wartezeit
-        assertEquals(1_700.0, r.interval!!.distanceM, 1.0)
+        assertEquals(1_700.0, r.interval!!.distanceM, 15.0)
         run.state = r.state
         for (t in 88..97) feed(run, fix(0.0, 1_922.0 + (t - 87) * 22.2, t * 1000L, speed = 22.2))
-        assertEquals(222.0 + 1_700 + 222.0, run.distance + 1_700.0, 25.0)
+        assertEquals(222.0 + 1_700 + 222.0, run.distance + gap.bridgedM, 25.0)
     }
 
     @Test fun sehrLangeLueckeOhneLuftlinie() {
@@ -182,5 +182,50 @@ class DistanceTrackerTest {
         assertFalse(DistanceTracker.isUsableForStart(fix(0.0, 0.0, 1000), 20_000, cfg))
         assertFalse(DistanceTracker.isUsableForStart(null, 2000, cfg))
         assertFalse(DistanceTracker.isUsableForStart(fix(0.0, 0.0, 1000).copy(isMock = true), 2000, cfg))
+    }
+
+    // ------------------------------------------------------------ Tunnel-Fälle (Britzer Tunnel)
+
+    @Test fun tunnelAusfahrtMitUngenauemErstemSignalWirdGezaehlt() {
+        val run = Run(DistanceTracker.seed(fix(0.0, 0.0, 0, acc = 15.0, speed = 22.2), 0))
+        for (t in 1..10) feed(run, fix(0.0, t * 22.2, t * 1000L, acc = 15.0, speed = 22.2))
+        // erstes Signal nach dem Tunnel nur ±25 m genau
+        feed(run, fix(0.0, 222.0 + 1_700.0, 87_000, acc = 25.0, speed = 22.2))
+        assertEquals(222.0 + 1_700.0, run.distance, 30.0)
+    }
+
+    @Test fun eingefroreneNullPositionenImTunnelVerlierenKeineStrecke() {
+        val run = Run(DistanceTracker.seed(fix(0.0, 0.0, 0, speed = 22.2), 0))
+        for (t in 1..10) feed(run, fix(0.0, t * 22.2, t * 1000L, speed = 22.2))
+        // Handy meldet 77 s lang dieselbe Position am Tunneleingang, Geschwindigkeit 0
+        for (t in 11..87) feed(run, fix(0.0, 222.0, t * 1000L, speed = 0.0))
+        // Ausfahrt: echte Positionen 1,7 km weiter
+        for (t in 88..95) feed(run, fix(0.0, 1_922.0 + (t - 88) * 22.2, t * 1000L, speed = 22.2))
+        assertEquals(1_922.0 + 7 * 22.2, run.distance, 40.0)
+    }
+
+    @Test fun eingefroreneMitFahrtGemeldeteWerdenVerworfen() {
+        val run = Run(DistanceTracker.seed(fix(0.0, 0.0, 0, speed = 22.2), 0))
+        for (t in 1..10) feed(run, fix(0.0, t * 22.2, t * 1000L, speed = 22.2))
+        for (t in 11..20) feed(run, fix(0.0, 222.0, t * 1000L, speed = 22.2))
+        assertEquals(10, run.rejects.count { it == RejectReason.FROZEN })
+        assertEquals(10_000L, run.state.cursorMs) // Zeit läuft nicht als gemessen weiter -> Schätzung greift
+    }
+
+    @Test fun gekruemmterTunnelHoechstens35ProzentUmweg() {
+        val run = Run(DistanceTracker.seed(fix(0.0, 0.0, 0, speed = 22.2), 0))
+        for (t in 1..10) feed(run, fix(0.0, t * 22.2, t * 1000L, speed = 22.2))
+        // Luftlinie nur 1000 m, Schätzung 77 s × 22,2 = 1709 m -> begrenzt auf 1350 m
+        val r = DistanceTracker.onFix(run.state, fix(0.0, 1_222.0, 87_000, speed = 22.2), 87_000, cfg)
+        assertEquals(1_350.0, r.gap!!.bridgedM, 2.0)
+    }
+
+    @Test fun einzelnerSprungImStandBleibtOhneStrecke() {
+        val run = Run(DistanceTracker.seed(fix(0.0, 0.0, 0, speed = 0.0), 0))
+        for (t in 1..300) feed(run, fix(0.0, 0.0, t * 1000L, speed = 0.0))
+        feed(run, fix(800.0, 0.0, 301_000, speed = 0.0)) // einzelner Ausreißer
+        for (t in 302..320) feed(run, fix(0.0, 0.0, t * 1000L, speed = 0.0))
+        assertEquals(0.0, run.distance, 0.0)
+        assertEquals(listOf(RejectReason.JUMP), run.rejects)
     }
 }
