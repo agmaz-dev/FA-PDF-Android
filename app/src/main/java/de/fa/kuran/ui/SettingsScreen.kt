@@ -38,6 +38,8 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -186,7 +188,7 @@ fun SettingsScreen(q: Quran, st: AppState, onBack: () -> Unit) {
                         val fam = Fonts.arabic(if (st.font == "hayrat") "amiri" else st.font)
                         Text(
                             androidx.compose.ui.text.buildAnnotatedString {
-                                append("ٱلْحَمْدُ "); withStyle(androidx.compose.ui.text.SpanStyle(color = pal.red)) { append("لِلَّهِ") }; append(" رَبِّ ٱلْعَٰلَمِينَ ﴿٢﴾ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ ﴿٣﴾")
+                                append("ٱلْحَمْدُ "); val st0 = length; append("لِلَّهِ"); addStyle(androidx.compose.ui.text.SpanStyle(color = pal.red), st0, length); append(" رَبِّ ٱلْعَٰلَمِينَ ﴿٢﴾ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ ﴿٣﴾")
                             },
                             style = arabicStyle(fam, 26f * st.arZoom.coerceIn(0.7f, 1.6f), pal.ink, TextAlign.Center), maxLines = 2,
                         )
