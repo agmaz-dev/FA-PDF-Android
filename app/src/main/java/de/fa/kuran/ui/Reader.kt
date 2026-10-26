@@ -190,7 +190,7 @@ private fun ReaderBody(q: Quran, st: AppState, wide: Boolean, twoUp: Boolean, on
         if (sel != null && st.mode != ReadMode.MUSHAF && q.pageOf(sel) == page) {
             val ay = q.ayahs[sel]
             Row(
-                Modifier.align(Alignment.BottomCenter).padding(bottom = if (playIdx != null) 96.dp else 22.dp)
+                Modifier.align(Alignment.BottomCenter).padding(bottom = 22.dp)
                     .clip(RoundedCornerShape(26.dp)).background(pal.glass).border(1.dp, pal.glassLine, RoundedCornerShape(26.dp)).padding(5.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -202,29 +202,6 @@ private fun ReaderBody(q: Quran, st: AppState, wide: Boolean, twoUp: Boolean, on
                     Text(t("Paylaş") + " · " + q.surah(ay.s).name() + " " + ay.s + ":" + ay.a, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
                 }
                 RoundIcon(pal, Icons.Filled.Close, t("Kapat"), size = 44.dp) { selected = null }
-            }
-        }
-        // Sesli okuma çubuğu
-        if (playIdx != null) {
-            val ay = q.ayahs[playIdx]
-            Row(
-                Modifier.align(Alignment.BottomCenter).padding(bottom = 22.dp, start = 16.dp, end = 16.dp).widthIn(max = 560.dp).fillMaxWidth()
-                    .clip(RoundedCornerShape(30.dp)).background(pal.glass).border(1.dp, pal.glassLine, RoundedCornerShape(30.dp)).padding(6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                Box(Modifier.size(48.dp).clip(CircleShape).background(pal.accent).clickable { audio.toggle() }, contentAlignment = Alignment.Center) {
-                    if (audio.paused) androidx.compose.material3.Icon(Icons.Filled.PlayArrow, t("Devam et"), tint = Color.White, modifier = Modifier.size(28.dp))
-                    else PauseGlyph(Color.White)
-                }
-                Column(Modifier.weight(1f)) {
-                    Text(de.fa.kuran.data.reciterById(audio.reciter).name, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = pal.ink, maxLines = 1)
-                    Text(
-                        (if (audio.loading) t("Yükleniyor…") + " · " else "") + q.surah(ay.s).name() + " " + ay.s + ":" + ay.a,
-                        fontSize = 13.sp, color = pal.muted, maxLines = 1,
-                    )
-                }
-                RoundIcon(pal, Icons.Filled.Close, t("Durdur"), size = 44.dp) { audio.stop() }
             }
         }
         audio.error?.let {
@@ -241,6 +218,32 @@ private fun ReaderBody(q: Quran, st: AppState, wide: Boolean, twoUp: Boolean, on
             Box(Modifier.align(Alignment.TopCenter).fillMaxWidth().height(64.dp).clickable(
                 interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null,
             ) { openBars() })
+        }
+        // Sesli okuma: sayfanın üst şeridinde küçük çubuk (metni kapatmaz)
+        if (playIdx != null) {
+            val ay = q.ayahs[playIdx]
+            val short = de.fa.kuran.data.reciterById(audio.reciter).name.split(' ', '-').last()
+            Row(
+                Modifier.align(Alignment.TopCenter).padding(top = if (bars) (if (wide) 128.dp else 188.dp) else 6.dp)
+                    .height(40.dp).shadow(4.dp, RoundedCornerShape(20.dp))
+                    .clip(RoundedCornerShape(20.dp)).background(pal.glass).border(1.dp, pal.glassLine, RoundedCornerShape(20.dp))
+                    .padding(start = 4.dp, end = 2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Box(Modifier.size(32.dp).clip(CircleShape).background(pal.accent).clickable { audio.toggle() }, contentAlignment = Alignment.Center) {
+                    if (audio.paused) androidx.compose.material3.Icon(Icons.Filled.PlayArrow, t("Devam et"), tint = Color.White, modifier = Modifier.size(20.dp))
+                    else Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                        Box(Modifier.size(width = 3.5.dp, height = 12.dp).clip(RoundedCornerShape(1.dp)).background(Color.White))
+                        Box(Modifier.size(width = 3.5.dp, height = 12.dp).clip(RoundedCornerShape(1.dp)).background(Color.White))
+                    }
+                }
+                Text("${ay.s}:${ay.a}", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = pal.ink, maxLines = 1, modifier = Modifier.padding(start = 4.dp))
+                Text(if (audio.loading) "· " + t("Yükleniyor…") else "· $short", fontSize = 13.sp, color = pal.muted, maxLines = 1)
+                Box(Modifier.size(32.dp).clip(CircleShape).clickable { audio.stop() }, contentAlignment = Alignment.Center) {
+                    androidx.compose.material3.Icon(Icons.Filled.Close, t("Durdur"), tint = pal.muted, modifier = Modifier.size(18.dp))
+                }
+            }
         }
 
         if (hint && !bars) {
