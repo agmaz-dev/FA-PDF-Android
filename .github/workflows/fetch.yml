@@ -2,17 +2,18 @@ name: DIB meal fetch
 on:
   push:
     branches: [ dib-fetch ]
+permissions:
+  contents: write
 jobs:
   fetch:
     runs-on: ubuntu-latest
     steps:
-      - name: Download
+      - name: Download and push to temp branch
         run: |
-          mkdir out
-          curl -sSL -A "Mozilla/5.0" -o out/kuran_meal.pdf "https://webdosya.diyanet.gov.tr/kuran/kuranikerim/dosyalar/document/kuran_meal.pdf" || true
-          ls -la out
-      - uses: actions/upload-artifact@v4
-        with:
-          name: dib
-          path: out/
-          retention-days: 1
+          mkdir out && cd out
+          curl -sSL -A "Mozilla/5.0" -o kuran_meal.pdf "https://webdosya.diyanet.gov.tr/kuran/kuranikerim/dosyalar/document/kuran_meal.pdf"
+          ls -la
+          git init -q -b dib-data
+          git config user.name "github-actions[bot]"; git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A && git commit -qm data
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" dib-data
