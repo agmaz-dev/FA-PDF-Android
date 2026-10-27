@@ -63,6 +63,7 @@ class MainActivity : ComponentActivity() {
         window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.BLACK))
         de.fa.kuran.ui.Fonts.init(applicationContext)
         de.fa.kuran.ui.Tevafuk.init(applicationContext)
+        de.fa.kuran.ui.DibMeal.init(applicationContext)
         de.fa.kuran.data.Audio.init(applicationContext)
         val st = AppState(applicationContext)
         applyImmersive(true)
@@ -100,6 +101,9 @@ fun App(st: AppState, immersive: (Boolean) -> Unit) {
     }
     LaunchedEffect(Unit) {
         withContext(Dispatchers.IO) { runCatching { Pack.persistAssets(ctx) } }
+    }
+    LaunchedEffect(st.packVersion) {
+        withContext(Dispatchers.IO) { de.fa.kuran.ui.Fonts.init(ctx); de.fa.kuran.ui.DibMeal.init(ctx); de.fa.kuran.ui.Tevafuk.init(ctx) }
     }
     LaunchedEffect(st.packUri, quran, st.packVersion) {
         val base = quran ?: return@LaunchedEffect

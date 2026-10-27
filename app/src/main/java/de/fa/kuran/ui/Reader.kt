@@ -223,11 +223,13 @@ private fun ReaderBody(q: Quran, st: AppState, wide: Boolean, twoUp: Boolean, on
             ) { openBars() })
         }
         // Sesli okuma: kameranın hemen solunda küçük düğme (sadece ⏸/▶ ve ✕), sayfa kaymaz
-        if (playIdx != null) {
+        if (playIdx != null) BoxWithConstraints(Modifier.fillMaxSize()) {
+            // aufgeklappt: Mitte der Mushaf-Seite oben (zwischen Seitenzahl und Surenname), in allen drei Ansichten frei
+            val cx = if (st.mode == ReadMode.MUSHAF) maxWidth / 2 else maxWidth * 0.75f
             Row(
                 // aufgeklappt: links neben der Seitenzahl; zugeklappt: links neben der Kamera
-                (if (wide) Modifier.align(Alignment.TopStart).padding(start = 64.dp) else Modifier.align(Alignment.TopCenter).offset(x = (-62).dp))
-                    .padding(top = if (bars) (if (wide) 128.dp else 188.dp) else 6.dp)
+                (if (wide) Modifier.align(Alignment.TopStart).offset(x = cx - 36.dp) else Modifier.align(Alignment.TopCenter).offset(x = (-62).dp))
+                    .padding(top = if (bars) (if (wide) 128.dp else 188.dp) else if (wide) 14.dp else 6.dp)
                     .height(38.dp).shadow(3.dp, RoundedCornerShape(19.dp))
                     .clip(RoundedCornerShape(19.dp)).background(pal.glass).border(1.dp, pal.glassLine, RoundedCornerShape(19.dp))
                     .padding(horizontal = 3.dp),

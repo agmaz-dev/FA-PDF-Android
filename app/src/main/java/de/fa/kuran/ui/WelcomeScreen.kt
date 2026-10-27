@@ -50,7 +50,7 @@ fun WelcomeScreen(st: AppState, onDone: (String) -> Unit) {
     val details = mapOf(
         "hayrat" to Triple("H", "Kur'ân-ı Kerîm ve Muhtasar Kelime Meâli", "Tevâfuklu mushaf ile birlikte · Risale-i Nur hâşiyeleri"),
         "elmalili" to Triple("E", "Elmalılı Muhammed Hamdi Yazır (1878 – 1942)", "Sûre tanıtımlarıyla birlikte"),
-        "tr.diyanet" to Triple("D", "Diyanet İşleri Başkanlığı", "Türkiye'nin resmî meali"),
+        "tr.diyanet" to Triple("D", "Diyanet İşleri Başkanlığı", "Altuntaş – Şahin (2011)"),
         "tr.golpinarli" to Triple("G", "Abdülbâki Gölpınarlı (1900 – 1982)", "Edebî dil"),
         "de.bubenheim" to Triple("D", "Frank Bubenheim & Nadeem Elyas", "Deutsche Übersetzung"),
         "en.sahih" to Triple("EN", "Saheeh International", "English translation"),

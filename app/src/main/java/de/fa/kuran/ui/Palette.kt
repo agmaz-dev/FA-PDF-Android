@@ -135,6 +135,20 @@ object Tevafuk {
     fun isRed(ayahIdx: Int, wordIdx: Int): Boolean = red.contains(ayahIdx.toLong() * 1000 + wordIdx)
 }
 
+/** Diyanet İşleri Başkanlığı'nın yeni meali (Altuntaş–Şahin) – kişisel pakette: pack/diyanet.json */
+object DibMeal {
+    var meal: List<String>? = null
+        private set
+    fun init(ctx: android.content.Context) {
+        if (meal != null) return
+        val txt = runCatching {
+            val f = java.io.File(ctx.filesDir, "pack/diyanet.json")
+            if (f.exists() && f.length() > 0) f.readText() else ctx.assets.open("pack/diyanet.json").bufferedReader().use { it.readText() }
+        }.getOrNull() ?: return
+        runCatching { val a = org.json.JSONObject(txt).getJSONArray("meal"); meal = List(a.length()) { a.getString(it) } }
+    }
+}
+
 const val BASMALA = "بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ"
 
 fun arabicDigits(n: Int): String = n.toString().map { c -> '٠' + (c - '0') }.joinToString("")
@@ -146,7 +160,7 @@ data class MealInfo2(val id: String, val short: String, val name: String)
 val MEALLER = listOf(
     MealInfo2("hayrat", "Hayrat", "Hayrat Muhtasar Meâli"),
     MealInfo2("elmalili", "Elmalılı", "Elmalılı Hamdi Yazır Meâli"),
-    MealInfo2("tr.diyanet", "Diyanet", "Diyanet İşleri Başkanlığı Meâli"),
+    MealInfo2("tr.diyanet", "Diyanet", "Diyanet İşleri Başkanlığı Meâli (Altuntaş – Şahin)"),
     MealInfo2("tr.golpinarli", "Gölpınarlı", "Abdülbâki Gölpınarlı Meâli"),
     MealInfo2("de.bubenheim", "Bubenheim", "Deutsch – Bubenheim & Elyas"),
     MealInfo2("en.sahih", "Saheeh Intl.", "English – Saheeh International"),

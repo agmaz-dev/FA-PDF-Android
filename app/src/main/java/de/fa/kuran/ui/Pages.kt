@@ -58,6 +58,14 @@ fun mealLines(q: Quran, pack: Pack?, source: String, ayahIdx: List<Int>): List<M
             if (t.isBlank()) continue
             val g = pack.hayratGroup?.getOrNull(i) ?: listOf(i)
             out += MealLine(i, g.joinToString(", ") { q.ayahs[it].a.toString() }, t)
+        } else if (source == "tr.diyanet" && DibMeal.meal != null) {
+            val m = DibMeal.meal!!
+            val t = m.getOrNull(i) ?: ""
+            if (t.isBlank()) continue
+            var j = i + 1
+            while (j < q.ayahs.size && q.ayahs[j].s == ay.s && m.getOrNull(j) == "") j++
+            val label = if (j - 1 > i) "${ay.a}-${q.ayahs[j - 1].a}" else "${ay.a}"
+            out += MealLine(i, label, t)
         } else if (q.hasMeal(source)) {
             val t = q.mealText(source, i)
             if (t.isBlank()) continue
