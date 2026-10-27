@@ -142,7 +142,7 @@ class Pack(
                         while (true) {
                             val e = z.nextEntry ?: break
                             val name = e.name.substringAfterLast('/')
-                            if (!e.isDirectory && name.isNotEmpty() && (img.matches(name.lowercase()) || name.endsWith(".json"))) {
+                            if (!e.isDirectory && name.isNotEmpty() && (img.matches(name.lowercase()) || name.endsWith(".json") || name.endsWith(".ttf") || name.endsWith(".otf"))) {
                                 java.io.File(dir, name).outputStream().use { z.copyTo(it) }
                                 n++; onProgress(n)
                             }
