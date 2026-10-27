@@ -1,29 +1,13 @@
-name: DIB meal fetch
+name: cleanup temp branches
 on:
   push:
     branches: [ dib-fetch ]
 permissions:
   contents: write
 jobs:
-  fetch:
+  clean:
     runs-on: ubuntu-latest
     steps:
-      - name: Fetch translations
-        run: |
-          mkdir out && cd out
-          curl -sSL "https://api.quran.com/api/v4/resources/translations?language=tr" -o tr_list.json
-          curl -sSL "https://api.quran.com/api/v4/resources/translations" -o all_list.json
-          python3 - <<'PY'
-          import json
-          d=json.load(open('all_list.json'))
-          tr=[t for t in d['translations'] if t.get('language_name','').lower()=='turkish']
-          json.dump(tr,open('turkish.json','w'),ensure_ascii=False,indent=1)
-          print(tr)
-          PY
-          for id in $(python3 -c "import json;print(' '.join(str(t['id']) for t in json.load(open('turkish.json'))))"); do
-            curl -sSL "https://api.quran.com/api/v4/quran/translations/$id" -o t_$id.json; ls -la t_$id.json
-          done
-          git init -q -b dib-data
-          git config user.name "github-actions[bot]"; git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A && git commit -qm data
-          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" dib-data
+      - run: |
+          git init -q x && cd x
+          for b in dib-data dib-fetch; do git push "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" --delete $b || true; done
