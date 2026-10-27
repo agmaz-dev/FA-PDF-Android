@@ -144,7 +144,7 @@ private fun ReaderBody(q: Quran, st: AppState, wide: Boolean, twoUp: Boolean, on
         CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
             HorizontalPager(
                 state = pager,
-                modifier = Modifier.fillMaxSize().padding(top = if (bars) (if (wide) 124.dp else 184.dp) + (if (playIdx != null) 48.dp else 0.dp) else if (playIdx != null) 52.dp else 0.dp),
+                modifier = Modifier.fillMaxSize().padding(top = if (bars) (if (wide) 124.dp else 184.dp) else 0.dp),
                 beyondViewportPageCount = 1,
                 pageSpacing = if (twoUp) 0.dp else 12.dp,
             ) { idx ->
@@ -222,29 +222,26 @@ private fun ReaderBody(q: Quran, st: AppState, wide: Boolean, twoUp: Boolean, on
                 interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null,
             ) { openBars() })
         }
-        // Sesli okuma: sayfanın üst şeridinde küçük çubuk (metni kapatmaz)
+        // Sesli okuma: kameranın hemen solunda küçük düğme (sadece ⏸/▶ ve ✕), sayfa kaymaz
         if (playIdx != null) {
-            val ay = q.ayahs[playIdx]
-            val short = de.fa.kuran.data.reciterById(audio.reciter).name.split(' ', '-').last()
             Row(
-                Modifier.align(Alignment.TopStart).padding(start = 14.dp, top = if (bars) (if (wide) 128.dp else 188.dp) else 8.dp)
-                    .height(40.dp).shadow(4.dp, RoundedCornerShape(20.dp))
-                    .clip(RoundedCornerShape(20.dp)).background(pal.glass).border(1.dp, pal.glassLine, RoundedCornerShape(20.dp))
-                    .padding(start = 4.dp, end = 2.dp),
+                Modifier.align(Alignment.TopCenter).offset(x = (-56).dp)
+                    .padding(top = if (bars) (if (wide) 128.dp else 188.dp) else 6.dp)
+                    .height(34.dp).shadow(3.dp, RoundedCornerShape(17.dp))
+                    .clip(RoundedCornerShape(17.dp)).background(pal.glass).border(1.dp, pal.glassLine, RoundedCornerShape(17.dp))
+                    .padding(horizontal = 3.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(1.dp),
             ) {
-                Box(Modifier.size(32.dp).clip(CircleShape).background(pal.accent).clickable { audio.toggle() }, contentAlignment = Alignment.Center) {
-                    if (audio.paused) androidx.compose.material3.Icon(Icons.Filled.PlayArrow, t("Devam et"), tint = Color.White, modifier = Modifier.size(20.dp))
-                    else Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-                        Box(Modifier.size(width = 3.5.dp, height = 12.dp).clip(RoundedCornerShape(1.dp)).background(Color.White))
-                        Box(Modifier.size(width = 3.5.dp, height = 12.dp).clip(RoundedCornerShape(1.dp)).background(Color.White))
+                Box(Modifier.size(28.dp).clip(CircleShape).background(pal.accent).clickable { audio.toggle() }, contentAlignment = Alignment.Center) {
+                    if (audio.paused) androidx.compose.material3.Icon(Icons.Filled.PlayArrow, t("Devam et"), tint = Color.White, modifier = Modifier.size(18.dp))
+                    else Row(horizontalArrangement = Arrangement.spacedBy(2.5.dp)) {
+                        Box(Modifier.size(width = 3.dp, height = 11.dp).clip(RoundedCornerShape(1.dp)).background(Color.White))
+                        Box(Modifier.size(width = 3.dp, height = 11.dp).clip(RoundedCornerShape(1.dp)).background(Color.White))
                     }
                 }
-                Text("${ay.s}:${ay.a}", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = pal.ink, maxLines = 1, modifier = Modifier.padding(start = 4.dp))
-                Text(if (audio.loading) "· " + t("Yükleniyor…") else if (audio.phase == "meal") "· " + t("Meal") else "· $short", fontSize = 13.sp, color = pal.muted, maxLines = 1)
-                Box(Modifier.size(32.dp).clip(CircleShape).clickable { audio.stop() }, contentAlignment = Alignment.Center) {
-                    androidx.compose.material3.Icon(Icons.Filled.Close, t("Durdur"), tint = pal.muted, modifier = Modifier.size(18.dp))
+                Box(Modifier.size(28.dp).clip(CircleShape).clickable { audio.stop() }, contentAlignment = Alignment.Center) {
+                    androidx.compose.material3.Icon(Icons.Filled.Close, t("Durdur"), tint = pal.muted, modifier = Modifier.size(16.dp))
                 }
             }
         }
