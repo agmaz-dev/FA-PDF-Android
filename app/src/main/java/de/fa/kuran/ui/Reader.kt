@@ -225,23 +225,24 @@ private fun ReaderBody(q: Quran, st: AppState, wide: Boolean, twoUp: Boolean, on
         // Sesli okuma: kameranın hemen solunda küçük düğme (sadece ⏸/▶ ve ✕), sayfa kaymaz
         if (playIdx != null) {
             Row(
-                Modifier.align(Alignment.TopCenter).offset(x = (-56).dp)
+                // aufgeklappt: links neben der Seitenzahl; zugeklappt: links neben der Kamera
+                (if (wide) Modifier.align(Alignment.TopStart).padding(start = 64.dp) else Modifier.align(Alignment.TopCenter).offset(x = (-62).dp))
                     .padding(top = if (bars) (if (wide) 128.dp else 188.dp) else 6.dp)
-                    .height(34.dp).shadow(3.dp, RoundedCornerShape(17.dp))
-                    .clip(RoundedCornerShape(17.dp)).background(pal.glass).border(1.dp, pal.glassLine, RoundedCornerShape(17.dp))
+                    .height(38.dp).shadow(3.dp, RoundedCornerShape(19.dp))
+                    .clip(RoundedCornerShape(19.dp)).background(pal.glass).border(1.dp, pal.glassLine, RoundedCornerShape(19.dp))
                     .padding(horizontal = 3.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(1.dp),
             ) {
-                Box(Modifier.size(28.dp).clip(CircleShape).background(pal.accent).clickable { audio.toggle() }, contentAlignment = Alignment.Center) {
-                    if (audio.paused) androidx.compose.material3.Icon(Icons.Filled.PlayArrow, t("Devam et"), tint = Color.White, modifier = Modifier.size(18.dp))
-                    else Row(horizontalArrangement = Arrangement.spacedBy(2.5.dp)) {
-                        Box(Modifier.size(width = 3.dp, height = 11.dp).clip(RoundedCornerShape(1.dp)).background(Color.White))
-                        Box(Modifier.size(width = 3.dp, height = 11.dp).clip(RoundedCornerShape(1.dp)).background(Color.White))
+                Box(Modifier.size(32.dp).clip(CircleShape).background(pal.accent).clickable { audio.toggle() }, contentAlignment = Alignment.Center) {
+                    if (audio.paused) androidx.compose.material3.Icon(Icons.Filled.PlayArrow, t("Devam et"), tint = Color.White, modifier = Modifier.size(21.dp))
+                    else Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                        Box(Modifier.size(width = 3.5.dp, height = 13.dp).clip(RoundedCornerShape(1.dp)).background(Color.White))
+                        Box(Modifier.size(width = 3.5.dp, height = 13.dp).clip(RoundedCornerShape(1.dp)).background(Color.White))
                     }
                 }
-                Box(Modifier.size(28.dp).clip(CircleShape).clickable { audio.stop() }, contentAlignment = Alignment.Center) {
-                    androidx.compose.material3.Icon(Icons.Filled.Close, t("Durdur"), tint = pal.muted, modifier = Modifier.size(16.dp))
+                Box(Modifier.size(32.dp).clip(CircleShape).clickable { audio.stop() }, contentAlignment = Alignment.Center) {
+                    androidx.compose.material3.Icon(Icons.Filled.Close, t("Durdur"), tint = pal.muted, modifier = Modifier.size(18.dp))
                 }
             }
         }
