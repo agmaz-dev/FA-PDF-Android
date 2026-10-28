@@ -1,18 +1,39 @@
-name: tmp fetch
+name: tmp env
 on:
   push:
     branches: [ dib-fetch ]
 permissions:
   contents: write
 jobs:
-  f:
+  env:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        rec: [danis, collak]
+        part: [0, 1, 2, 3, 4, 5]
+    steps:
+      - uses: actions/checkout@v4
+        with: { ref: dib-fetch }
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg >/dev/null
+      - run: pip install -q numpy
+      - run: python tools/env.py ${{ matrix.rec }} ${{ matrix.part }} 6
+      - uses: actions/upload-artifact@v4
+        with: { name: "env-${{ matrix.rec }}-${{ matrix.part }}", path: out/ }
+  ref:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+        with: { ref: dib-fetch }
+      - run: python tools/ref.py
+      - uses: actions/upload-artifact@v4
+        with: { name: ref, path: out/ }
+  push:
+    needs: [env, ref]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { path: all, merge-multiple: true }
       - run: |
-          mkdir out && cd out
-          for id in ishak_danish ishakdanishatimmp3; do curl -sSL "https://archive.org/metadata/$id" -o meta_$id.json; done
-          curl -sSL "https://api.quran.com/api/v4/resources/chapter_reciters" -o qc_reciters.json
-          curl -sSL "https://archive.org/download/ishakdanishatimmp3" -o ia_danis_dl.html
-          ls -la
+          cd all && ls | wc -l && du -sh .
           git init -q -b dib-data; git config user.name b; git config user.email b@b
           git add -A && git commit -qm d && git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" dib-data
