@@ -52,6 +52,7 @@ fun WelcomeScreen(st: AppState, onDone: (String) -> Unit) {
         "elmalili" to Triple("E", "Elmalılı Muhammed Hamdi Yazır (1878 – 1942)", "Sûre tanıtımlarıyla birlikte"),
         "tr.diyanet" to Triple("D", "Diyanet İşleri Başkanlığı", "Altuntaş – Şahin (2011)"),
         "tr.golpinarli" to Triple("G", "Abdülbâki Gölpınarlı (1900 – 1982)", "Edebî dil"),
+        "feridun" to Triple("F", "Feridun A.", "Sade Türkçe meal, açıklama notlarıyla"),
         "de.bubenheim" to Triple("D", "Frank Bubenheim & Nadeem Elyas", "Deutsche Übersetzung"),
         "en.sahih" to Triple("EN", "Saheeh International", "English translation"),
         "ar.muyassar" to Triple("ع", "التفسير الميسر", "مجمع الملك فهد لطباعة المصحف الشريف"),

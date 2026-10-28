@@ -84,7 +84,7 @@ fun IndexScreen(q: Quran, st: AppState, onGo: (Int) -> Unit, onBack: () -> Unit)
         if (nq.length < 3) emptyList()
         else {
             val list = q.ayahs.indices.map { i ->
-                (if (mealId == "tr.diyanet") DibMeal.meal?.getOrNull(i) else if (q.hasMeal(mealId)) q.mealText(mealId, i) else if (mealId == "hayrat") pack?.hayratMeal?.getOrNull(i) else pack?.elmalili?.get(i)) ?: q.builtinMeal(i)
+                (if (mealId == "feridun") FeridunMeal.meal?.getOrNull(i) else if (mealId == "tr.diyanet") DibMeal.meal?.getOrNull(i) else if (q.hasMeal(mealId)) q.mealText(mealId, i) else if (mealId == "hayrat") pack?.hayratMeal?.getOrNull(i) else pack?.elmalili?.get(i)) ?: q.builtinMeal(i)
             }
             val out = ArrayList<Hit>()
             for (i in list.indices) {

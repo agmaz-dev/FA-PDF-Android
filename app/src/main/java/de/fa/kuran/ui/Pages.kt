@@ -41,6 +41,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.em
 import de.fa.kuran.data.AppState
 import de.fa.kuran.data.Pack
 import de.fa.kuran.data.Quran
@@ -58,6 +59,11 @@ fun mealLines(q: Quran, pack: Pack?, source: String, ayahIdx: List<Int>): List<M
             if (t.isBlank()) continue
             val g = pack.hayratGroup?.getOrNull(i) ?: listOf(i)
             out += MealLine(i, g.joinToString(", ") { q.ayahs[it].a.toString() }, t)
+        } else if (source == "feridun" && FeridunMeal.meal != null) {
+            val t = FeridunMeal.meal!!.getOrNull(i) ?: ""
+            if (t.isBlank()) continue
+            val n = FeridunMeal.notes?.getOrNull(i).orEmpty()
+            out += MealLine(i, "${ay.a}", if (n.isNotBlank()) "$t\u2063$n" else t)
         } else if (source == "tr.diyanet" && DibMeal.meal != null) {
             val m = DibMeal.meal!!
             val t = m.getOrNull(i) ?: ""
@@ -96,6 +102,8 @@ private val fnRegex = Regex("⁽(\\d+)⁾")
 
 fun mealAnnotated(label: String, text: String, red: Color, selected: Boolean, hl: Color): AnnotatedString = buildAnnotatedString {
     withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append("$label- ") }
+    val note = if (text.contains('\u2063')) text.substringAfter('\u2063') else null
+    @Suppress("NAME_SHADOWING") val text = text.substringBefore('\u2063')
     var last = 0
     for (m in fnRegex.findAll(text)) {
         append(text.substring(last, m.range.first))
@@ -103,6 +111,7 @@ fun mealAnnotated(label: String, text: String, red: Color, selected: Boolean, hl
         last = m.range.last + 1
     }
     append(text.substring(last))
+    if (!note.isNullOrBlank()) withStyle(SpanStyle(fontStyle = FontStyle.Italic, fontSize = 0.82.em, color = Color(0xFF8A8478))) { append("\n" + note) }
     if (selected) addStyle(SpanStyle(background = hl), 0, length)
 }
 

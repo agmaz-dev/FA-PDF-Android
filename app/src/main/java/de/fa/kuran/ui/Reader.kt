@@ -127,7 +127,7 @@ private fun ReaderBody(q: Quran, st: AppState, wide: Boolean, twoUp: Boolean, on
     val playIdx = audio.playing
     val hl = playIdx ?: selected
     // meal sesi için âyetin meali
-    audio.mealOf = { i -> mealLines(q, st.pack, st.meal, listOf(i)).firstOrNull()?.text ?: "" }
+    audio.mealOf = { i -> mealOnly(mealLines(q, st.pack, st.meal, listOf(i)).firstOrNull()?.text ?: "") }
     audio.mealLang = mealSpeechLang(st.meal)
     val onPlay: () -> Unit = {
         if (playIdx == null) audio.play(q, selected ?: q.ayahsOnPage(page).firstOrNull()?.idx ?: 0) else audio.toggle()
@@ -178,7 +178,7 @@ private fun ReaderBody(q: Quran, st: AppState, wide: Boolean, twoUp: Boolean, on
                     RoundIcon(pal, Icons.Filled.Close, t("Kapat"), size = 36.dp) { selected = null }
                 }
                 Text(
-                    mealLines(q, st.pack, st.meal, listOf(ay.idx)).firstOrNull()?.text?.replace(Regex("⁽\\d+⁾"), "")
+                    mealLines(q, st.pack, st.meal, listOf(ay.idx)).firstOrNull()?.text?.let { mealOnly(it) }?.replace(Regex("⁽\\d+⁾"), "")
                         ?: t("Bu âyetin meâli bir önceki âyetle birlikte verilmiştir."),
                     fontSize = 16.sp, lineHeight = 22.sp, color = pal.ink,
                     modifier = Modifier.heightIn(max = 160.dp).verticalScroll(rememberScrollState()),
@@ -456,7 +456,7 @@ private fun TwoUp(q: Quran, right: Int, st: AppState, pal: Palette, selected: In
 /** Âyeti Arapçası ve seçili mealiyle paylaşır (WhatsApp vb.) */
 fun shareAyah(ctx: android.content.Context, q: Quran, st: AppState, idx: Int) {
     val ay = q.ayahs[idx]
-    val meal = mealLines(q, st.pack, st.meal, listOf(idx)).firstOrNull()?.text?.replace(Regex("⁽\\d+⁾|\\(\\d+\\)"), "")?.trim() ?: ""
+    val meal = mealLines(q, st.pack, st.meal, listOf(idx)).firstOrNull()?.text?.let { mealOnly(it) }?.replace(Regex("⁽\\d+⁾|\\(\\d+\\)"), "")?.trim() ?: ""
     val ref = q.surah(ay.s).name() + " " + ay.s + ":" + ay.a
     val text = buildString {
         append(ay.ar).append(" ﴿").append(arabicDigits(ay.a)).append("﴾")
