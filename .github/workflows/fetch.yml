@@ -1,39 +1,36 @@
-name: tmp env
+name: tmp align
 on:
   push:
     branches: [ dib-fetch ]
 permissions:
   contents: write
 jobs:
-  env:
+  al:
     runs-on: ubuntu-latest
+    timeout-minutes: 300
     strategy:
+      fail-fast: false
       matrix:
         rec: [danis, collak]
-        part: [0, 1, 2, 3, 4, 5]
+        part: [0]
     steps:
       - uses: actions/checkout@v4
         with: { ref: dib-fetch }
       - run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg >/dev/null
-      - run: pip install -q numpy
-      - run: python tools/env.py ${{ matrix.rec }} ${{ matrix.part }} 6
+      - run: pip install -q torch --index-url https://download.pytorch.org/whl/cpu && pip install -q transformers numba numpy
+      - run: mkdir -p out && (python tools/align.py ${{ matrix.rec }} ${{ matrix.part }} 1 ${{ env.ONLY }} 2>&1 | tee out/log_${{ matrix.rec }}_${{ matrix.part }}.txt) ; true
+        env: { ONLY: "1,67,112,36" }
       - uses: actions/upload-artifact@v4
-        with: { name: "env-${{ matrix.rec }}-${{ matrix.part }}", path: out/ }
-  ref:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with: { ref: dib-fetch }
-      - run: python tools/ref.py
-      - uses: actions/upload-artifact@v4
-        with: { name: ref, path: out/ }
+        if: always()
+        with: { name: "al-${{ matrix.rec }}-${{ matrix.part }}", path: out/ }
   push:
-    needs: [env, ref]
+    needs: [al]
+    if: always()
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
         with: { path: all, merge-multiple: true }
       - run: |
-          cd all && ls | wc -l && du -sh .
+          cd all && ls && du -sh .
           git init -q -b dib-data; git config user.name b; git config user.email b@b
           git add -A && git commit -qm d && git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" dib-data
