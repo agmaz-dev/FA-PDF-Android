@@ -63,6 +63,7 @@ class MainActivity : ComponentActivity() {
         window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.BLACK))
         de.fa.kuran.ui.Fonts.init(applicationContext)
         de.fa.kuran.ui.Tevafuk.init(applicationContext)
+        de.fa.kuran.ui.AyahBoxes.init(applicationContext)
         de.fa.kuran.ui.DibMeal.init(applicationContext)
         de.fa.kuran.ui.FeridunMeal.init(applicationContext)
         de.fa.kuran.data.Audio.init(applicationContext)
@@ -104,7 +105,7 @@ fun App(st: AppState, immersive: (Boolean) -> Unit) {
         withContext(Dispatchers.IO) { runCatching { Pack.persistAssets(ctx) } }
     }
     LaunchedEffect(st.packVersion) {
-        withContext(Dispatchers.IO) { de.fa.kuran.ui.Fonts.init(ctx); de.fa.kuran.ui.DibMeal.init(ctx); de.fa.kuran.ui.FeridunMeal.init(ctx); de.fa.kuran.ui.Tevafuk.init(ctx) }
+        withContext(Dispatchers.IO) { de.fa.kuran.ui.Fonts.init(ctx); de.fa.kuran.ui.DibMeal.init(ctx); de.fa.kuran.ui.FeridunMeal.init(ctx); de.fa.kuran.ui.Tevafuk.init(ctx); de.fa.kuran.ui.AyahBoxes.init(ctx) }
     }
     LaunchedEffect(st.packUri, quran, st.packVersion) {
         val base = quran ?: return@LaunchedEffect

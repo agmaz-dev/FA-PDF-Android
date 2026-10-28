@@ -125,7 +125,7 @@ fun SettingsScreen(q: Quran, st: AppState, onBack: () -> Unit) {
         "view" to "tema gece beyaz krem yazı stil font hat hüsrev medine boyut büyüt arapça theme schrift größe خط مظهر",
         "meal" to "meal tefsir hayrat elmalılı çeviri açıklama hâşiye übersetzung translation تفسير",
         "lang" to "dil language sprache türkçe deutsch english arapça لغة",
-        "audio" to "ses okuyucu hafız indir dinle sudais afasi husari audio rezitator reciter تلاوة قارئ",
+        "audio" to "ses okuyucu hafız indir dinle sudais afasi husari danış çollak audio rezitator reciter تلاوة قارئ",
         "speech" to "meal sesi konuşma erkek kalın hız ses stimme speech voice صوت",
         "pack" to "paket sayfa zip klasör paket pack paket حزمة",
         "about" to "kaynak hakkında lisans quellen sources مصادر",
@@ -362,10 +362,18 @@ private fun AudioSettings(q: de.fa.kuran.data.Quran, st: AppState, pal: Palette)
                 Radio(pal, sel)
                 Column(Modifier.weight(1f)) {
                     Text(r.name, color = pal.ink, fontWeight = FontWeight.SemiBold)
+                    val all = if (r.surah) 114 else q.ayahs.size
                     Text(
-                        if (cnt >= q.ayahs.size) t("Tamamı indirildi") else if (cnt > 0) t("%1 / %2 âyet indirildi", cnt, q.ayahs.size) else t("İnternetten çalınır · tamamı yaklaşık %1 MB", r.approxMb),
+                        if (cnt >= all) t("Tamamı indirildi") else if (cnt > 0) (if (r.surah) t("%1 / %2 sûre indirildi", cnt, all) else t("%1 / %2 âyet indirildi", cnt, all)) else t("İnternetten çalınır · tamamı yaklaşık %1 MB", r.approxMb),
                         fontSize = 12.sp, color = pal.muted,
                     )
+                    if (r.surah) {
+                        val miss = remember(r.id) { de.fa.kuran.data.Audio.missing(r) }
+                        if (miss.isNotEmpty()) Text(
+                            t("Kaydı olmayan sûreler (%1): %2 – bunları İshak Danış okur.", miss.size, miss.joinToString(", ") { q.surahs[it - 1].name() }),
+                            fontSize = 12.sp, color = pal.red,
+                        )
+                    }
                 }
             }
             if (active == r.id) {
@@ -380,8 +388,8 @@ private fun AudioSettings(q: de.fa.kuran.data.Quran, st: AppState, pal: Palette)
                 }
             } else {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    SmallButton(pal, t("Bu sûreyi indir"), enabled = active == null) { st.reciter = r.id; de.fa.kuran.data.Downloads.start(r, de.fa.kuran.data.Downloads.surahItems(q, curSurah)) }
-                    SmallButton(pal, t("Tümünü indir"), enabled = active == null) { st.reciter = r.id; de.fa.kuran.data.Downloads.start(r, listOf(1 to 1) + de.fa.kuran.data.Downloads.allItems(q)) }
+                    SmallButton(pal, t("Bu sûreyi indir"), enabled = active == null) { st.reciter = r.id; de.fa.kuran.data.Downloads.start(r, de.fa.kuran.data.Downloads.itemsFor(q, r, curSurah)) }
+                    SmallButton(pal, t("Tümünü indir"), enabled = active == null) { st.reciter = r.id; de.fa.kuran.data.Downloads.start(r, de.fa.kuran.data.Downloads.itemsFor(q, r, null)) }
                     if (cnt > 0) SmallButton(pal, t("Sil")) { de.fa.kuran.data.Downloads.delete(r) }
                 }
                 if (de.fa.kuran.data.Downloads.failed > 0 && de.fa.kuran.data.Downloads.total > 0 && sel)

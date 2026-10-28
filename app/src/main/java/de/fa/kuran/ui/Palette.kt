@@ -135,6 +135,30 @@ object Tevafuk {
     fun isRed(ayahIdx: Int, wordIdx: Int): Boolean = red.contains(ayahIdx.toLong() * 1000 + wordIdx)
 }
 
+/** Hayrat sayfalarında her âyetin kapladığı alanlar (sayfaya oranla x0,y0,x1,y1) – kişisel pakette: pack/ayahboxes.json */
+object AyahBoxes {
+    private var m: Map<Int, Map<Int, List<FloatArray>>> = emptyMap()
+    fun init(ctx: android.content.Context) {
+        val txt = runCatching {
+            val f = java.io.File(ctx.filesDir, "pack/ayahboxes.json")
+            if (f.exists() && f.length() > 0) f.readText() else ctx.assets.open("pack/ayahboxes.json").bufferedReader().use { it.readText() }
+        }.getOrNull() ?: return
+        runCatching {
+            val o = org.json.JSONObject(txt); val out = HashMap<Int, Map<Int, List<FloatArray>>>()
+            o.keys().forEach { k ->
+                val arr = o.getJSONArray(k); val pm = HashMap<Int, List<FloatArray>>()
+                for (i in 0 until arr.length()) {
+                    val e = arr.getJSONArray(i); val rs = e.getJSONArray(1)
+                    pm[e.getInt(0)] = (0 until rs.length()).map { j -> val r = rs.getJSONArray(j); FloatArray(4) { r.getDouble(it).toFloat() } }
+                }
+                out[k.toInt()] = pm
+            }
+            m = out
+        }
+    }
+    fun get(pageIdx: Int, ayah: Int?): List<FloatArray> = if (ayah == null) emptyList() else m[pageIdx]?.get(ayah).orEmpty()
+}
+
 /** Diyanet İşleri Başkanlığı'nın yeni meali (Altuntaş–Şahin) – kişisel pakette: pack/diyanet.json */
 object DibMeal {
     var meal: List<String>? = null

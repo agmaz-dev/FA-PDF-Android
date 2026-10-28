@@ -36,6 +36,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
@@ -212,7 +216,7 @@ fun MushafPage(
     if (image != null) {
         // Kitabın kendi sayfası: diziliş hiç değişmez, sadece büyür
         PaperPage(pal, modifier, side, onTap, onPinch = { z -> st.arZoom = (st.arZoom * z).coerceIn(1f, 4f) }, padding = 4.dp) {
-            BookImage(image, st.arZoom, Modifier.weight(1f).fillMaxWidth(), fillWidth = side == Side.SINGLE)
+            BookImage(image, st.arZoom, Modifier.weight(1f).fillMaxWidth(), fillWidth = side == Side.SINGLE, boxes = AyahBoxes.get(page - 1, selected), hl = pal.highlight)
         }
         return
     }
@@ -273,10 +277,24 @@ private fun ArabicContent(q: Quran, page: Int, family: FontFamily, pal: Palette,
 }
 
 @Composable
-fun BookImage(uri: Uri, zoom: Float, modifier: Modifier, fillWidth: Boolean = false) {
+fun BookImage(uri: Uri, zoom: Float, modifier: Modifier, fillWidth: Boolean = false, boxes: List<FloatArray> = emptyList(), hl: Color = Color.Yellow) {
     val ctx = LocalContext.current
     var bmp by remember(uri) { mutableStateOf<ImageBitmap?>(null) }
     LaunchedEffect(uri) { bmp = withContext(Dispatchers.IO) { Pack.loadImage(ctx, uri, 2400) } }
+    // okunan / seçili âyetin üstüne yarı saydam renk (sayfanın dizilişi değişmez)
+    val fill = hl.copy(alpha = 0.32f)
+    fun Modifier.marks(fit: Boolean, bw: Int, bh: Int) = this.drawWithContent {
+        drawContent()
+        if (boxes.isEmpty()) return@drawWithContent
+        var sx = size.width; var sy = size.height; var ox = 0f; var oy = 0f
+        if (fit) {
+            val sc = minOf(size.width / bw, size.height / bh); sx = bw * sc; sy = bh * sc
+            ox = (size.width - sx) / 2; oy = (size.height - sy) / 2
+        }
+        boxes.forEach { r ->
+            drawRoundRect(fill, topLeft = Offset(ox + r[0] * sx, oy + r[1] * sy), size = Size((r[2] - r[0]) * sx, (r[3] - r[1]) * sy), cornerRadius = CornerRadius(6f, 6f))
+        }
+    }
     BoxWithConstraints(modifier, contentAlignment = Alignment.Center) {
         val b = bmp
         if (b == null) {
@@ -285,18 +303,29 @@ fun BookImage(uri: Uri, zoom: Float, modifier: Modifier, fillWidth: Boolean = fa
             val z = zoom.coerceAtLeast(1f)
             val mw = maxWidth
             val mh = maxHeight
+            val density = LocalDensity.current
             val boxWider = mh.value > 0f && b.height > 0 && (mw.value / mh.value) > (b.width.toFloat() / b.height)
+            val vs = rememberScrollState()
+            // okunan âyet ekranın dışındaysa sayfayı oraya kaydır
+            val imgH = with(density) { (if (z <= 1.01f) mw else mw * z).toPx() } * b.height / b.width
+            val viewH = with(density) { mh.toPx() }
+            LaunchedEffect(boxes.firstOrNull()?.get(1), imgH) {
+                val r = boxes.firstOrNull() ?: return@LaunchedEffect
+                if (vs.maxValue <= 0) return@LaunchedEffect
+                val top = r[1] * imgH; val bot = boxes.last()[3] * imgH
+                if (top < vs.value || bot > vs.value + viewH) vs.animateScrollTo((top - viewH * 0.25f).toInt().coerceIn(0, vs.maxValue))
+            }
             if (z <= 1.01f && fillWidth && boxWider) {
                 // Tek sayfa: ekranın bütün genişliğini doldurur, aşağı kaydırılarak okunur (diziliş değişmez)
-                Box(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-                    Image(b, contentDescription = t("Mushaf sayfası"), modifier = Modifier.fillMaxWidth().aspectRatio(b.width.toFloat() / b.height), contentScale = ContentScale.FillWidth)
+                Box(Modifier.fillMaxSize().verticalScroll(vs)) {
+                    Image(b, contentDescription = t("Mushaf sayfası"), modifier = Modifier.fillMaxWidth().aspectRatio(b.width.toFloat() / b.height).marks(false, b.width, b.height), contentScale = ContentScale.FillWidth)
                 }
             } else if (z <= 1.01f) {
-                Image(b, contentDescription = t("Mushaf sayfası"), modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
+                Image(b, contentDescription = t("Mushaf sayfası"), modifier = Modifier.fillMaxSize().marks(true, b.width, b.height), contentScale = ContentScale.Fit)
             } else {
-                Box(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).horizontalScroll(rememberScrollState())) {
+                Box(Modifier.fillMaxSize().verticalScroll(vs).horizontalScroll(rememberScrollState())) {
                     val w = if (fillWidth && boxWider) mw * z else mw * z
-                    Image(b, contentDescription = t("Mushaf sayfası"), modifier = Modifier.width(w).aspectRatio(b.width.toFloat() / b.height), contentScale = ContentScale.FillWidth)
+                    Image(b, contentDescription = t("Mushaf sayfası"), modifier = Modifier.width(w).aspectRatio(b.width.toFloat() / b.height).marks(false, b.width, b.height), contentScale = ContentScale.FillWidth)
                 }
             }
         }
