@@ -12,14 +12,13 @@ jobs:
       fail-fast: false
       matrix:
         rec: [danis, collak]
-        part: [0]
+        part: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
     steps:
       - uses: actions/checkout@v4
         with: { ref: dib-fetch }
       - run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg >/dev/null
       - run: pip install -q torch --index-url https://download.pytorch.org/whl/cpu && pip install -q transformers numba numpy
-      - run: mkdir -p out && (python tools/align.py ${{ matrix.rec }} ${{ matrix.part }} 1 ${{ env.ONLY }} 2>&1 | tee out/log_${{ matrix.rec }}_${{ matrix.part }}.txt) ; true
-        env: { ONLY: "1,67,112,36" }
+      - run: mkdir -p out && (python tools/align.py ${{ matrix.rec }} ${{ matrix.part }} 12 2>&1 | tee out/log_${{ matrix.rec }}_${{ matrix.part }}.txt) ; true
       - uses: actions/upload-artifact@v4
         if: always()
         with: { name: "al-${{ matrix.rec }}-${{ matrix.part }}", path: out/ }

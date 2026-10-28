@@ -100,7 +100,14 @@ def emissions(x):
             out.append(lg[s0:s0 + n])
     return np.concatenate(out).astype(np.float32)
 os.makedirs('out', exist_ok=True)
-surahs = only or [s for s in range(1, 115) if (s - 1) % nparts == part]
+if only: surahs = only
+else:
+    ln = {}
+    for a in AY: ln[a[0]] = ln.get(a[0], 0) + len(a[2])
+    bins = [[0, []] for _ in range(nparts)]
+    for sn in sorted(ln, key=lambda k: -ln[k]):
+        b = min(bins, key=lambda x: x[0]); b[0] += ln[sn]; b[1].append(sn)
+    surahs = sorted(bins[part][1])
 res = {}
 for s in surahs:
     if rec == 'collak' and str(s) not in col: continue
@@ -150,8 +157,17 @@ for s in surahs:
             if c != prev and c != BL: dec.append(inv[int(c)])
             prev = c
         rows.append([st[k] * 20, (en[k] + 1) * 20, round(float(np.mean(sc[k])), 2), round(cer(''.join(dec), texts[k][1]), 2)])
+    # sessizlik kontrolü: her âyet başından önceki 0.6 sn içinde duraklama var mı
+    hop = 320; nfr = len(x) // hop
+    db = 20 * np.log10(np.sqrt((x[:nfr * hop].reshape(nfr, hop) ** 2).mean(1)) + 1e-5)
+    sp = np.percentile(db, 70)
+    sil = []
+    for k in range(1, na):
+        w = db[max(0, st[k] - 30):st[k] + 1]
+        sil.append(round(float(w.min() - sp), 1) if len(w) else 0.0)
+    for k in range(na): rows[k].append(sil[k - 1] if k > 0 else None)
     g0 = int(np.sum(j == -1)); ge = int(np.sum(j == S))
     res[s] = {'dur': round(len(x) / 16), 'pre': g0 * 20, 'post': ge * 20, 'ayahs': rows}
     c = [r[3] for r in rows]
-    print(s, f'{len(x)/16000:.0f}s', f'{time.time()-t0:.0f}s', 'pre', g0 * 20, 'post', ge * 20, 'medCER', np.median(c), 'bad', sum(1 for v in c if v > 0.5), flush=True)
+    print(s, f'{len(x)/16000:.0f}s', f'{time.time()-t0:.0f}s', 'pre', g0 * 20, 'post', ge * 20, 'medCER', np.median(c), 'bad', sum(1 for v in c if v > 0.5), 'pause<-15dB', round(np.mean([v < -15 for v in sil]), 2) if sil else 1, flush=True)
 json.dump(res, open(f'out/al_{rec}_{part}.json', 'w'))
