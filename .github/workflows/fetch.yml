@@ -10,12 +10,9 @@ jobs:
     steps:
       - run: |
           mkdir out && cd out
-          for id in ishakdanishatimmp3 fatihcollakk Fatih-Colak fathcollakkuran fatihcollakve70hafizlihatimmp3; do curl -sSL "https://archive.org/metadata/$id" -o meta_$id.json; done
-          curl -sSL -A "Mozilla/5.0" "https://surahquran.com/sheikh-qari-turkish-97.html" -o sq97.html
-          curl -sSL -A "Mozilla/5.0" "https://surahquran.com/sheikh-qari-turkish-21.html" -o sq21.html
-          curl -sSL -A "Mozilla/5.0" "https://surahquran.com/sheikh-97-sora-36-mp3-tr.html" -o sq97_36.html
-          curl -sSL -A "Mozilla/5.0" "https://surahquran.com/sheikh-21-sora-36-mp3-tr.html" -o sq21_36.html
+          for id in ishak_danish ishakdanishatimmp3; do curl -sSL "https://archive.org/metadata/$id" -o meta_$id.json; done
           curl -sSL "https://api.quran.com/api/v4/resources/chapter_reciters" -o qc_reciters.json
+          curl -sSL "https://archive.org/download/ishakdanishatimmp3" -o ia_danis_dl.html
           ls -la
           git init -q -b dib-data; git config user.name b; git config user.email b@b
           git add -A && git commit -qm d && git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" dib-data
