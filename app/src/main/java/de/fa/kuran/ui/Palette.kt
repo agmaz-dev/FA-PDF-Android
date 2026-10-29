@@ -173,7 +173,7 @@ object DibMeal {
     }
 }
 
-/** Feridun A. – Sade Türkçe Meal (kişisel pakette: pack/feridun.json), âyet notlarıyla */
+/** Feridun A. – Uzun Meal (kişisel pakette: pack/feridun2.json), sûre açıklamalarıyla. Eski Sade Türkçe Meal (feridun.json) silinir. */
 object FeridunMeal {
     var meal: List<String>? = null
         private set
@@ -181,9 +181,10 @@ object FeridunMeal {
         private set
     fun init(ctx: android.content.Context) {
         if (meal != null) return
+        runCatching { java.io.File(ctx.filesDir, "pack/feridun.json").delete() }
         val txt = runCatching {
-            val f = java.io.File(ctx.filesDir, "pack/feridun.json")
-            if (f.exists() && f.length() > 0) f.readText() else ctx.assets.open("pack/feridun.json").bufferedReader().use { it.readText() }
+            val f = java.io.File(ctx.filesDir, "pack/feridun2.json")
+            if (f.exists() && f.length() > 0) f.readText() else ctx.assets.open("pack/feridun2.json").bufferedReader().use { it.readText() }
         }.getOrNull() ?: return
         runCatching {
             val o = org.json.JSONObject(txt)
@@ -209,7 +210,7 @@ val MEALLER = listOf(
     MealInfo2("elmalili", "Elmalılı", "Elmalılı Hamdi Yazır Meâli"),
     MealInfo2("tr.diyanet", "Diyanet", "Diyanet İşleri Başkanlığı Meâli (Altuntaş – Şahin)"),
     MealInfo2("tr.golpinarli", "Gölpınarlı", "Abdülbâki Gölpınarlı Meâli"),
-    MealInfo2("feridun", "Feridun A.", "Feridun A. – Sade Türkçe Meal"),
+    MealInfo2("feridun", "Feridun A.", "Feridun A. – Uzun Meal"),
     MealInfo2("de.bubenheim", "Bubenheim", "Deutsch – Bubenheim & Elyas"),
     MealInfo2("en.sahih", "Saheeh Intl.", "English – Saheeh International"),
     MealInfo2("ar.muyassar", "الميسر", "العربية – التفسير الميسر"),
