@@ -143,7 +143,7 @@ private fun mealItems(q: Quran, pack: Pack?, page: Int, source: String, selected
             if (n.isNotBlank()) out += MItem.Note(n)
         }
         val l = lines[ay.idx] ?: continue
-        out += MItem.Line(ay.idx, mealAnnotated(l.label, l.text, pal.red, ay.idx == selected, pal.highlight, if (source == "feridun") pal.muted else null))
+        out += MItem.Line(ay.idx, mealAnnotated(l.label, l.text, pal.red, ay.idx == selected, pal.highlight))
     }
     return out
 }
