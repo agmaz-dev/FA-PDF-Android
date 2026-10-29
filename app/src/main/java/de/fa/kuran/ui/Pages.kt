@@ -154,7 +154,7 @@ private fun itemStyle(it: MItem, size: Float, pal: Palette): TextStyle = when (i
     is MItem.Title -> mealStyle(size * 1.18f, pal.ink).copy(fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
     is MItem.Sub -> mealStyle(size * 0.86f, pal.muted).copy(textAlign = TextAlign.Center)
     is MItem.Intro -> mealStyle(size * 0.86f, pal.muted).copy(fontStyle = FontStyle.Italic)
-    is MItem.Head -> mealStyle(size * 0.86f, pal.muted).copy(fontWeight = FontWeight.SemiBold)
+    is MItem.Head -> mealStyle(size * 0.9f, if (pal.ink.red + pal.ink.green + pal.ink.blue > 1.5f) Color(0xFF6CC070) else Color(0xFF2E7D32)).copy(fontWeight = FontWeight.Bold)
     is MItem.Note -> mealStyle(size * 0.8f, pal.muted)
     MItem.Basmala -> arabicStyle(Fonts.amiri, size * 1.3f, pal.ink, TextAlign.Center)
     MItem.BasmalaTr -> mealStyle(size, pal.ink).copy(fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
@@ -214,7 +214,7 @@ fun MealPage(q: Quran, page: Int, st: AppState, pal: Palette, side: Side, select
             Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).heightIn(min = boxH), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 items.forEach { item ->
                     val mod = if (item is MItem.Line) Modifier.fillMaxWidth().pointerInput(item.idx) { detectTapGestures(onTap = { onT() }, onLongPress = { onA(item.idx) }) }
-                    else Modifier.fillMaxWidth().pointerInput(Unit) { detectTapGestures { _ -> onT() } }
+                    else Modifier.fillMaxWidth().padding(top = if (item is MItem.Head) 8.dp else 0.dp).pointerInput(Unit) { detectTapGestures { _ -> onT() } }
                     Text(itemText(item, pal), style = itemStyle(item, size, pal), modifier = mod)
                 }
                 if (source == "hayrat" && pack?.hayratMeal == null) {
