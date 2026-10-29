@@ -102,7 +102,7 @@ private sealed interface MItem {
 
 private val fnRegex = Regex("⁽(\\d+)⁾")
 
-fun mealAnnotated(label: String, text: String, red: Color, selected: Boolean, hl: Color): AnnotatedString = buildAnnotatedString {
+fun mealAnnotated(label: String, text: String, red: Color, selected: Boolean, hl: Color, gray: Color? = null): AnnotatedString = buildAnnotatedString {
     withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append("$label- ") }
     val note = if (text.contains('\u2063')) text.substringAfter('\u2063') else null
     @Suppress("NAME_SHADOWING") val text = text.substringBefore('\u2063')
@@ -113,6 +113,13 @@ fun mealAnnotated(label: String, text: String, red: Color, selected: Boolean, hl
         last = m.range.last + 1
     }
     append(text.substring(last))
+    // âyet olmayan açıklamalar (parantez içi) açık gri
+    if (gray != null) {
+        val base = length - text.length
+        Regex("\\([^()]*\\)").findAll(text).forEach { m ->
+            if (!m.value.matches(Regex("\\(\\d+\\)"))) addStyle(SpanStyle(color = gray), base + m.range.first, base + m.range.last + 1)
+        }
+    }
     if (!note.isNullOrBlank()) withStyle(SpanStyle(fontStyle = FontStyle.Italic, fontSize = 0.82.em, color = Color(0xFF8A8478))) { append("\n" + note) }
     if (selected) addStyle(SpanStyle(background = hl), 0, length)
 }
@@ -136,7 +143,7 @@ private fun mealItems(q: Quran, pack: Pack?, page: Int, source: String, selected
             if (n.isNotBlank()) out += MItem.Note(n)
         }
         val l = lines[ay.idx] ?: continue
-        out += MItem.Line(ay.idx, mealAnnotated(l.label, l.text, pal.red, ay.idx == selected, pal.highlight))
+        out += MItem.Line(ay.idx, mealAnnotated(l.label, l.text, pal.red, ay.idx == selected, pal.highlight, if (source == "feridun") pal.muted else null))
     }
     return out
 }
@@ -147,7 +154,7 @@ private fun itemStyle(it: MItem, size: Float, pal: Palette): TextStyle = when (i
     is MItem.Title -> mealStyle(size * 1.18f, pal.ink).copy(fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
     is MItem.Sub -> mealStyle(size * 0.86f, pal.muted).copy(textAlign = TextAlign.Center)
     is MItem.Intro -> mealStyle(size * 0.86f, pal.muted).copy(fontStyle = FontStyle.Italic)
-    is MItem.Head -> mealStyle(size, pal.ink).copy(fontWeight = FontWeight.Bold)
+    is MItem.Head -> mealStyle(size * 0.86f, pal.muted).copy(fontWeight = FontWeight.SemiBold)
     is MItem.Note -> mealStyle(size * 0.8f, pal.muted)
     MItem.Basmala -> arabicStyle(Fonts.amiri, size * 1.3f, pal.ink, TextAlign.Center)
     MItem.BasmalaTr -> mealStyle(size, pal.ink).copy(fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
