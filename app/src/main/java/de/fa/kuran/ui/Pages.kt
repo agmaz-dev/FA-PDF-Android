@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -23,6 +24,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -240,7 +242,14 @@ fun AciklamaPage(q: Quran, page: Int, st: AppState, pal: Palette, side: Side, se
         if (L.lang != "tr") Text(t("Hâşiyeler sadece Türkçedir."), fontSize = 12.sp, color = pal.accent)
         Box(Modifier.fillMaxWidth().padding(vertical = 8.dp).height(1.5.dp).background(pal.ink))
         Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(t("%1- %2 Sûresi, %3. âyet", surah.n, surah.name(), cur.a), fontSize = (15 * z).sp, fontWeight = FontWeight.Bold, color = pal.ink)
+            val ctx = androidx.compose.ui.platform.LocalContext.current
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(t("%1- %2 Sûresi, %3. âyet", surah.n, surah.name(), cur.a), fontSize = (15 * z).sp, fontWeight = FontWeight.Bold, color = pal.ink, modifier = Modifier.weight(1f))
+                // âyeti paylaş (alttaki Önceki/Sonraki düğmelerini kapatmasın diye burada)
+                Box(Modifier.size(36.dp).clip(RoundedCornerShape(18.dp)).background(pal.accent).clickable { shareAyah(ctx, q, st, cur.idx) }, contentAlignment = Alignment.Center) {
+                    androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.Filled.Share, t("Paylaş"), tint = Color.White, modifier = Modifier.size(18.dp))
+                }
+            }
             Text(
                 buildAnnotatedString { cur.ar.split(' ').forEachIndexed { i, w -> if (i > 0) append(" "); if (isAllahWord(w) || Tevafuk.isRed(cur.idx, i)) withStyle(SpanStyle(color = pal.red)) { append(w) } else append(w) }; append(" " + ayahMarker(cur.a)) },
                 style = arabicStyle(Fonts.arabic(st.font), 25f, pal.ink, TextAlign.Center), modifier = Modifier.fillMaxWidth(),

@@ -190,7 +190,7 @@ private fun ReaderBody(q: Quran, st: AppState, wide: Boolean, twoUp: Boolean, on
             }
         }
         // Meal ve açıklamada: seçili âyet için küçük paylaş düğmesi
-        if (sel != null && st.mode != ReadMode.MUSHAF && q.pageOf(sel) == page) {
+        if (sel != null && st.mode == ReadMode.MEAL && q.pageOf(sel) == page) {
             val ay = q.ayahs[sel]
             Row(
                 Modifier.align(Alignment.BottomCenter).padding(bottom = 22.dp)
