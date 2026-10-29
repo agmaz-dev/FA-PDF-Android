@@ -93,6 +93,8 @@ private sealed interface MItem {
     data class Title(val text: String) : MItem
     data class Sub(val text: String) : MItem
     data class Intro(val text: String) : MItem
+    data class Head(val text: String) : MItem
+    data class Note(val text: String) : MItem
     data object Basmala : MItem
     data object BasmalaTr : MItem
     data class Line(val idx: Int, val text: AnnotatedString) : MItem
@@ -126,7 +128,12 @@ private fun mealItems(q: Quran, pack: Pack?, page: Int, source: String, selected
             val yer = if (s.type == "Mekkî") t("Mekke") else t("Medîne")
             out += MItem.Sub(t("[%1 devrinde nâzil olmuştur, %2 âyettir.]", yer, s.ayat))
             if (source == "elmalili") pack?.elmaliliIntro?.get(s.n)?.takeIf { it.isNotBlank() }?.let { out += MItem.Intro(it) }
+            if (source == "feridun") FeridunMeal.intro[s.n]?.takeIf { it.isNotBlank() }?.let { out += MItem.Intro(it) }
             if (s.n != 1 && s.n != 9) { out += MItem.Basmala; out += MItem.BasmalaTr }
+        }
+        if (source == "feridun") FeridunMeal.sections[ay.idx]?.let { (h, n) ->
+            out += MItem.Head(h)
+            if (n.isNotBlank()) out += MItem.Note(n)
         }
         val l = lines[ay.idx] ?: continue
         out += MItem.Line(ay.idx, mealAnnotated(l.label, l.text, pal.red, ay.idx == selected, pal.highlight))
@@ -140,6 +147,8 @@ private fun itemStyle(it: MItem, size: Float, pal: Palette): TextStyle = when (i
     is MItem.Title -> mealStyle(size * 1.18f, pal.ink).copy(fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
     is MItem.Sub -> mealStyle(size * 0.86f, pal.muted).copy(textAlign = TextAlign.Center)
     is MItem.Intro -> mealStyle(size * 0.86f, pal.muted).copy(fontStyle = FontStyle.Italic)
+    is MItem.Head -> mealStyle(size, pal.ink).copy(fontWeight = FontWeight.Bold)
+    is MItem.Note -> mealStyle(size * 0.8f, pal.muted)
     MItem.Basmala -> arabicStyle(Fonts.amiri, size * 1.3f, pal.ink, TextAlign.Center)
     MItem.BasmalaTr -> mealStyle(size, pal.ink).copy(fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
     is MItem.Line -> mealStyle(size, pal.ink)
@@ -149,6 +158,8 @@ private fun itemText(it: MItem, pal: Palette): AnnotatedString = when (it) {
     is MItem.Title -> AnnotatedString(it.text)
     is MItem.Sub -> AnnotatedString(it.text)
     is MItem.Intro -> AnnotatedString(it.text)
+    is MItem.Head -> AnnotatedString(it.text)
+    is MItem.Note -> AnnotatedString(it.text)
     MItem.Basmala -> basmalaText(pal.red)
     MItem.BasmalaTr -> AnnotatedString(t("Rahmân, Rahîm olan Allah'ın ismiyle"))
     is MItem.Line -> it.text

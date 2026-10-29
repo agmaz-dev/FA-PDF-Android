@@ -173,23 +173,34 @@ object DibMeal {
     }
 }
 
-/** Feridun A. – Uzun Meal (kişisel pakette: pack/feridun2.json), sûre açıklamalarıyla. Eski Sade Türkçe Meal (feridun.json) silinir. */
+/** Feridun A. – Uzun Meal (kişisel pakette: pack/feridun3.json): sûre açıklamaları ve bölüm başlıklarıyla. Eski sürümler silinir. */
 object FeridunMeal {
     var meal: List<String>? = null
         private set
     var notes: List<String>? = null
         private set
+    /** sûre no → açıklama */
+    var intro: Map<Int, String> = emptyMap()
+        private set
+    /** âyet idx → (bölüm başlığı, not) */
+    var sections: Map<Int, Pair<String, String>> = emptyMap()
+        private set
     fun init(ctx: android.content.Context) {
         if (meal != null) return
-        runCatching { java.io.File(ctx.filesDir, "pack/feridun.json").delete() }
+        runCatching { listOf("feridun.json", "feridun2.json").forEach { java.io.File(ctx.filesDir, "pack/$it").delete() } }
         val txt = runCatching {
-            val f = java.io.File(ctx.filesDir, "pack/feridun2.json")
-            if (f.exists() && f.length() > 0) f.readText() else ctx.assets.open("pack/feridun2.json").bufferedReader().use { it.readText() }
+            val f = java.io.File(ctx.filesDir, "pack/feridun3.json")
+            if (f.exists() && f.length() > 0) f.readText() else ctx.assets.open("pack/feridun3.json").bufferedReader().use { it.readText() }
         }.getOrNull() ?: return
         runCatching {
             val o = org.json.JSONObject(txt)
             val a = o.getJSONArray("meal"); meal = List(a.length()) { a.getString(it) }
-            o.optJSONArray("not")?.let { n -> notes = List(n.length()) { n.getString(it) } }
+            o.optJSONObject("intro")?.let { io -> val m = HashMap<Int, String>(); io.keys().forEach { k -> m[k.toInt()] = io.getString(k) }; intro = m }
+            o.optJSONArray("bol")?.let { ba ->
+                val m = HashMap<Int, Pair<String, String>>()
+                for (i in 0 until ba.length()) { val e = ba.getJSONArray(i); m[e.getInt(0)] = e.getString(1) to e.optString(2, "") }
+                sections = m
+            }
         }
     }
 }
