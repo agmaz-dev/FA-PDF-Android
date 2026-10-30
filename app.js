@@ -381,8 +381,8 @@ $('#sheet').addEventListener('click', e => { if (e.target.id === 'sheet' || e.ta
 let idxTab = 'sure';
 function openIndex() {
   bars(false);
-  openSheet(`<div class="shTop"><h3>${t('Fihrist')}</h3><button class="x" data-close>✕</button></div>
-    <div class="seg" id="ixSeg"><button data-t="sure">${t('Sûreler')}</button><button data-t="cuz">${t('Cüzler')}</button><button data-t="isaret">${t('İşaretler')}</button></div>
+  openSheet(`<div class="grab"></div><div class="inav"><span class="inb"></span><span class="int">${t('Fihrist')}</span><button class="inb idone" data-close>${t('Bitti')}</button></div>
+    <div class="isegc" id="ixSeg" style="margin:0 16px 8px"><button data-t="sure">${t('Sûreler')}</button><button data-t="cuz">${t('Cüzler')}</button><button data-t="isaret">${t('İşaretler')}</button></div>
     <input class="search" id="ixQ" placeholder="${t('Sûre ara…')}" type="search"><div class="list" id="ixL"></div>`);
   $('#ixSeg').addEventListener('click', e => { const b = e.target.closest('[data-t]'); if (b) { idxTab = b.dataset.t; drawIndex(); } });
   $('#ixQ').addEventListener('input', drawIndex);
@@ -423,11 +423,18 @@ function catValue(c) {
   if (c === 'speech') return t({ar: 'Arapça', ar_meal: 'Arapça + meal', meal: 'Meal', ack: 'Açıklama'}[st.audioMode]);
   return '';
 }
+// iOS tarzı satır yardımcıları
+const LBL = x => `<div class="ilbl">${x}</div>`;
+const FT = x => `<div class="ift">${x}</div>`;
+const GRP = x => `<div class="igrp">${x}</div>`;
+const CHK = (label, sub, on, attrs, dis) => `<button class="irow" ${attrs} ${dis ? 'disabled' : ''}><span class="itx"><span>${label}</span>${sub ? `<small>${sub}</small>` : ''}</span>${on ? '<span class="ichk">✓</span>' : ''}</button>`;
+const ACT = (label, attrs, red) => `<button class="irow iact${red ? ' ired' : ''}" ${attrs}>${label}</button>`;
 function openSettings() {
   bars(false);
   const w = innerWidth >= 760; if (w && !setCat) setCat = 'view';
-  openSheet(`<div class="shTop"><h3>${t('Ayarlar')}</h3><button class="x" data-close>✕</button></div><div class="set ${w ? 'wide' : 'narrow'}${!w && setCat ? ' open' : ''}" id="setW"><div class="cats" id="setC"></div><div class="det" id="setD"></div></div>`);
-  $('#setC').addEventListener('click', e => { const b = e.target.closest('[data-c]'); if (b) { setCat = b.dataset.c; drawSettings(); } });
+  openSheet(`<div class="grab"></div><div class="inav" id="setNav"></div><div class="set ${w ? 'wide' : 'narrow'}${!w && setCat ? ' open' : ''}" id="setW"><div class="cats" id="setC"></div><div class="det" id="setD"></div></div>`);
+  $('#setC').addEventListener('click', e => { const b = e.target.closest('[data-c]'); if (b) { setCat = b.dataset.c; drawSettings(); $('#setD').scrollTop = 0; } });
+  $('#setNav').addEventListener('click', e => { if (e.target.closest('[data-back]')) { setCat = null; drawSettings(); } });
   $('#setD').addEventListener('click', onSetClick);
   $('#setD').addEventListener('input', onSetInput);
   drawSettings();
@@ -435,31 +442,34 @@ function openSettings() {
 function drawSettings() {
   const w = innerWidth >= 760; const W = $('#setW'); if (!W) return;
   W.classList.toggle('open', !w && !!setCat);
-  $('#setC').innerHTML = CATS.map(([k, n, c]) => `<button class="cat${setCat === k && w ? ' on' : ''}" data-c="${k}"><span class="ic" style="background:${c}">${n[0]}</span><span class="tx"><b>${t(n)}</b><small>${esc(catValue(k))}</small></span><span>›</span></button>`).join('');
-  let h = w ? '' : `<button class="backb" data-back>‹ ${t('Ayarlar')}</button>`;
-  const c = setCat || 'view';
+  const c = setCat || 'view'; const cn = (CATS.find(x => x[0] === c) || CATS[0])[1];
+  $('#setNav').innerHTML = (!w && setCat)
+    ? `<button class="inb" data-back>‹ ${t('Ayarlar')}</button><span class="int">${t(cn)}</span><button class="inb idone" data-close>${t('Bitti')}</button>`
+    : `<span class="inb"></span><span class="int">${t('Ayarlar')}</span><button class="inb idone" data-close>${t('Bitti')}</button>`;
+  $('#setC').innerHTML = GRP(CATS.map(([k, n, col]) => `<button class="irow icat${setCat === k && w ? ' on' : ''}" data-c="${k}"><span class="iic" style="background:${col}">${CICON[k] || n[0]}</span><span class="itx"><span>${t(n)}</span></span><span class="ival">${esc(catValue(k))}</span><span class="ichev">›</span></button>`).join(''));
+  let h = '';
   if (c === 'view') {
-    h += `<div class="card"><h4>${t('Tema')}</h4><div class="seg" style="margin:0">${[['krem', 'Krem'], ['beyaz', 'Beyaz'], ['gece', 'Gece']].map(([k, n]) => `<button data-theme="${k}" class="${st.theme === k ? 'on' : ''}">${t(n)}</button>`).join('')}</div></div>`;
-    h += `<div class="card"><h4>${t('Arapça yazı büyüklüğü')}</h4><div class="sl"><input type="range" min="0.6" max="2.5" step="0.05" value="${st.arZoom}" data-zoom="arZoom"><b>${Math.round(st.arZoom * 100)}%</b></div>
-      <h4 style="margin-top:12px">${t('Meal yazı büyüklüğü')}</h4><div class="sl"><input type="range" min="0.6" max="2.2" step="0.05" value="${st.mealZoom}" data-zoom="mealZoom"><b>${Math.round(st.mealZoom * 100)}%</b></div></div>`;
-    h += `<h4 style="margin:12px 2px 8px">${t('Arapça yazı şekli')}</h4><div class="fonts">${FONTS.map(([k, n, s]) => `<button class="fc${st.font === k ? ' on' : ''}" data-font="${k}"><div class="s" style="font-family:'${k}',amiri">بِسْمِ ٱللَّهِ</div><b>${t(n)}</b><small>${t(s)}</small></button>`).join('')}</div>`;
+    h += LBL(t('Tema')) + `<div class="isegc">${[['krem', 'Krem'], ['beyaz', 'Beyaz'], ['gece', 'Gece']].map(([k, n]) => `<button data-theme="${k}" class="${st.theme === k ? 'on' : ''}">${t(n)}</button>`).join('')}</div>`;
+    h += LBL(t('Yazı büyüklüğü')) + GRP(`<div class="irow islr"><span class="itx"><span>${t('Arapça')}</span></span><input type="range" min="0.6" max="2.5" step="0.05" value="${st.arZoom}" data-zoom="arZoom"><b>${Math.round(st.arZoom * 100)}%</b></div>
+      <div class="irow islr"><span class="itx"><span>${t('Meal')}</span></span><input type="range" min="0.6" max="2.2" step="0.05" value="${st.mealZoom}" data-zoom="mealZoom"><b>${Math.round(st.mealZoom * 100)}%</b></div>`) + FT(t('Sayfada iki parmakla da büyütüp küçültebilirsiniz.'));
+    h += LBL(t('Arapça yazı şekli')) + `<div class="fonts">${FONTS.map(([k, n, sb]) => `<button class="fc${st.font === k ? ' on' : ''}" data-font="${k}"><div class="s" style="font-family:'${k}',amiri">بِسْمِ ٱللَّهِ</div><b>${t(n)}</b><small>${t(sb)}</small></button>`).join('')}</div>`;
   } else if (c === 'meal') {
-    h += MEALLER.map(m => { const ok = hasMeal(m.id); return `<button class="opt${st.meal === m.id ? ' on' : ''}" data-meal="${m.id}" ${ok ? '' : 'disabled'}><span class="rd"></span><span class="tx"><b>${esc(m.short)}</b><small>${esc(m.name)}${ok ? '' : ' · ' + t('Kişisel dosya gerekli')}</small></span></button>`; }).join('');
+    h += LBL(t('Meal')) + GRP(MEALLER.map(m => { const ok = hasMeal(m.id); return CHK(esc(m.short), esc(m.name) + (ok ? '' : ' · ' + t('Kişisel dosya gerekli')), st.meal === m.id, `data-meal="${m.id}"`, !ok); }).join(''));
   } else if (c === 'lang') {
-    h += LANGS.map(([k, n]) => `<button class="opt${st.lang === k ? ' on' : ''}" data-lang="${k}"><span class="rd"></span><span class="tx"><b>${n}</b></span></button>`).join('');
+    h += LBL(t('Dil')) + GRP(LANGS.map(([k, n]) => CHK(n, '', st.lang === k, `data-lang="${k}"`)).join(''));
   } else if (c === 'audio') { h += audioSettings();
   } else if (c === 'speech') { h += speechSettings();
   } else if (c === 'pack') {
-    h += `<div class="card"><h4>${t('Kişisel dosya')}</h4><p class="muted">${t('Hayrat meali, Diyanet meali ve tevâfuk kırmızı kelimeleri kişisel izinle kullanıldığı için uygulamanın içinde değildir. Size verilen Kuran-Kisisel.json dosyasını bir kere aktarın; telefonda saklanır ve internetsiz çalışır.')}</p>
-      <p><b>${PERS ? t('Durum: aktarıldı') : t('Durum: aktarılmadı')}</b></p>
-      <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn pri" data-import>${t('Dosyayı aktar')}</button>${PERS ? `<button class="btn" data-delpers>${t('Sil')}</button>` : ''}</div></div>`;
+    h += LBL(t('Kişisel dosya')) + GRP(`<div class="irow"><span class="itx"><span>${t('Durum')}</span></span><span class="ival">${PERS ? t('Aktarıldı') : t('Aktarılmadı')}</span></div>` + ACT(t('Dosyayı aktar'), 'data-import') + (PERS ? ACT(t('Sil'), 'data-delpers', true) : ''));
+    h += FT(t('Hayrat meali, Diyanet meali ve tevâfuk kırmızı kelimeleri kişisel izinle kullanıldığı için uygulamanın içinde değildir. Size verilen Kuran-Kisisel.json dosyasını bir kere aktarın; telefonda saklanır ve internetsiz çalışır.'));
   } else {
-    h += `<div class="card"><h4>${t('Hakkında ve kaynaklar')}</h4><p class="muted">
-      Kur'an metni: Tanzil / alquran.cloud (Osmanî hat)<br>Elmalılı, Gölpınarlı, Bubenheim, Saheeh, Müyesser: alquran.cloud<br>Feridun A. – Uzun Meal ve Kur'an Açıklamaları: Feridun A.<br>
-      Yazı tipleri: Kral Fahd Kur'an Matbaası (Medine, Osman Taha), Google Fonts (OFL)<br>Hayrat meali, Diyanet meali ve kırmızı kelimeler: kişisel dosya</p></div>`;
+    const R = (a, b) => `<div class="irow"><span class="itx"><span>${a}</span><small>${b}</small></span></div>`;
+    h += LBL(t('Hakkında ve kaynaklar')) + GRP(R("Kur'an metni", 'Tanzil / alquran.cloud (Osmanî hat)') + R('Mealler', 'Elmalılı, Gölpınarlı, Bubenheim, Saheeh, Müyesser: alquran.cloud') + R("Feridun A.", "Uzun Meal ve Kur'an Açıklamaları") +
+      R('Sesler', 'EveryAyah (Arap kâriler), archive.org (İshak Danış, Fatih Çollak), Piper (doğal Türkçe ses)') + R('Yazı tipleri', "Kral Fahd Kur'an Matbaası, Google Fonts (OFL)") + R('Kişisel dosya', 'Hayrat meali, Diyanet meali, kırmızı kelimeler'));
   }
   $('#setD').innerHTML = h;
 }
+const CICON = {view: 'Aa', meal: '📖', lang: '🌐', audio: '🔊', speech: '💬', pack: '📁', about: 'ℹ︎'};
 function onSetClick(e) {
   const b = e.target.closest('button'); if (!b) return;
   if (onAudioSetClick(b)) return;
@@ -716,30 +726,33 @@ function onPlay() {
 }
 
 function audioSettings() {
-  let h = `<p class="muted" style="margin:0 2px 10px">${t('Okuyucuyu seçin. Sesleri telefona indirirseniz internetsiz dinlersiniz; indirmezseniz internetten çalınır.')}</p>`;
+  let h = LBL(t('Okuyucu'));
   const cs = surahsOnPage(cur)[0]; const cn = cs ? cs[0] : 1;
   for (const r of RECITERS) {
     const n = Dl.counts[r.id]; const all = r.surah ? 114 : Q.ayahs.length + 1;
     const stt = n == null ? '…' : n >= all ? t('Tamamı indirildi') : n > 0 ? (r.surah ? t('%1 / %2 sûre indirildi', n, 114) : t('%1 / %2 âyet indirildi', n, all)) : t('İnternetten çalınır · tamamı yaklaşık %1 MB', r.mb);
-    h += `<div class="card" style="padding:12px 14px"><button class="opt${st.reciter === r.id ? ' on' : ''}" data-rec="${r.id}" style="padding:0;margin:0 0 8px;box-shadow:none"><span class="rd"></span><span class="tx"><b>${esc(r.name)}</b><small>${r.surah ? t('Türk hafız · sûre sûre') + ' · ' : ''}${stt}</small></span></button>`;
-    if (Dl.active === r.id) h += `<div id="dlp"><progress max="${Dl.total}" value="${Dl.done}" style="width:100%"></progress><div style="display:flex;align-items:center;gap:8px"><span class="muted" style="flex:1">${t('İndiriliyor… %1 / %2', Dl.done, Dl.total)}</span><button class="btn" data-dlstop>${t('Durdur')}</button></div></div>`;
-    else h += `<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" data-dl="${r.id}" data-s="${cn}" ${Dl.active ? 'disabled' : ''}>${t('Bu sûreyi indir')}</button><button class="btn" data-dl="${r.id}" data-s="0" ${Dl.active ? 'disabled' : ''}>${t('Tümünü indir')}</button>${n ? `<button class="btn" data-dldel="${r.id}">${t('Sil')}</button>` : ''}</div>`;
-    if (Dl.failed && !Dl.active && st.reciter === r.id) h += `<p class="muted" style="color:var(--red)">${t('%1 dosya indirilemedi. İnternet bağlantısını kontrol edip tekrar deneyin.', Dl.failed)}</p>`;
-    h += '</div>';
+    let g = CHK(esc(r.name), (r.surah ? t('Türk hafız · sûre sûre') + ' · ' : '') + stt, st.reciter === r.id, `data-rec="${r.id}"`);
+    if (st.reciter === r.id) {
+      if (Dl.active === r.id) g += `<div class="irow" id="dlp" style="display:block;padding:10px 16px"><progress max="${Dl.total}" value="${Dl.done}" style="width:100%"></progress><div style="display:flex;align-items:center"><span class="muted" style="flex:1">${t('İndiriliyor… %1 / %2', Dl.done, Dl.total)}</span></div></div>` + ACT(t('Durdur'), 'data-dlstop', true);
+      else g += ACT(t('Bu sûreyi indir'), `data-dl="${r.id}" data-s="${cn}" ${Dl.active ? 'disabled' : ''}`) + ACT(t('Tümünü indir'), `data-dl="${r.id}" data-s="0" ${Dl.active ? 'disabled' : ''}`) + (n ? ACT(t('Sil'), `data-dldel="${r.id}"`, true) : '');
+    }
+    h += GRP(g);
+    if (Dl.failed && !Dl.active && st.reciter === r.id) h += FT(`<span style="color:var(--red)">${t('%1 dosya indirilemedi. İnternet bağlantısını kontrol edip tekrar deneyin.', Dl.failed)}</span>`);
   }
-  h += `<p class="muted">${t('Kaynaklar: EveryAyah (Arap kâriler), archive.org (İshak Danış, Fatih Çollak). iPhone ekranı kilitlenince sesi durdurabilir.')}</p>`;
+  h += FT(t('İndirilen sesler telefonda kalır ve internetsiz çalınır. Kaynaklar: EveryAyah, archive.org. iPhone ekranı kilitlenince sesi durdurabilir.'));
   if (RECITERS.some(r => Dl.counts[r.id] == null)) Promise.all(RECITERS.map(r => Dl.count(r))).then(() => { if (setCat === 'audio') drawSettings(); });
   return h;
 }
 function speechSettings() {
   const vs = window.speechSynthesis ? Sp.voices() : [];
-  let h = `<div class="card"><h4>${t('Ne okunsun?')}</h4><div class="seg seg4" style="margin:0">${[['ar', 'Arapça'], ['ar_meal', 'Arapça + meal'], ['meal', 'Meal'], ['ack', 'Açıklama']].map(([k, n]) => `<button data-amode="${k}" class="${st.audioMode === k ? 'on' : ''}">${t(n)}</button>`).join('')}</div><p class="muted" style="margin:8px 0 0">${t('Açıklama: sadece Açıklama sayfasındayken geçerlidir; Arapça okunmaz, her âyette önce meal, sonra açıklama Türkçe okunur. Meal ve Mushaf sayfasında bu seçenekle sadece meal okunur.')}</p></div>`;
+  let h = LBL(t('Ne okunsun?')) + GRP([['ar', 'Arapça'], ['ar_meal', 'Arapça + meal'], ['meal', 'Meal'], ['ack', 'Açıklama']].map(([k, n]) => CHK(t(n), '', st.audioMode === k, `data-amode="${k}"`)).join(''));
+  h += FT(t('Açıklama seçeneği sadece Açıklama sayfasında geçerlidir: Arapça okunmaz, her âyette önce meal, sonra açıklama okunur. Meal ve Mushaf sayfasında bu seçenekle meal okunur.'));
   const tr = mealSpeechLang() === 'tr'; const neu = Sp.useNeural();
-  h += `<div class="card"><h4>${t('Ses')}</h4><select data-voice style="width:100%;height:40px;border-radius:10px;font-size:16px">${tr ? `<option value="neural" ${neu ? 'selected' : ''}>${t('Doğal erkek sesi (önerilen)')}</option>` : ''}${vs.map(v => `<option value="${esc(v.voiceURI)}" ${!neu && Sp.pick() === v ? 'selected' : ''}>${esc(v.name)} · ${t('telefonun sesi')}</option>`).join('')}</select>
-    ${neu ? `<p class="muted">${t('Doğal ses telefonda çalışır; ilk kullanımda bir kere yaklaşık 90 MB indirilir, sonra internetsiz çalışır.')}</p>` : (!vs.length ? `<p class="muted">${t('Bu dilde konuşma sesi bulunamadı.')}</p>` : '')}
-    ${neu ? '' : `<h4 style="margin-top:12px">${t('Ses kalınlığı')}</h4><div class="sl"><input type="range" min="0.5" max="1.5" step="0.05" value="${st.pitch}" data-sp="pitch"><b>${Math.round(st.pitch * 100)}%</b></div>`}
-    <h4 style="margin-top:12px">${t('Konuşma hızı')}</h4><div class="sl"><input type="range" min="0.5" max="1.5" step="0.05" value="${st.rate}" data-sp="rate"><b>${Math.round(st.rate * 100)}%</b></div>
-    <button class="btn pri" data-sample style="margin-top:10px">${t('Örnek dinle')}</button></div>`;
+  h += LBL(t('Ses')) + GRP(`<div class="irow"><span class="itx"><span>${t('Ses')}</span></span><select data-voice class="isel">${tr ? `<option value="neural" ${neu ? 'selected' : ''}>${t('Doğal erkek sesi')}</option>` : ''}${vs.map(v => `<option value="${esc(v.voiceURI)}" ${!neu && Sp.pick() === v ? 'selected' : ''}>${esc(v.name)} · ${t('telefonun sesi')}</option>`).join('')}</select></div>`
+    + (neu ? '' : `<div class="irow islr"><span class="itx"><span>${t('Ses kalınlığı')}</span></span><input type="range" min="0.5" max="1.5" step="0.05" value="${st.pitch}" data-sp="pitch"><b>${Math.round(st.pitch * 100)}%</b></div>`)
+    + `<div class="irow islr"><span class="itx"><span>${t('Konuşma hızı')}</span></span><input type="range" min="0.5" max="1.5" step="0.05" value="${st.rate}" data-sp="rate"><b>${Math.round(st.rate * 100)}%</b></div>`
+    + ACT('▶︎ ' + t('Örnek dinle'), 'data-sample'));
+  h += FT(neu ? t('Doğal ses telefonda çalışır; ilk kullanımda bir kere yaklaşık 90 MB indirilir, sonra internetsiz çalışır.') : (!vs.length ? t('Bu dilde konuşma sesi bulunamadı.') : ''));
   return h;
 }
 function onAudioSetClick(b) {
