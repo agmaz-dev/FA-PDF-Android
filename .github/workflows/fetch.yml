@@ -1,4 +1,4 @@
-name: tmp voices
+name: tmp fonts
 on:
   push:
     branches: [ dib-fetch ]
@@ -8,14 +8,10 @@ jobs:
   t:
     runs-on: ubuntu-latest
     steps:
-      - run: sudo apt-get install -y -qq ffmpeg >/dev/null; pip install -q piper-tts
       - run: |
-          mkdir out; cd out; H=https://huggingface.co/rhasspy/piper-voices/resolve/main
-          for p in de/de_DE/thorsten/medium/de_DE-thorsten-medium en/en_US/ryan/medium/en_US-ryan-medium ar/ar_JO/kareem/medium/ar_JO-kareem-medium; do
-            n=$(basename $p); curl -sSLf -o $n.onnx $H/$p.onnx && curl -sSLf -o $n.onnx.json $H/$p.onnx.json || echo "fail $n" >> log.txt; done
-          echo "Im Namen Allahs, des Allerbarmers, des Barmherzigen. Dies ist das Buch, an dem kein Zweifel ist, eine Rechtleitung für die Gottesfürchtigen." | piper -m de_DE-thorsten-medium.onnx -f de.wav
-          echo "In the name of Allah, the Entirely Merciful, the Especially Merciful. This is the Book about which there is no doubt, a guidance for those conscious of Allah." | piper -m en_US-ryan-medium.onnx -f en.wav
-          echo "ذلك الكتاب لا ريب فيه هدى للمتقين" | piper -m ar_JO-kareem-medium.onnx -f ar.wav
-          for l in de en ar; do ffmpeg -v error -y -i $l.wav -b:a 64k ornek_$l.mp3; rm $l.wav; done
-          ls -la >> log.txt; cat log.txt
+          mkdir out; cd out; B=https://raw.githubusercontent.com/google/fonts/main/ofl
+          curl -sSLf -o SourceSerif4.ttf "$B/sourceserif4/SourceSerif4%5Bopsz,wght%5D.ttf"
+          curl -sSLf -o Literata.ttf "$B/literata/Literata%5Bopsz,wght%5D.ttf"
+          curl -sSLf -o Newsreader.ttf "$B/newsreader/Newsreader%5Bopsz,wght%5D.ttf"
+          ls -la
           git init -q -b dib-data; git config user.name b; git config user.email b@b; git add -A; git commit -qm d; git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" dib-data
