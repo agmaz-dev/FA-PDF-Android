@@ -212,7 +212,7 @@ function slotHtml(p) {
 function fitAll(slot) {
   slot.querySelectorAll('.fit[data-fit]').forEach(box => {
     const inner = box.firstElementChild; const kind = box.dataset.fit;
-    let lo = kind === 'ar' ? 12 : 11, hi = kind === 'ar' ? 40 : 22;
+    let lo = kind === 'ar' ? 12 : 11, hi = kind === 'ar' ? 40 : 26;
     const H = box.clientHeight; if (!H) return;
     for (let k = 0; k < 8; k++) { const mid = (lo + hi) / 2; inner.style.setProperty('--fs', mid + 'px'); if (inner.scrollHeight <= H) lo = mid; else hi = mid; }
     const z = kind === 'ar' ? st.arZoom : st.mealZoom;
@@ -305,10 +305,11 @@ document.addEventListener('click', e => {
   const go = e.target.closest('[data-go]'); if (go) { const i = +go.dataset.go; if (i >= 0 && i < Q.ayahs.length) { sel = i; const p = ay(i)[2]; if (p !== cur) goPage(p); else rerender(); } return; }
   if (e.target.closest('[data-x]')) { sel = null; rerender(); updateSel(); return; }
   if (e.target.closest('[data-open-ac]')) { setMode('aciklama'); return; }
-  if (e.target.closest('#pager')) { if (lp && lp.done) { lp = null; return; } if (document.body.classList.contains('barsOn')) bars(false); }
+  if (e.target.closest('#pager')) { if (lp && lp.done) { lp = null; return; } bars(!document.body.classList.contains('barsOn')); }
 });
 $('#tapTop').addEventListener('click', () => bars(!document.body.classList.contains('barsOn')));
 $('#bars').addEventListener('pointerdown', () => bars(true));
+$('#modes').addEventListener('pointerdown', () => bars(true));
 $('#slider').addEventListener('input', e => { $('#tPage').textContent = '· ' + e.target.value; });
 $('#slider').addEventListener('change', e => goPage(+e.target.value, false));
 $('#bMark').addEventListener('click', () => {
