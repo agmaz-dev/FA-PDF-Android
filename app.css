@@ -224,3 +224,8 @@ body.gece{--shBg:#1C1C1E;--shCard:#2C2C2E;--shAcc:#D8B66A;--shSep:#3A3A3C;--shMu
 .inav{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:8px}
 .inav .inb{overflow:hidden;text-overflow:ellipsis;min-width:0}
 .inav .int{max-width:52vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:center}
+
+/* Meal ve açıklama yazısı: Source Serif */
+@font-face{font-family:"SourceSerif";src:url(fonts/sourceserif.ttf);font-weight:200 900;font-display:swap}
+.meal,.ac .body,.ac h2,.selCard .tx,.phead{font-family:"SourceSerif",Georgia,serif}
+.meal .bs,.ac .ek{font-family:amiri}
