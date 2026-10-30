@@ -4,6 +4,7 @@ on:
   workflow_dispatch:
   push:
     branches: [ kuran ]
+    paths-ignore: [ 'webapp/**', 'webapp-tools/**', '.github/workflows/webapp.yml' ]
 
 permissions:
   contents: write

@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Kur'an">
+<meta name="theme-color" content="#ECE9F2">
+<title>Kur'an-ı Kerim</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<div id="pager" dir="rtl"></div>
+<div id="tapTop"></div>
+
+<div id="bars">
+  <div class="row1">
+    <button class="gc" id="bMenu" aria-label="Fihrist"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+    <button class="gp" id="bTitle"><b id="tSurah"></b><span id="tPage"></span></button>
+    <button class="gc" id="bMark" aria-label="İşaret"><svg viewBox="0 0 24 24"><path d="M7 4h10v16l-5-4-5 4z"/></svg></button>
+    <button class="gc" id="bSet" aria-label="Ayarlar"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.8v2.6M12 18.6v2.6M2.8 12h2.6M18.6 12h2.6M5.5 5.5l1.9 1.9M16.6 16.6l1.9 1.9M5.5 18.5l1.9-1.9M16.6 7.4l1.9-1.9"/></svg></button>
+  </div>
+  <input type="range" id="slider" min="1" max="604" value="1" dir="rtl">
+</div>
+
+<div id="modes">
+  <button data-m="meal">Meal</button><button data-m="mushaf">Mushaf</button><button data-m="aciklama">Açıklama</button>
+</div>
+
+<div id="selBar"></div>
+<div id="toast"></div>
+
+<div id="sheet" class="hidden"><div class="sheetIn" id="sheetIn"></div></div>
+<input type="file" id="fileIn" accept=".json,application/json" hidden>
+<script src="app.js"></script>
+</body>
+</html>
