@@ -1,35 +1,16 @@
-name: tmp align
+name: tmp cors
 on:
   push:
     branches: [ dib-fetch ]
 permissions:
   contents: write
 jobs:
-  al:
-    runs-on: ubuntu-latest
-    timeout-minutes: 300
-    strategy:
-      fail-fast: false
-      matrix:
-        rec: [danis, collak]
-        part: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
-    steps:
-      - uses: actions/checkout@v4
-        with: { ref: dib-fetch }
-      - run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg >/dev/null
-      - run: pip install -q torch --index-url https://download.pytorch.org/whl/cpu && pip install -q transformers numba numpy
-      - run: mkdir -p out && (python tools/align.py ${{ matrix.rec }} ${{ matrix.part }} 12 2>&1 | tee out/log_${{ matrix.rec }}_${{ matrix.part }}.txt) ; true
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with: { name: "al-${{ matrix.rec }}-${{ matrix.part }}", path: out/ }
-  push:
-    needs: [al]
-    if: always()
+  c:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v4
-        with: { path: all, merge-multiple: true }
       - run: |
-          cd all && ls && du -sh .
-          git init -q -b dib-data; git config user.name b; git config user.email b@b
-          git add -A && git commit -qm d && git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" dib-data
+          mkdir out; O="Origin: https://agmaz-dev.github.io"
+          for u in https://everyayah.com/data/Alafasy_128kbps/001001.mp3 https://archive.org/download/ishak_danish/112.mp3 "https://archive.org/download/fatihcollakk/112.mp3"; do
+            echo "== $u" >> out/cors.txt; curl -sSIL -H "$O" "$u" | grep -iE "^HTTP|access-control|location|content-type|accept-ranges" >> out/cors.txt; done
+          cat out/cors.txt
+          cd out; git init -q -b dib-data; git config user.name b; git config user.email b@b; git add -A; git commit -qm d; git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" dib-data
