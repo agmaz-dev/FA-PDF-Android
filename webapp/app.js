@@ -18,7 +18,7 @@ const LANGS = [['tr','Türkçe'],['de','Deutsch'],['en','English'],['ar','الع
 const MEALLER = [
   {id:'hayrat', short:'Hayrat', name:'Hayrat Muhtasar Meâli', personal:true},
   {id:'elmalili', short:'Elmalılı', name:'Elmalılı Hamdi Yazır Meâli', file:'tr.yazir'},
-  {id:'tr.diyanet', short:'Diyanet', name:'Diyanet İşleri Başkanlığı Meâli (Altuntaş – Şahin)', personal:true},
+  {id:'tr.diyanet', short:'Diyanet', name:'Diyanet İşleri Başkanlığı Meâli (Altuntaş – Şahin)', file:'tr.diyanet'},
   {id:'tr.golpinarli', short:'Gölpınarlı', name:'Abdülbâki Gölpınarlı Meâli', file:'tr.golpinarli'},
   {id:'feridun', short:'Feridun A.', name:'Feridun A. – Uzun Meal', file:'feridun'},
   {id:'de.bubenheim', short:'Bubenheim', name:'Deutsch – Bubenheim & Elyas', file:'de.bubenheim'},
@@ -80,7 +80,6 @@ function applyPersonal(p) {
   if (PERS && PERS.tevafuk) PERS.tevafuk.forEach(([a, w]) => RED.add(a * 1000 + w));
   if (PERS && PERS.hayrat) MEAL['hayrat'] = PERS.hayrat.meal;
   else delete MEAL['hayrat'];
-  if (PERS && PERS.diyanet) MEAL['tr.diyanet'] = PERS.diyanet; else delete MEAL['tr.diyanet'];
 }
 const hasMeal = id => { const m = mealInfo(id); return !m.personal || !!MEAL[id]; };
 
@@ -461,11 +460,11 @@ function drawSettings() {
   } else if (c === 'speech') { h += speechSettings();
   } else if (c === 'pack') {
     h += LBL(t('Kişisel dosya')) + GRP(`<div class="irow"><span class="itx"><span>${t('Durum')}</span></span><span class="ival">${PERS ? t('Aktarıldı') : t('Aktarılmadı')}</span></div>` + ACT(t('Dosyayı aktar'), 'data-import') + (PERS ? ACT(t('Sil'), 'data-delpers', true) : ''));
-    h += FT(t('Hayrat meali, Diyanet meali ve tevâfuk kırmızı kelimeleri kişisel izinle kullanıldığı için uygulamanın içinde değildir. Size verilen Kuran-Kisisel.json dosyasını bir kere aktarın; telefonda saklanır ve internetsiz çalışır.'));
+    h += FT(t('Hayrat meali ve tevâfuk kırmızı kelimeleri kişisel izinle kullanıldığı için uygulamanın içinde değildir. Size verilen Kuran-Kisisel.json dosyasını bir kere aktarın; telefonda saklanır ve internetsiz çalışır.'));
   } else {
     const R = (a, b) => `<div class="irow"><span class="itx"><span>${a}</span><small>${b}</small></span></div>`;
     h += LBL(t('Hakkında ve kaynaklar')) + GRP(R("Kur'an metni", 'Tanzil / alquran.cloud (Osmanî hat)') + R('Mealler', 'Elmalılı, Gölpınarlı, Bubenheim, Saheeh, Müyesser: alquran.cloud') + R("Feridun A.", "Uzun Meal ve Kur'an Açıklamaları") +
-      R('Sesler', 'EveryAyah (Arap kâriler), archive.org (İshak Danış, Fatih Çollak), Piper (doğal Türkçe ses)') + R('Yazı tipleri', "Kral Fahd Kur'an Matbaası, Google Fonts (OFL)") + R('Kişisel dosya', 'Hayrat meali, Diyanet meali, kırmızı kelimeler'));
+      R('Sesler', 'EveryAyah (Arap kâriler), archive.org (İshak Danış, Fatih Çollak), Piper (doğal Türkçe ses)') + R('Yazı tipleri', "Kral Fahd Kur'an Matbaası, Google Fonts (OFL)") + R('Diyanet', 'Diyanet İşleri Başkanlığı Meâli (Altuntaş – Şahin)') + R('Kişisel dosya', 'Hayrat meali, kırmızı kelimeler'));
   }
   $('#setD').innerHTML = h;
 }
