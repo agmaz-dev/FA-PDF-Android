@@ -747,7 +747,8 @@ function speechSettings() {
   let h = LBL(t('Ne okunsun?')) + GRP([['ar', 'Arapça'], ['ar_meal', 'Arapça + meal'], ['meal', 'Meal'], ['ack', 'Açıklama']].map(([k, n]) => CHK(t(n), '', st.audioMode === k, `data-amode="${k}"`)).join(''));
   h += FT(t('Açıklama seçeneği sadece Açıklama sayfasında geçerlidir: Arapça okunmaz, her âyette önce meal, sonra açıklama okunur. Meal ve Mushaf sayfasında bu seçenekle meal okunur.'));
   const tr = mealSpeechLang() === 'tr'; const neu = Sp.useNeural();
-  h += LBL(t('Ses')) + GRP(`<div class="irow"><span class="itx"><span>${t('Ses')}</span></span><select data-voice class="isel">${tr ? `<option value="neural" ${neu ? 'selected' : ''}>${t('Doğal erkek sesi')}</option>` : ''}${vs.map(v => `<option value="${esc(v.voiceURI)}" ${!neu && Sp.pick() === v ? 'selected' : ''}>${esc(v.name)} · ${t('telefonun sesi')}</option>`).join('')}</select></div>`
+  h += LBL(t('Ses')) + GRP((tr ? CHK(t('Doğal erkek sesi'), t('Önerilen · telefonda çalışır'), neu, 'data-vset="neural"') : '')
+      + vs.map(v => CHK(esc(v.name), t('Telefonun kendi sesi'), !neu && Sp.pick() === v, `data-vset="${esc(v.voiceURI)}"`)).join('')) + GRP(''
     + (neu ? '' : `<div class="irow islr"><span class="itx"><span>${t('Ses kalınlığı')}</span></span><input type="range" min="0.5" max="1.5" step="0.05" value="${st.pitch}" data-sp="pitch"><b>${Math.round(st.pitch * 100)}%</b></div>`)
     + `<div class="irow islr"><span class="itx"><span>${t('Konuşma hızı')}</span></span><input type="range" min="0.5" max="1.5" step="0.05" value="${st.rate}" data-sp="rate"><b>${Math.round(st.rate * 100)}%</b></div>`
     + ACT('▶︎ ' + t('Örnek dinle'), 'data-sample'));
@@ -761,6 +762,7 @@ function onAudioSetClick(b) {
   if (d.dlstop != null) { Dl.stop = true; return true; }
   if (d.dldel) { Dl.del(reciterById(d.dldel)); return true; }
   if (d.amode) { st.audioMode = d.amode; save(); drawSettings(); return true; }
+  if (d.vset) { st.voice = d.vset; save(); drawSettings(); return true; }
   if (d.ackread != null) { st.ackRead = !st.ackRead; save(); drawSettings(); return true; }
   if (d.sample != null) { unlockAudio(); Sp.speak({de: 'Im Namen Allahs, des Allerbarmers, des Barmherzigen.', en: 'In the name of Allah, the Entirely Merciful, the Especially Merciful.', ar: 'بسم الله الرحمن الرحيم'}[mealSpeechLang()] || "Rahmân ve Rahîm olan Allah'ın adıyla."); return true; }
   return false;
