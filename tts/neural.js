@@ -2,10 +2,13 @@
 import { createPiperPhonemize } from './piper.js';
 
 const BASE = new URL('./', import.meta.url).href;
-const MODEL = BASE + 'tr_TR-dfki-medium.onnx';
-const CFG = BASE + 'tr_TR-dfki-medium.onnx.json';
+// her dil için doğal erkek sesi
+const VOICES = {tr: 'tr_TR-dfki-medium', de: 'de_DE-thorsten-medium', en: 'en_US-ryan-medium', ar: 'ar_JO-kareem-medium'};
 const CACHE = 'kuran-tts';
-let session = null, cfg = null, loading = null;
+let session = null, cfg = null, loading = null, curVoice = null, lang = 'tr';
+const MODEL = () => BASE + VOICES[lang] + '.onnx';
+const CFG = () => BASE + VOICES[lang] + '.onnx.json';
+export function setLang(l) { if (!VOICES[l]) l = 'tr'; if (l !== lang) { lang = l; session = null; loading = null; } }
 
 function loadOrt() {
   if (window.ort) return Promise.resolve();
@@ -19,15 +22,15 @@ async function cached(url, onProgress) {
   for (;;) { const {done, value} = await rd.read(); if (done) break; parts.push(value); got += value.length; onProgress && onProgress(got, total); }
   const blob = new Blob(parts); await c.put(url, new Response(blob)); return blob.arrayBuffer();
 }
-export async function isDownloaded() { try { return !!(await (await caches.open(CACHE)).match(MODEL)); } catch (e) { return false; } }
+export async function isDownloaded() { try { return !!(await (await caches.open(CACHE)).match(MODEL())); } catch (e) { return false; } }
 export async function remove() { await caches.delete(CACHE); session = null; loading = null; }
 export function ensure(onProgress) {
   if (session) return Promise.resolve();
   if (!loading) loading = (async () => {
     await loadOrt();
     ort.env.wasm.numThreads = 1; ort.env.wasm.wasmPaths = BASE;
-    cfg = JSON.parse(new TextDecoder().decode(await cached(CFG)));
-    const buf = await cached(MODEL, onProgress);
+    cfg = JSON.parse(new TextDecoder().decode(await cached(CFG())));
+    const buf = await cached(MODEL(), onProgress);
     session = await ort.InferenceSession.create(buf, {executionProviders: ['wasm']});
   })().catch(e => { loading = null; throw e; });
   return loading;
