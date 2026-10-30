@@ -646,14 +646,17 @@ const Au = {
     const nf = firstIdxOfSurah[this.sNum + 1]; const cur = this.playing;
     this.texts(cur, () => { if (nf == null) this.stop(); else this.startSurah(nf, true); });
   },
-  needTexts() { return st.audioMode !== 'ar'; },
-  textOnly() { return st.audioMode === 'meal' || st.audioMode === 'ack'; },
+  // Açıklama seçeneği sadece Açıklama sayfasında geçerli; Meal/Mushaf sayfasında meal okunur
+  mode() { return st.audioMode === 'ack' && !AM() ? 'meal' : st.audioMode; },
+  needTexts() { return this.mode() !== 'ar'; },
+  textOnly() { const m = this.mode(); return m === 'meal' || m === 'ack'; },
   /** âyetten sonra okunacak Türkçe metinler: meal, açıklama sayfasında açıklama */
   texts(i, then) {
     const list = [];
     const meal = () => mealPlain(i).replace(/⁽\d+⁾|\(\d+\)|\[\d+\]/g, '').trim();
-    if (st.audioMode === 'ar_meal' || st.audioMode === 'meal') { const m = meal(); if (m) list.push(m); }
-    if (st.audioMode === 'ack') { const m = meal(); if (m) list.push(m); const [s, a] = ay(i); const A = ACK && ACK[s] && ACK[s].ayat[a]; if (A) list.push(A.t + '. ' + A.p.join(' ')); }
+    const md = this.mode();
+    if (md === 'ar_meal' || md === 'meal') { const m = meal(); if (m) list.push(m); }
+    if (md === 'ack') { const m = meal(); if (m) list.push(m); const [s, a] = ay(i); const A = ACK && ACK[s] && ACK[s].ayat[a]; if (A) list.push(A.t + '. ' + A.p.join(' ')); }
     if (!list.length) { then(); return; }
     this.set(i, 'meal'); const tok = this.ttok = {};
     Sp.speak(list.join(' '), () => { if (tok === this.ttok && !this.paused) { this.phase = 'ar'; then(); } });
@@ -730,7 +733,7 @@ function audioSettings() {
 }
 function speechSettings() {
   const vs = window.speechSynthesis ? Sp.voices() : [];
-  let h = `<div class="card"><h4>${t('Ne okunsun?')}</h4><div class="seg seg4" style="margin:0">${[['ar', 'Arapça'], ['ar_meal', 'Arapça + meal'], ['meal', 'Meal'], ['ack', 'Açıklama']].map(([k, n]) => `<button data-amode="${k}" class="${st.audioMode === k ? 'on' : ''}">${t(n)}</button>`).join('')}</div><p class="muted" style="margin:8px 0 0">${t('Açıklama: Arapça okunmaz; her âyette önce meali, sonra açıklaması Türkçe okunur. Açıklaması olmayan âyetlerde sadece meal okunur.')}</p></div>`;
+  let h = `<div class="card"><h4>${t('Ne okunsun?')}</h4><div class="seg seg4" style="margin:0">${[['ar', 'Arapça'], ['ar_meal', 'Arapça + meal'], ['meal', 'Meal'], ['ack', 'Açıklama']].map(([k, n]) => `<button data-amode="${k}" class="${st.audioMode === k ? 'on' : ''}">${t(n)}</button>`).join('')}</div><p class="muted" style="margin:8px 0 0">${t('Açıklama: sadece Açıklama sayfasındayken geçerlidir; Arapça okunmaz, her âyette önce meal, sonra açıklama Türkçe okunur. Meal ve Mushaf sayfasında bu seçenekle sadece meal okunur.')}</p></div>`;
   const tr = mealSpeechLang() === 'tr'; const neu = Sp.useNeural();
   h += `<div class="card"><h4>${t('Ses')}</h4><select data-voice style="width:100%;height:40px;border-radius:10px;font-size:16px">${tr ? `<option value="neural" ${neu ? 'selected' : ''}>${t('Doğal erkek sesi (önerilen)')}</option>` : ''}${vs.map(v => `<option value="${esc(v.voiceURI)}" ${!neu && Sp.pick() === v ? 'selected' : ''}>${esc(v.name)} · ${t('telefonun sesi')}</option>`).join('')}</select>
     ${neu ? `<p class="muted">${t('Doğal ses telefonda çalışır; ilk kullanımda bir kere yaklaşık 90 MB indirilir, sonra internetsiz çalışır.')}</p>` : (!vs.length ? `<p class="muted">${t('Bu dilde konuşma sesi bulunamadı.')}</p>` : '')}
