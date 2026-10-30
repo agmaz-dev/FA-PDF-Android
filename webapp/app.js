@@ -4,8 +4,9 @@ const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
 // ---------- ayarlar (telefonda saklanır) ----------
-const DEF = {lang:'tr', meal:'elmalili', font:'medina', theme:'krem', arZoom:1, mealZoom:1, page:1, mode:'meal', marks:[], reciter:'sudais', audioMode:'ar', ackRead:true, voice:'', pitch:0.8, rate:0.95};
+const DEF = {lang:'tr', meal:'elmalili', font:'medina', theme:'krem', arZoom:1, mealZoom:1, page:1, mode:'meal', marks:[], reciter:'sudais', audioMode:'ar', ackRead:true, voice:'', pitch:0.8, rate:1};
 const st = (() => { try { return Object.assign({}, DEF, JSON.parse(localStorage.getItem('kuran') || '{}')); } catch (e) { return Object.assign({}, DEF); } })();
+if (st.rate === 0.95) st.rate = 1;
 const save = () => { try { localStorage.setItem('kuran', JSON.stringify(st)); } catch (e) {} };
 
 // ---------- dil ----------
@@ -461,7 +462,7 @@ function onSetClick(e) {
 }
 function onSetInput(e) {
   if (e.target.dataset.sp) { st[e.target.dataset.sp] = +e.target.value; e.target.nextElementSibling.textContent = Math.round(st[e.target.dataset.sp] * 100) + '%'; save(); return; }
-  if (e.target.dataset.voice != null) { st.voice = e.target.value; save(); return; }
+  if (e.target.dataset.voice != null) { st.voice = e.target.value; save(); drawSettings(); return; }
   const z = e.target.dataset.zoom; if (!z) return;
   st[z] = +e.target.value; e.target.nextElementSibling.textContent = Math.round(st[z] * 100) + '%'; save();
   clearTimeout(onSetInput._t); onSetInput._t = setTimeout(rerender, 120);
@@ -539,9 +540,16 @@ function drawDl() { const e = document.getElementById('dlp'); if (e) { e.querySe
 const Sp = {
   voices() { const l = mealSpeechLang(); return (speechSynthesis.getVoices() || []).filter(v => v.lang.toLowerCase().startsWith(l)); },
   pick() { const vs = this.voices(); return vs.find(v => v.voiceURI === st.voice) || vs.find(v => /male|erkek|cem|tolga|daniel|markus|majed|maged|tarik/i.test(v.name) && !/female/i.test(v.name)) || vs[0]; },
+  useNeural() { return mealSpeechLang() === 'tr' && (!st.voice || st.voice === 'neural'); },
+  split(text) { return (text.match(/[^.!?;:]+[.!?;:]*\s*/g) || [text]).reduce((a, x) => { if (a.length && (a[a.length - 1] + x).length < 220) a[a.length - 1] += x; else a.push(x); return a; }, []).map(x => x.trim()).filter(Boolean); },
   speak(text, done) {
-    speechSynthesis.cancel();
-    const parts = (text.match(/[^.!?;:]+[.!?;:]*\s*/g) || [text]).reduce((a, x) => { if (a.length && (a[a.length - 1] + x).length < 220) a[a.length - 1] += x; else a.push(x); return a; }, []);
+    Sp.stop();
+    if (this.useNeural()) { this.neuralSpeak(text, done); return; }
+    this.sysSpeak(text, done);
+  },
+  sysSpeak(text, done) {
+    if (!window.speechSynthesis) { done && done(); return; }
+    const parts = this.split(text);
     const v = this.pick(); let i = 0; const tok = Sp.tok = {};
     const next = () => {
       if (tok !== Sp.tok) return;
@@ -551,7 +559,29 @@ const Sp = {
     };
     next();
   },
-  stop() { Sp.tok = null; try { speechSynthesis.cancel(); } catch (e) {} },
+  el: new Audio(),
+  async neuralSpeak(text, done) {
+    const tok = Sp.tok = {}; const parts = this.split(text);
+    let N;
+    try {
+      N = await import('./tts/neural.js');
+      if (!(await N.isDownloaded())) toast(t('Doğal ses hazırlanıyor… (ilk seferde bir kere indirilir)'));
+      await N.ensure((g, tot) => { if (tot) { const e = $('#toast'); e.textContent = t('Doğal ses indiriliyor… %1%', Math.round(g / tot * 100)); e.style.display = 'block'; clearTimeout(e._t); e._t = setTimeout(() => e.style.display = 'none', 3000); } });
+    } catch (e) { if (tok === Sp.tok) { toast(t('Doğal ses yüklenemedi, telefonun sesi kullanılıyor.')); this.sysSpeak(text, done); } return; }
+    let pending = parts.length ? N.synth(parts[0], st.rate) : null;
+    for (let i = 0; i < parts.length; i++) {
+      let blob; try { blob = await pending; } catch (e) { blob = null; }
+      if (tok !== Sp.tok) return;
+      pending = i + 1 < parts.length ? N.synth(parts[i + 1], st.rate) : null;
+      if (!blob) continue;
+      const u = URL.createObjectURL(blob);
+      await new Promise(res => { this.el.onended = res; this.el.onerror = res; this.el.src = u; this.el.play().catch(res); Sp.cur = res; });
+      URL.revokeObjectURL(u);
+      if (tok !== Sp.tok) return;
+    }
+    if (tok === Sp.tok) done && done();
+  },
+  stop() { Sp.tok = null; try { speechSynthesis.cancel(); } catch (e) {} try { Sp.el.pause(); } catch (e) {} if (Sp.cur) { const c = Sp.cur; Sp.cur = null; c(); } },
 };
 const mealSpeechLang = () => st.meal.startsWith('de.') ? 'de' : st.meal.startsWith('en.') ? 'en' : st.meal.startsWith('ar.') ? 'ar' : 'tr';
 if (window.speechSynthesis) speechSynthesis.onvoiceschanged = () => { if (setCat === 'speech') drawSettings(); };
@@ -655,7 +685,10 @@ function mediaMeta() {
 if ('mediaSession' in navigator) { navigator.mediaSession.setActionHandler('play', () => Au.paused && Au.toggle()); navigator.mediaSession.setActionHandler('pause', () => !Au.paused && Au.toggle()); }
 const PLAY_SVG = '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z" fill="currentColor" stroke="none"/></svg>';
 const PAUSE_SVG = '<svg viewBox="0 0 24 24"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z" fill="currentColor" stroke="none"/></svg>';
+const SILENT = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAIlYAAESsAAACABAAZGF0YQAAAAA=';
+function unlockAudio() { for (const el of [Au.el, Sp.el]) { if (el._ok) continue; try { el.src = SILENT; const p = el.play(); if (p) p.then(() => { el.pause(); el._ok = true; }).catch(() => {}); } catch (e) {} } }
 function onPlay() {
+  unlockAudio();
   if (Au.playing == null) { const idxs = ayahsOnPage(cur); Au.play(sel != null && idxs.includes(sel) ? sel : idxs[0]); } else Au.toggle();
 }
 
@@ -679,8 +712,10 @@ function speechSettings() {
   const vs = window.speechSynthesis ? Sp.voices() : [];
   let h = `<div class="card"><h4>${t('Ne okunsun?')}</h4><div class="seg" style="margin:0">${[['ar', 'Sadece Arapça'], ['ar_meal', 'Arapça + meal'], ['meal', 'Sadece meal']].map(([k, n]) => `<button data-amode="${k}" class="${st.audioMode === k ? 'on' : ''}">${t(n)}</button>`).join('')}</div>
     <button class="opt${st.ackRead ? ' on' : ''}" data-ackread style="margin:10px 0 0;padding:6px 0;box-shadow:none"><span class="rd"></span><span class="tx"><b>${t('Açıklama sayfasında açıklamayı da oku')}</b><small>${t('Açıklama sayfasındayken âyetten sonra açıklama Türkçe okunur')}</small></span></button></div>`;
-  h += `<div class="card"><h4>${t('Ses')}</h4>${vs.length ? `<select data-voice style="width:100%;height:40px;border-radius:10px;font-size:16px">${vs.map(v => `<option value="${esc(v.voiceURI)}" ${Sp.pick() === v ? 'selected' : ''}>${esc(v.name)}</option>`).join('')}</select>` : `<p class="muted">${t('Bu dilde konuşma sesi bulunamadı. iPhone Ayarlar → Erişilebilirlik → Seslendirilen İçerik → Sesler bölümünden Türkçe ses indirebilirsiniz.')}</p>`}
-    <h4 style="margin-top:12px">${t('Ses kalınlığı')}</h4><div class="sl"><input type="range" min="0.5" max="1.5" step="0.05" value="${st.pitch}" data-sp="pitch"><b>${Math.round(st.pitch * 100)}%</b></div>
+  const tr = mealSpeechLang() === 'tr'; const neu = Sp.useNeural();
+  h += `<div class="card"><h4>${t('Ses')}</h4><select data-voice style="width:100%;height:40px;border-radius:10px;font-size:16px">${tr ? `<option value="neural" ${neu ? 'selected' : ''}>${t('Doğal erkek sesi (önerilen)')}</option>` : ''}${vs.map(v => `<option value="${esc(v.voiceURI)}" ${!neu && Sp.pick() === v ? 'selected' : ''}>${esc(v.name)} · ${t('telefonun sesi')}</option>`).join('')}</select>
+    ${neu ? `<p class="muted">${t('Doğal ses telefonda çalışır; ilk kullanımda bir kere yaklaşık 90 MB indirilir, sonra internetsiz çalışır.')}</p>` : (!vs.length ? `<p class="muted">${t('Bu dilde konuşma sesi bulunamadı.')}</p>` : '')}
+    ${neu ? '' : `<h4 style="margin-top:12px">${t('Ses kalınlığı')}</h4><div class="sl"><input type="range" min="0.5" max="1.5" step="0.05" value="${st.pitch}" data-sp="pitch"><b>${Math.round(st.pitch * 100)}%</b></div>`}
     <h4 style="margin-top:12px">${t('Konuşma hızı')}</h4><div class="sl"><input type="range" min="0.5" max="1.5" step="0.05" value="${st.rate}" data-sp="rate"><b>${Math.round(st.rate * 100)}%</b></div>
     <button class="btn pri" data-sample style="margin-top:10px">${t('Örnek dinle')}</button></div>`;
   return h;
@@ -693,7 +728,7 @@ function onAudioSetClick(b) {
   if (d.dldel) { Dl.del(reciterById(d.dldel)); return true; }
   if (d.amode) { st.audioMode = d.amode; save(); drawSettings(); return true; }
   if (d.ackread != null) { st.ackRead = !st.ackRead; save(); drawSettings(); return true; }
-  if (d.sample != null) { Sp.speak({de: 'Im Namen Allahs, des Allerbarmers, des Barmherzigen.', en: 'In the name of Allah, the Entirely Merciful, the Especially Merciful.', ar: 'بسم الله الرحمن الرحيم'}[mealSpeechLang()] || "Rahmân ve Rahîm olan Allah'ın adıyla."); return true; }
+  if (d.sample != null) { unlockAudio(); Sp.speak({de: 'Im Namen Allahs, des Allerbarmers, des Barmherzigen.', en: 'In the name of Allah, the Entirely Merciful, the Especially Merciful.', ar: 'بسم الله الرحمن الرحيم'}[mealSpeechLang()] || "Rahmân ve Rahîm olan Allah'ın adıyla."); return true; }
   return false;
 }
 $('#bPlay').addEventListener('click', onPlay);

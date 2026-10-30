@@ -1,0 +1,1 @@
+Büyük ses dosyaları (model, ort, espeak) sadece gh-pages dalında.
