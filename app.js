@@ -323,6 +323,33 @@ document.querySelectorAll('#modes button').forEach(b => b.addEventListener('clic
 function setMode(m) { st.mode = m; save(); updateBars(); rerender(); updateSel(); }
 let rz = 0; addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { rerender(); slots[cur - 1].scrollIntoView({inline: 'start', block: 'nearest'}); }, 150); });
 
+
+// ---------- iki parmakla büyütme (Android'deki gibi) ----------
+let pz = null;
+const tdist = e => Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+$('#pager').addEventListener('touchstart', e => {
+  if (e.touches.length !== 2) return;
+  const box = (e.target.closest && e.target.closest('.fit')) || null; if (!box) return;
+  const ar = box.dataset.fit === 'ar'; const key = ar ? 'arZoom' : 'mealZoom';
+  const els = [...slots[cur - 1].querySelectorAll(ar ? '.fit[data-fit=ar] > div' : '.fit[data-fit=meal] > div, .ac .body')];
+  pz = {d0: tdist(e), key, f: 1, els: els.map(el => [el, parseFloat(el.style.getPropertyValue('--fs')) || 16])};
+  if (lp) { clearTimeout(lp.t); lp = null; }
+}, {passive: true});
+$('#pager').addEventListener('touchmove', e => {
+  if (!pz || e.touches.length !== 2) return;
+  e.preventDefault();
+  const lim = pz.key === 'arZoom' ? [0.6, 2.5] : [0.6, 2.2];
+  pz.f = Math.max(lim[0] / st[pz.key], Math.min(lim[1] / st[pz.key], tdist(e) / pz.d0));
+  pz.els.forEach(([el, fs]) => el.style.setProperty('--fs', (fs * pz.f) + 'px'));
+}, {passive: false});
+$('#pager').addEventListener('touchend', e => {
+  if (!pz || e.touches.length) return;
+  const z = pz; pz = null;
+  if (Math.abs(z.f - 1) < 0.02) return;
+  st[z.key] = Math.round(st[z.key] * z.f * 100) / 100; save(); rerender();
+});
+document.addEventListener('gesturestart', e => e.preventDefault());
+
 // ---------- alt sayfa ----------
 function openSheet(html) { $('#sheetIn').innerHTML = html; $('#sheet').classList.remove('hidden'); }
 function closeSheet() { $('#sheet').classList.add('hidden'); $('#sheetIn').innerHTML = ''; }
