@@ -4,7 +4,7 @@ const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
 // ---------- ayarlar (telefonda saklanır) ----------
-const DEF = {lang:'tr', meal:'elmalili', font:'medina', theme:'krem', arZoom:1, mealZoom:1, page:1, mode:'meal', marks:[]};
+const DEF = {lang:'tr', meal:'elmalili', font:'medina', theme:'krem', arZoom:1, mealZoom:1, page:1, mode:'meal', marks:[], reciter:'sudais', audioMode:'ar', ackRead:true, voice:'', pitch:0.8, rate:0.95};
 const st = (() => { try { return Object.assign({}, DEF, JSON.parse(localStorage.getItem('kuran') || '{}')); } catch (e) { return Object.assign({}, DEF); } })();
 const save = () => { try { localStorage.setItem('kuran', JSON.stringify(st)); } catch (e) {} };
 
@@ -158,7 +158,7 @@ function mealPage(p) {
       h += `<div class="hd">${esc(hd)}</div>`; if (nt) h += `<div class="nt">${esc(nt)}</div>`;
     }
     const l = lines[i]; if (!l) continue;
-    h += `<p class="ln${i === sel ? ' sel' : ''}" data-i="${i}"><b>${l.label}- </b>${mealHtml(l.text)}</p>`;
+    h += `<p class="ln${i === hl() ? ' sel' : ''}" data-i="${i}"><b>${l.label}- </b>${mealHtml(l.text)}</p>`;
   }
   if (!hasMeal(src)) h += `<p class="muted">${t('Bu meal kişisel dosyada. Ayarlar → Kişisel dosya bölümünden aktarın; şimdilik Elmalılı meali gösteriliyor.')}</p>`;
   return `<div class="paper">${headHtml(p)}<div class="fit" data-fit="meal"><div class="meal">${h}</div></div></div>`;
@@ -174,7 +174,7 @@ function mushafPage(p) {
   for (const i of ayahsOnPage(p)) {
     const [s, a] = ay(i);
     if (a === 1) { flush(); h += surahHeader(surah(s)); if (s !== 1 && s !== 9) h += `<div class="bsm">${basmalaHtml()}</div>`; }
-    para.push(`<span data-i="${i}"${i === sel ? ' class="sel"' : ''}>${arWords(i)} <span class="m">${marker(a)}</span></span>`);
+    para.push(`<span data-i="${i}"${i === hl() ? ' class="sel"' : ''}>${arWords(i)} <span class="m">${marker(a)}</span></span>`);
   }
   flush();
   const ss = surahsOnPage(p);
@@ -184,7 +184,7 @@ function mushafPage(p) {
 const SHARE_SVG = '<svg viewBox="0 0 24 24"><circle cx="18" cy="5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="19" r="2.5"/><path d="M8.2 10.8l7.6-4.4M8.2 13.2l7.6 4.4"/></svg>';
 function aciklamaPage(p) {
   const idxs = ayahsOnPage(p);
-  const cur = idxs.includes(sel) ? sel : idxs[0];
+  const cur = idxs.includes(hl()) ? hl() : idxs[0];
   const [s, a] = ay(cur); const S = surah(s);
   const l = mealLines(st.meal, [cur])[0];
   let h = `<div class="ah"><b>${t('%1- %2 Sûresi, %3. âyet', s, sName(S), a)}</b><button class="round" data-share="${cur}" aria-label="${t('Paylaş')}">${SHARE_SVG}</button></div>`;
@@ -364,12 +364,14 @@ function drawIndex() {
 
 // Ayarlar
 let setCat = null;
-const CATS = [['view', 'Görünüm', '#2F7D6D'], ['meal', 'Meal', '#C48A2C'], ['lang', 'Dil', '#3A6FD8'], ['pack', 'Kişisel dosya', '#6D6A64'], ['about', 'Hakkında ve kaynaklar', '#9A948A']];
+const CATS = [['view', 'Görünüm', '#2F7D6D'], ['meal', 'Meal', '#C48A2C'], ['lang', 'Dil', '#3A6FD8'], ['audio', 'Sesli okuma', '#D2475F'], ['speech', 'Meal sesi', '#8A5CD6'], ['pack', 'Kişisel dosya', '#6D6A64'], ['about', 'Hakkında ve kaynaklar', '#9A948A']];
 function catValue(c) {
   if (c === 'view') return t(FONTS.find(f => f[0] === st.font)[1]) + ' · ' + t({krem: 'Krem', beyaz: 'Beyaz', gece: 'Gece'}[st.theme]);
   if (c === 'meal') return mealInfo(st.meal).short;
   if (c === 'lang') return LANGS.find(l => l[0] === st.lang)[1];
   if (c === 'pack') return PERS ? t('Aktarıldı') : t('Aktarılmadı');
+  if (c === 'audio') return reciterById(st.reciter).name.split(' ').pop();
+  if (c === 'speech') return t({ar: 'Sadece Arapça', ar_meal: 'Arapça + meal', meal: 'Sadece meal'}[st.audioMode]);
   return '';
 }
 function openSettings() {
@@ -396,6 +398,8 @@ function drawSettings() {
     h += MEALLER.map(m => { const ok = hasMeal(m.id); return `<button class="opt${st.meal === m.id ? ' on' : ''}" data-meal="${m.id}" ${ok ? '' : 'disabled'}><span class="rd"></span><span class="tx"><b>${esc(m.short)}</b><small>${esc(m.name)}${ok ? '' : ' · ' + t('Kişisel dosya gerekli')}</small></span></button>`; }).join('');
   } else if (c === 'lang') {
     h += LANGS.map(([k, n]) => `<button class="opt${st.lang === k ? ' on' : ''}" data-lang="${k}"><span class="rd"></span><span class="tx"><b>${n}</b></span></button>`).join('');
+  } else if (c === 'audio') { h += audioSettings();
+  } else if (c === 'speech') { h += speechSettings();
   } else if (c === 'pack') {
     h += `<div class="card"><h4>${t('Kişisel dosya')}</h4><p class="muted">${t('Hayrat meali, Diyanet meali ve tevâfuk kırmızı kelimeleri kişisel izinle kullanıldığı için uygulamanın içinde değildir. Size verilen Kuran-Kisisel.json dosyasını bir kere aktarın; telefonda saklanır ve internetsiz çalışır.')}</p>
       <p><b>${PERS ? t('Durum: aktarıldı') : t('Durum: aktarılmadı')}</b></p>
@@ -409,6 +413,7 @@ function drawSettings() {
 }
 function onSetClick(e) {
   const b = e.target.closest('button'); if (!b) return;
+  if (onAudioSetClick(b)) return;
   if (b.dataset.back != null) { setCat = null; drawSettings(); return; }
   if (b.dataset.theme) { st.theme = b.dataset.theme; save(); applyTheme(); drawSettings(); return; }
   if (b.dataset.font) { st.font = b.dataset.font; save(); drawSettings(); rerender(); return; }
@@ -418,6 +423,8 @@ function onSetClick(e) {
   if (b.dataset.delpers != null) { idb.del('personal').then(() => { applyPersonal(null); if (mealInfo(st.meal).personal) st.meal = 'elmalili'; save(); drawSettings(); rerender(); toast(t('Kişisel dosya silindi')); }); }
 }
 function onSetInput(e) {
+  if (e.target.dataset.sp) { st[e.target.dataset.sp] = +e.target.value; e.target.nextElementSibling.textContent = Math.round(st[e.target.dataset.sp] * 100) + '%'; save(); return; }
+  if (e.target.dataset.voice != null) { st.voice = e.target.value; save(); return; }
   const z = e.target.dataset.zoom; if (!z) return;
   st[z] = +e.target.value; e.target.nextElementSibling.textContent = Math.round(st[z] * 100) + '%'; save();
   clearTimeout(onSetInput._t); onSetInput._t = setTimeout(rerender, 120);
@@ -437,6 +444,225 @@ function applyTheme() {
   document.querySelector('meta[name=theme-color]').content = getComputedStyle(document.body).getPropertyValue('--app').trim();
 }
 
+
+// ---------- sesli okuma ----------
+const RECITERS = [
+  {id:'sudais', name:'Abdurrahman es-Südeys', folder:'Abdurrahmaan_As-Sudais_192kbps', mb:1300},
+  {id:'shuraym', name:"Su'ûd eş-Şüreym", folder:'Saood_ash-Shuraym_128kbps', mb:800},
+  {id:'maher', name:'Mâhir el-Muaykılî', folder:'MaherAlMuaiqly128kbps', mb:750},
+  {id:'rifai', name:'Hânî er-Rifâî', folder:'Hani_Rifai_192kbps', mb:1500},
+  {id:'basfar', name:'Abdullah Basfar', folder:'Abdullah_Basfar_192kbps', mb:1400},
+  {id:'afasy', name:'Mişârî Râşid el-Afâsî', folder:'Alafasy_128kbps', mb:800},
+  {id:'husary', name:'Mahmûd Halîl el-Husarî', folder:'Husary_128kbps', mb:900},
+  {id:'danis', name:'İshak Danış', surah:true, base:'https://archive.org/download/ishak_danish/', mb:890},
+  {id:'collak', name:'Fatih Çollak', surah:true, base:'https://archive.org/download/fatihcollakk/', mb:700, fallback:'danis'},
+];
+const reciterById = id => RECITERS.find(r => r.id === id) || RECITERS[0];
+const code6 = (s, a) => String(s).padStart(3, '0') + String(a).padStart(3, '0');
+const ayahUrl = (r, s, a) => `https://everyayah.com/data/${r.folder}/${code6(s, a)}.mp3`;
+const TIMING = {};
+const loadTiming = async id => TIMING[id] || (TIMING[id] = await getJSON('data/timing/' + id + '.json').catch(() => ({})));
+const reciterFor = (r, s) => (TIMING[r.id] && TIMING[r.id][s]) || !r.fallback ? r : reciterById(r.fallback);
+const surahUrl = (r, s) => r.base + ((TIMING[r.id] && TIMING[r.id][s] && TIMING[r.id][s].f) || String(s).padStart(3, '0') + '.mp3');
+
+// İndirilen sesler telefonda (Cache Storage) saklanır, internetsiz çalınır
+const SES = 'kuran-ses';
+const Dl = {active:null, done:0, total:0, failed:0, stop:false, counts:{},
+  async count(r) {
+    try { const c = await caches.open(SES); const ks = await c.keys(); const key = r.surah ? r.base : '/' + r.folder + '/'; this.counts[r.id] = ks.filter(k => k.url.includes(key)).length; } catch (e) { this.counts[r.id] = 0; }
+    return this.counts[r.id];
+  },
+  async items(r, surahNo) {
+    if (r.surah) { await loadTiming(r.id); if (r.fallback) await loadTiming(r.fallback); return (surahNo ? [surahNo] : [...Array(114)].map((_, i) => i + 1)).map(s => surahUrl(reciterFor(r, s), s)); }
+    const idxs = surahNo ? Q.ayahs.map((a, i) => a[0] === surahNo ? i : -1).filter(i => i >= 0) : Q.ayahs.map((_, i) => i);
+    return [ayahUrl(r, 1, 1), ...idxs.map(i => ayahUrl(r, ay(i)[0], ay(i)[1]))];
+  },
+  async start(r, urls) {
+    if (this.active) return;
+    this.active = r.id; this.done = 0; this.total = urls.length; this.failed = 0; this.stop = false; drawSettings();
+    if (navigator.storage && navigator.storage.persist) navigator.storage.persist();
+    const c = await caches.open(SES);
+    let k = 0; const N = r.surah ? 2 : 6;
+    const worker = async () => {
+      while (k < urls.length && !this.stop) {
+        const u = urls[k++]; let ok = !!(await c.match(u));
+        for (let tr = 0; !ok && tr < 3 && !this.stop; tr++) { try { const res = await fetch(u, {mode: 'cors'}); if (res.ok) { await c.put(u, res); ok = true; } } catch (e) {} if (!ok) await new Promise(z => setTimeout(z, 1500 * (tr + 1))); }
+        this.done++; if (!ok) this.failed++;
+        if (this.done % (r.surah ? 1 : 25) === 0) drawDl();
+      }
+    };
+    await Promise.all([...Array(N)].map(worker));
+    this.active = null; await this.count(r); drawSettings();
+  },
+  async del(r) { if (this.active === r.id) this.stop = true; const c = await caches.open(SES); const key = r.surah ? r.base : '/' + r.folder + '/'; for (const q of await c.keys()) if (q.url.includes(key)) await c.delete(q); await this.count(r); drawSettings(); },
+};
+function drawDl() { const e = document.getElementById('dlp'); if (e) { e.querySelector('progress').value = Dl.done; e.querySelector('span').textContent = t('İndiriliyor… %1 / %2', Dl.done, Dl.total); } }
+
+// Telefonun konuşma sesi (meal ve açıklama)
+const Sp = {
+  voices() { const l = mealSpeechLang(); return (speechSynthesis.getVoices() || []).filter(v => v.lang.toLowerCase().startsWith(l)); },
+  pick() { const vs = this.voices(); return vs.find(v => v.voiceURI === st.voice) || vs.find(v => /male|erkek|cem|tolga|daniel|markus|majed|maged|tarik/i.test(v.name) && !/female/i.test(v.name)) || vs[0]; },
+  speak(text, done) {
+    speechSynthesis.cancel();
+    const parts = (text.match(/[^.!?;:]+[.!?;:]*\s*/g) || [text]).reduce((a, x) => { if (a.length && (a[a.length - 1] + x).length < 220) a[a.length - 1] += x; else a.push(x); return a; }, []);
+    const v = this.pick(); let i = 0; const tok = Sp.tok = {};
+    const next = () => {
+      if (tok !== Sp.tok) return;
+      if (i >= parts.length) { done && done(); return; }
+      const u = new SpeechSynthesisUtterance(parts[i++]); u.lang = v ? v.lang : mealSpeechLang(); if (v) u.voice = v; u.pitch = st.pitch; u.rate = st.rate;
+      u.onend = next; u.onerror = next; speechSynthesis.speak(u);
+    };
+    next();
+  },
+  stop() { Sp.tok = null; try { speechSynthesis.cancel(); } catch (e) {} },
+};
+const mealSpeechLang = () => st.meal.startsWith('de.') ? 'de' : st.meal.startsWith('en.') ? 'en' : st.meal.startsWith('ar.') ? 'ar' : 'tr';
+if (window.speechSynthesis) speechSynthesis.onvoiceschanged = () => { if (setCat === 'speech') drawSettings(); };
+
+const Au = {
+  el: new Audio(), playing: null, paused: false, phase: 'ar', loading: false, basm: false, sRec: null, sNum: 0, sFirst: 0, sT: null, resume: null, blob: null,
+  async src(u) { try { const c = await caches.open(SES); const m = await c.match(u); if (m) { if (this.blob) URL.revokeObjectURL(this.blob); this.blob = URL.createObjectURL(await m.blob()); return this.blob; } } catch (e) {} return u; },
+  set(i, phase) { this.playing = i; if (phase) this.phase = phase; updateHl(); updatePill(); mediaMeta(); },
+  play(i) {
+    const r = reciterById(st.reciter); this.paused = false;
+    const [s, a] = ay(i); this.basm = a === 1 && s !== 1 && s !== 9;
+    if (st.audioMode === 'meal') this.texts(i, () => this.next(i));
+    else if (r.surah) this.startSurah(i); else this.startAyah(i);
+  },
+  async startAyah(i) {
+    Sp.stop(); this.set(i, 'ar'); this.loading = true;
+    const r = reciterById(st.reciter); const [s, a] = this.basm ? [1, 1] : ay(i);
+    const tok = this.tok = {};
+    const u = await this.src(ayahUrl(r, s, a)); if (tok !== this.tok) return;
+    this.el.onended = () => { if (this.basm) { this.basm = false; this.startAyah(i); } else this.texts(i, () => this.next(i)); };
+    this.el.ontimeupdate = null;
+    this.el.src = u; this.el.play().then(() => { this.loading = false; }).catch(() => this.fail());
+  },
+  async startSurah(i, fromStart) {
+    Sp.stop(); const [s, a] = ay(i); const R = reciterById(st.reciter);
+    await loadTiming(R.id); if (R.fallback) await loadTiming(R.fallback);
+    const r = reciterFor(R, s); const T = TIMING[r.id] && TIMING[r.id][s];
+    this.set(i, 'ar');
+    const seek = (fromStart || a === 1 || !T) ? 0 : Math.max(0, T.t[a - 1][0] - 150) / 1000;
+    if (this.sRec === r.id && this.sNum === s && this.el.src) { this.el.currentTime = seek; this.el.play().catch(() => {}); return; }
+    this.sRec = r.id; this.sNum = s; this.sT = T; this.sFirst = firstIdxOfSurah[s];
+    const tok = this.tok = {}; this.loading = true;
+    const u = await this.src(surahUrl(r, s)); if (tok !== this.tok) return;
+    this.el.onended = () => this.surahDone();
+    this.el.ontimeupdate = () => this.tick();
+    this.el.src = u;
+    const go = () => { this.el.currentTime = seek; this.el.play().then(() => { this.loading = false; }).catch(() => this.fail()); };
+    if (seek > 0) { this.el.addEventListener('loadedmetadata', go, {once: true}); this.el.load(); } else go();
+  },
+  tick() {
+    const T = this.sT; if (!T || this.phase !== 'ar' || this.paused || this.playing == null) return;
+    const pos = this.el.currentTime * 1000; let k = 0;
+    while (k + 1 < T.t.length && pos >= T.t[k + 1][0] - 120) k++;
+    const g = this.sFirst + k;
+    if (g !== this.playing) {
+      if (g === this.playing + 1 && this.needTexts()) { this.el.pause(); const prev = this.playing; this.texts(prev, () => { this.set(g, 'ar'); this.el.play().catch(() => {}); }); return; }
+      this.set(g);
+    }
+  },
+  surahDone() {
+    const nf = firstIdxOfSurah[this.sNum + 1]; const cur = this.playing;
+    this.texts(cur, () => { if (nf == null) this.stop(); else this.startSurah(nf, true); });
+  },
+  needTexts() { return st.audioMode !== 'ar' || (st.mode === 'aciklama' && st.ackRead); },
+  /** âyetten sonra okunacak Türkçe metinler: meal, açıklama sayfasında açıklama */
+  texts(i, then) {
+    const list = [];
+    if (st.audioMode !== 'ar') { const m = mealPlain(i).replace(/⁽\d+⁾|\(\d+\)|\[\d+\]/g, '').trim(); if (m) list.push(m); }
+    if (st.mode === 'aciklama' && st.ackRead) { const [s, a] = ay(i); const A = ACK && ACK[s] && ACK[s].ayat[a]; if (A) list.push(A.t + '. ' + A.p.join(' ')); }
+    if (!list.length) { then(); return; }
+    this.set(i, 'meal'); const tok = this.ttok = {};
+    Sp.speak(list.join(' '), () => { if (tok === this.ttok && !this.paused) { this.phase = 'ar'; then(); } });
+    this.resume = then;
+  },
+  next(i) {
+    const n = i + 1; if (n >= Q.ayahs.length) { this.stop(); return; }
+    const [s, a] = ay(n); this.basm = a === 1 && s !== 1 && s !== 9;
+    if (st.audioMode === 'meal') this.texts(n, () => this.next(n));
+    else if (reciterById(st.reciter).surah) this.startSurah(n, a === 1); else this.startAyah(n);
+  },
+  toggle() {
+    if (this.playing == null) return;
+    if (this.phase === 'meal') { if (this.paused) { this.paused = false; const r = this.resume; this.texts(this.playing, r); } else { this.paused = true; Sp.stop(); } }
+    else if (this.paused) { this.paused = false; this.el.play().catch(() => {}); } else { this.paused = true; this.el.pause(); }
+    updatePill();
+  },
+  stop() { this.tok = {}; this.ttok = {}; Sp.stop(); this.el.pause(); this.el.removeAttribute('src'); this.el.load(); this.playing = null; this.paused = false; this.sRec = null; this.sT = null; updateHl(); updatePill(); },
+  fail() { this.loading = false; toast(t("Ses çalınamadı. İnternet bağlantısını kontrol edin ya da sesleri Ayarlar'dan indirin.")); this.stop(); },
+};
+Au.el.preload = 'auto';
+const hl = () => Au.playing != null ? Au.playing : sel;
+function updateHl() {
+  const i = hl();
+  if (i != null && Au.playing != null && ay(i)[2] !== cur) { goPage(ay(i)[2]); return; }
+  if (st.mode === 'aciklama' && Au.playing != null) { renderSlot(cur); if (wide()) {} return; }
+  document.querySelectorAll('.slot [data-i].sel').forEach(e => e.classList.remove('sel'));
+  if (i != null) document.querySelectorAll(`.slot [data-i="${i}"]`).forEach(e => e.classList.add('sel'));
+}
+function updatePill() {
+  const on = Au.playing != null;
+  $('#apill').classList.toggle('on', on);
+  $('#apPlay').innerHTML = (on && !Au.paused) ? PAUSE_SVG : PLAY_SVG;
+  $('#bPlay').innerHTML = (on && !Au.paused) ? PAUSE_SVG : PLAY_SVG;
+  if ('mediaSession' in navigator) navigator.mediaSession.playbackState = on ? (Au.paused ? 'paused' : 'playing') : 'none';
+}
+function mediaMeta() {
+  if (!('mediaSession' in navigator) || Au.playing == null) return;
+  const [s, a] = ay(Au.playing);
+  try { navigator.mediaSession.metadata = new MediaMetadata({title: `${sName(surah(s))} ${s}:${a}`, artist: reciterById(st.reciter).name, album: "Kur'an-ı Kerim", artwork: [{src: 'icons/icon-512.png', sizes: '512x512', type: 'image/png'}]}); } catch (e) {}
+}
+if ('mediaSession' in navigator) { navigator.mediaSession.setActionHandler('play', () => Au.paused && Au.toggle()); navigator.mediaSession.setActionHandler('pause', () => !Au.paused && Au.toggle()); }
+const PLAY_SVG = '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z" fill="currentColor" stroke="none"/></svg>';
+const PAUSE_SVG = '<svg viewBox="0 0 24 24"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z" fill="currentColor" stroke="none"/></svg>';
+function onPlay() {
+  if (Au.playing == null) { const idxs = ayahsOnPage(cur); Au.play(sel != null && idxs.includes(sel) ? sel : idxs[0]); } else Au.toggle();
+}
+
+function audioSettings() {
+  let h = `<p class="muted" style="margin:0 2px 10px">${t('Okuyucuyu seçin. Sesleri telefona indirirseniz internetsiz dinlersiniz; indirmezseniz internetten çalınır.')}</p>`;
+  const cs = surahsOnPage(cur)[0]; const cn = cs ? cs[0] : 1;
+  for (const r of RECITERS) {
+    const n = Dl.counts[r.id]; const all = r.surah ? 114 : Q.ayahs.length + 1;
+    const stt = n == null ? '…' : n >= all ? t('Tamamı indirildi') : n > 0 ? (r.surah ? t('%1 / %2 sûre indirildi', n, 114) : t('%1 / %2 âyet indirildi', n, all)) : t('İnternetten çalınır · tamamı yaklaşık %1 MB', r.mb);
+    h += `<div class="card" style="padding:12px 14px"><button class="opt${st.reciter === r.id ? ' on' : ''}" data-rec="${r.id}" style="padding:0;margin:0 0 8px;box-shadow:none"><span class="rd"></span><span class="tx"><b>${esc(r.name)}</b><small>${r.surah ? t('Türk hafız · sûre sûre') + ' · ' : ''}${stt}</small></span></button>`;
+    if (Dl.active === r.id) h += `<div id="dlp"><progress max="${Dl.total}" value="${Dl.done}" style="width:100%"></progress><div style="display:flex;align-items:center;gap:8px"><span class="muted" style="flex:1">${t('İndiriliyor… %1 / %2', Dl.done, Dl.total)}</span><button class="btn" data-dlstop>${t('Durdur')}</button></div></div>`;
+    else h += `<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" data-dl="${r.id}" data-s="${cn}" ${Dl.active ? 'disabled' : ''}>${t('Bu sûreyi indir')}</button><button class="btn" data-dl="${r.id}" data-s="0" ${Dl.active ? 'disabled' : ''}>${t('Tümünü indir')}</button>${n ? `<button class="btn" data-dldel="${r.id}">${t('Sil')}</button>` : ''}</div>`;
+    if (Dl.failed && !Dl.active && st.reciter === r.id) h += `<p class="muted" style="color:var(--red)">${t('%1 dosya indirilemedi. İnternet bağlantısını kontrol edip tekrar deneyin.', Dl.failed)}</p>`;
+    h += '</div>';
+  }
+  h += `<p class="muted">${t('Kaynaklar: EveryAyah (Arap kâriler), archive.org (İshak Danış, Fatih Çollak). iPhone ekranı kilitlenince sesi durdurabilir.')}</p>`;
+  if (RECITERS.some(r => Dl.counts[r.id] == null)) Promise.all(RECITERS.map(r => Dl.count(r))).then(() => { if (setCat === 'audio') drawSettings(); });
+  return h;
+}
+function speechSettings() {
+  const vs = window.speechSynthesis ? Sp.voices() : [];
+  let h = `<div class="card"><h4>${t('Ne okunsun?')}</h4><div class="seg" style="margin:0">${[['ar', 'Sadece Arapça'], ['ar_meal', 'Arapça + meal'], ['meal', 'Sadece meal']].map(([k, n]) => `<button data-amode="${k}" class="${st.audioMode === k ? 'on' : ''}">${t(n)}</button>`).join('')}</div>
+    <button class="opt${st.ackRead ? ' on' : ''}" data-ackread style="margin:10px 0 0;padding:6px 0;box-shadow:none"><span class="rd"></span><span class="tx"><b>${t('Açıklama sayfasında açıklamayı da oku')}</b><small>${t('Açıklama sayfasındayken âyetten sonra açıklama Türkçe okunur')}</small></span></button></div>`;
+  h += `<div class="card"><h4>${t('Ses')}</h4>${vs.length ? `<select data-voice style="width:100%;height:40px;border-radius:10px;font-size:16px">${vs.map(v => `<option value="${esc(v.voiceURI)}" ${Sp.pick() === v ? 'selected' : ''}>${esc(v.name)}</option>`).join('')}</select>` : `<p class="muted">${t('Bu dilde konuşma sesi bulunamadı. iPhone Ayarlar → Erişilebilirlik → Seslendirilen İçerik → Sesler bölümünden Türkçe ses indirebilirsiniz.')}</p>`}
+    <h4 style="margin-top:12px">${t('Ses kalınlığı')}</h4><div class="sl"><input type="range" min="0.5" max="1.5" step="0.05" value="${st.pitch}" data-sp="pitch"><b>${Math.round(st.pitch * 100)}%</b></div>
+    <h4 style="margin-top:12px">${t('Konuşma hızı')}</h4><div class="sl"><input type="range" min="0.5" max="1.5" step="0.05" value="${st.rate}" data-sp="rate"><b>${Math.round(st.rate * 100)}%</b></div>
+    <button class="btn pri" data-sample style="margin-top:10px">${t('Örnek dinle')}</button></div>`;
+  return h;
+}
+function onAudioSetClick(b) {
+  const d = b.dataset;
+  if (d.rec) { st.reciter = d.rec; save(); if (Au.playing != null) Au.stop(); drawSettings(); return true; }
+  if (d.dl) { const r = reciterById(d.dl); st.reciter = r.id; save(); Dl.items(r, +d.s || null).then(u => Dl.start(r, u)); return true; }
+  if (d.dlstop != null) { Dl.stop = true; return true; }
+  if (d.dldel) { Dl.del(reciterById(d.dldel)); return true; }
+  if (d.amode) { st.audioMode = d.amode; save(); drawSettings(); return true; }
+  if (d.ackread != null) { st.ackRead = !st.ackRead; save(); drawSettings(); return true; }
+  if (d.sample != null) { Sp.speak({de: 'Im Namen Allahs, des Allerbarmers, des Barmherzigen.', en: 'In the name of Allah, the Entirely Merciful, the Especially Merciful.', ar: 'بسم الله الرحمن الرحيم'}[mealSpeechLang()] || "Rahmân ve Rahîm olan Allah'ın adıyla."); return true; }
+  return false;
+}
+$('#bPlay').addEventListener('click', onPlay);
+$('#apPlay').addEventListener('click', onPlay);
+$('#apClose').addEventListener('click', () => Au.stop());
+
 // ---------- başlat ----------
 (async function init() {
   applyTheme();
@@ -455,7 +681,7 @@ function applyTheme() {
   if (!hasMeal(st.meal)) st.meal = 'elmalili';
   await Promise.all([loadMeal('elmalili'), loadMeal(st.meal)]).catch(() => {});
   getJSON('data/aciklama.json').then(d => { ACK = d; if (st.mode === 'aciklama') rerender(); }).catch(() => {});
-  buildPager(); updateBars(); bars(true);
+  buildPager(); updateBars(); updatePill(); bars(true);
   if (document.fonts && document.fonts.ready) document.fonts.load(`20px "${st.font}"`).then(() => rerender()).catch(() => {});
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 })();

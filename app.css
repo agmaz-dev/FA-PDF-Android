@@ -168,3 +168,11 @@ html,body{background:var(--paper)}
 #modes{transition:transform .22s,opacity .22s;transform:translate(-50%,160%);opacity:0;pointer-events:none}
 body.barsOn #modes{transform:translate(-50%,0);opacity:1;pointer-events:auto}
 #tapTop{display:none}
+
+.gc.play{background:var(--accent);color:#fff;border-color:transparent}
+.gc.play svg{width:18px;height:18px}
+#apill{position:fixed;top:calc(var(--st) + 2px);right:10px;z-index:7;display:none;gap:4px;height:38px;border-radius:19px;background:var(--glass);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);box-shadow:0 1px 6px rgba(0,0,0,.18);border:1px solid var(--glassLine);padding:3px;transition:opacity .2s}
+#apill.on{display:flex}
+body.barsOn #apill{opacity:0;pointer-events:none}
+.apb{width:32px;height:32px;border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:14px}
+.apb.pri{background:var(--accent);color:#fff}.apb svg{width:16px;height:16px}
