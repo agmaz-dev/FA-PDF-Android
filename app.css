@@ -181,3 +181,4 @@ body.barsOn #apill{opacity:0;pointer-events:none}
 
 .ac .aitem{padding-bottom:14px;margin-bottom:12px;border-bottom:1px solid var(--chip);scroll-margin-top:8px}
 .ac .aitem.sel{background:none}.ac .aitem.sel .arx{background:var(--hl);border-radius:8px}
+.seg4{display:grid;grid-template-columns:1fr 1fr;gap:3px}.seg4 button{height:38px}

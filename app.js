@@ -183,32 +183,29 @@ function mushafPage(p) {
     <div class="frame"><div class="frame2"><div class="fit" data-fit="ar"><div class="ar" style="font-family:'${st.font}',amiri">${h}</div></div></div></div></div>`;
 }
 const SHARE_SVG = '<svg viewBox="0 0 24 24"><circle cx="18" cy="5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="19" r="2.5"/><path d="M8.2 10.8l7.6-4.4M8.2 13.2l7.6 4.4"/></svg>';
-function aciklamaPage(p) {
-  // Sayfadaki bütün âyetler alt alta; sağa sola kaydırınca sonraki/önceki sayfa
-  let h = '';
-  for (const i of ayahsOnPage(p)) {
-    const [s, a] = ay(i); const S = surah(s);
-    const l = mealLines(st.meal, [i])[0];
-    h += `<div class="aitem${i === hl() ? ' sel' : ''}" data-ai="${i}"><div class="ah"><b>${t('%1- %2 Sûresi, %3. âyet', s, sName(S), a)}</b><button class="round" data-share="${i}" aria-label="${t('Paylaş')}">${SHARE_SVG}</button></div>`;
-    h += `<div class="arx" style="font-family:'${st.font}',amiri">${arWords(i)} <span class="m" style="color:var(--gold)">${marker(a)}</span></div>`;
-    if (l) h += `<div class="ml"><b>${l.label}- </b>${mealHtml(l.text)}</div>`;
-    const A = ACK && ACK[s] && ACK[s].ayat[a];
-    if (A) {
-      h += `<div class="ex"><div class="et">${esc(A.t)}</div>`;
-      if (A.ar && A.ar.length) h += `<div class="ek">${A.ar.map(esc).join('<span>/</span>')}</div>`;
-      h += A.p.map(x => `<p class="ep">${esc(x)}</p>`).join('') + '</div>';
-    } else if (ACK && (a === 1 || i === ayahsOnPage(p)[0])) h += `<div class="none">${t('Bu sûrenin açıklaması henüz hazırlanmadı.')}</div>`;
-    h += '</div>';
-  }
+function aciklamaAyah(i) {
+  const [s, a] = ay(i); const S = surah(s);
+  const l = mealLines(st.meal, [i])[0];
+  let h = `<div class="aitem${i === Au.playing ? ' sel' : ''}" data-ai="${i}"><div class="ah"><b>${t('%1- %2 Sûresi, %3. âyet', s, sName(S), a)}</b><button class="round" data-share="${i}" aria-label="${t('Paylaş')}">${SHARE_SVG}</button></div>`;
+  h += `<div class="arx" style="font-family:'${st.font}',amiri">${arWords(i)} <span class="m" style="color:var(--gold)">${marker(a)}</span></div>`;
+  if (l) h += `<div class="ml"><b>${l.label}- </b>${mealHtml(l.text)}</div>`;
+  const A = ACK && ACK[s] && ACK[s].ayat[a];
+  if (A) {
+    h += `<div class="ex"><div class="et">${esc(A.t)}</div>`;
+    if (A.ar && A.ar.length) h += `<div class="ek">${A.ar.map(esc).join('<span>/</span>')}</div>`;
+    h += A.p.map(x => `<p class="ep">${esc(x)}</p>`).join('') + '</div>';
+  } else if (ACK) h += `<div class="none">${t('Bu sûrenin açıklaması henüz hazırlanmadı.')}</div>`;
+  h += '</div>';
   return `<div class="paper ac"><h6>${t('AÇIKLAMA')}</h6><h2>${t("Kur'an Açıklamaları")}</h2>
     <div class="src">${t('Arapça anahtar ifadeler, kelime anlamları ve âyet açıklamaları')}</div><div class="rule" style="margin-top:8px"></div>
     <div class="fit"><div class="body">${h}</div></div></div>`;
 }
 const wide = () => innerWidth >= 760 && innerWidth > innerHeight;
-function slotHtml(p) {
-  if (st.mode === 'mushaf') return mushafPage(p);
-  if (wide()) return (st.mode === 'aciklama' ? aciklamaPage(p) : mealPage(p)) + mushafPage(p);
-  return st.mode === 'aciklama' ? aciklamaPage(p) : mealPage(p);
+const AM = () => st.mode === 'aciklama';
+function slotHtml(k) {
+  if (AM()) { const i = k - 1; return aciklamaAyah(i) + (wide() ? mushafPage(ay(i)[2]) : ''); }
+  if (st.mode === 'mushaf') return mushafPage(k);
+  return mealPage(k) + (wide() ? mushafPage(k) : '');
 }
 
 /** Yazıyı sayfaya sığdırır (Android'deki gibi), sonra kullanıcının büyütmesi uygulanır */
@@ -226,32 +223,45 @@ function fitAll(slot) {
 }
 
 // ---------- sayfa çevirici ----------
-let slots = [], cur = st.page, sel = null, rendered = new Set();
-function buildPager() {
-  const pg = $('#pager'); pg.innerHTML = ''; slots = []; rendered.clear();
-  for (let p = 1; p <= PAGES; p++) { const d = document.createElement('div'); d.className = 'slot'; d.dataset.p = p; pg.appendChild(d); slots.push(d); }
-  const io = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting && e.intersectionRatio > 0.55) onPage(+e.target.dataset.p); }), {root: pg, threshold: [0.6]});
-  slots.forEach(s => io.observe(s));
-  goPage(cur, false);
+let slots = [], cur = st.page, curK = 1, curA = null, sel = null, rendered = new Set(), io = null;
+const NSLOT = () => AM() ? Q.ayahs.length : PAGES;
+const pageOfK = k => AM() ? ay(k - 1)[2] : k;
+function buildPager(k) {
+  const pg = $('#pager'); pg.innerHTML = ''; slots = []; rendered.clear(); if (io) io.disconnect();
+  const n = NSLOT(); const frag = document.createDocumentFragment();
+  for (let q = 1; q <= n; q++) { const d = document.createElement('div'); d.className = 'slot'; d.dataset.k = q; frag.appendChild(d); slots.push(d); }
+  pg.appendChild(frag);
+  io = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting && e.intersectionRatio > 0.55) onSlot(+e.target.dataset.k); }), {root: pg, threshold: [0.6]});
+  slots.forEach(x => io.observe(x));
+  goKey(k || (AM() ? (curA != null ? curA : (sel != null ? sel : pageRanges[cur - 1][0])) + 1 : cur), false);
 }
-function renderAround(p) {
-  for (let q = p - 2; q <= p + 2; q++) if (q >= 1 && q <= PAGES && !rendered.has(q)) renderSlot(q);
-  for (const q of [...rendered]) if (Math.abs(q - p) > 3) { slots[q - 1].innerHTML = ''; rendered.delete(q); }
+const curSlot = () => slots[curK - 1];
+function renderAround(k) {
+  for (let q = k - 2; q <= k + 2; q++) if (q >= 1 && q <= slots.length && !rendered.has(q)) renderSlot(q);
+  for (const q of [...rendered]) if (Math.abs(q - k) > 3) { slots[q - 1].innerHTML = ''; rendered.delete(q); }
 }
-function renderSlot(p) { const s = slots[p - 1]; s.innerHTML = slotHtml(p); rendered.add(p); fitAll(s); if (st.mode === 'aciklama') { const e = s.querySelector('.aitem.sel'); if (e) e.scrollIntoView({block: 'start', inline: 'nearest'}); } }
-function rerender() { const ps = [...rendered]; rendered.clear(); ps.forEach(renderSlot); renderAround(cur); }
-function onPage(p) {
-  if (p === cur && rendered.has(p)) return;
-  cur = p; st.page = p; save(); renderAround(p); updateBars();
-  if (sel != null && Q.ayahs[sel] && ay(sel)[2] !== p) { sel = null; updateSel(); }
+function renderSlot(k) { const x = slots[k - 1]; x.innerHTML = slotHtml(k); rendered.add(k); fitAll(x); }
+function rerender() { const ks = [...rendered]; rendered.clear(); ks.forEach(renderSlot); renderAround(curK); }
+function setCur(k) {
+  curK = k; cur = pageOfK(k); curA = AM() ? k - 1 : null; st.page = cur; save();
+}
+function onSlot(k) {
+  if (k === curK && rendered.has(k)) return;
+  setCur(k); renderAround(k); updateBars();
+  if (sel != null && Q.ayahs[sel] && ay(sel)[2] !== cur) { sel = null; updateSel(); }
+}
+function goKey(k, smooth = true) {
+  k = Math.max(1, Math.min(slots.length, k)); setCur(k); renderAround(k);
+  slots[k - 1].scrollIntoView({behavior: smooth ? 'smooth' : 'auto', inline: 'start', block: 'nearest'});
+  updateBars();
 }
 function goPage(p, smooth = true) {
   p = Math.max(1, Math.min(PAGES, p));
   if (sel != null && ay(sel)[2] !== p) { sel = null; updateSel(); }
-  cur = p; st.page = p; save(); renderAround(p);
-  slots[p - 1].scrollIntoView({behavior: smooth ? 'smooth' : 'auto', inline: 'start', block: 'nearest'});
-  updateBars();
+  if (AM()) { if (curA != null && ay(curA)[2] === p) return; goKey(pageRanges[p - 1][0] + 1, smooth); return; }
+  goKey(p, smooth);
 }
+const goAyah = (i, smooth = true) => AM() ? goKey(i + 1, smooth) : goPage(ay(i)[2], smooth);
 
 // ---------- çubuklar ----------
 let barsTimer = 0;
@@ -269,6 +279,7 @@ function toast(s) { const e = $('#toast'); e.textContent = s; e.style.display = 
 // ---------- seçili âyet ----------
 function select(i) {
   sel = (sel === i && st.mode !== 'aciklama') ? null : i;
+  if (AM()) { goKey(i + 1); updateSel(); return; }
   const p = ay(i)[2];
   if (p !== cur) goPage(p); else rerender();
   updateSel();
@@ -323,16 +334,16 @@ $('#bMenu').addEventListener('click', () => openIndex());
 $('#bTitle').addEventListener('click', () => openIndex());
 $('#bSet').addEventListener('click', () => openSettings());
 document.querySelectorAll('#modes button').forEach(b => b.addEventListener('click', () => setMode(b.dataset.m)));
-function setMode(m) { st.mode = m; save(); updateBars(); rerender(); updateSel(); }
-let rz = 0; addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { rerender(); slots[cur - 1].scrollIntoView({inline: 'start', block: 'nearest'}); }, 150); });
+function setMode(m) { const was = AM(); if (m === 'aciklama' && sel != null) curA = sel; st.mode = m; save(); if (was !== AM()) buildPager(); else rerender(); updateBars(); updateSel(); }
+let rz = 0; addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { rerender(); curSlot().scrollIntoView({inline: 'start', block: 'nearest'}); }, 150); });
 
 
 // ---------- iki parmakla büyütme (Android'deki gibi) ----------
 let pz = null;
 function pzStart(target) {
-  const box = (target && target.closest && target.closest('.fit')) || slots[cur - 1].querySelector('.fit'); if (!box) return;
+  const box = (target && target.closest && target.closest('.fit')) || curSlot().querySelector('.fit'); if (!box) return;
   const ar = box.dataset.fit === 'ar'; const key = ar ? 'arZoom' : 'mealZoom';
-  const els = [...slots[cur - 1].querySelectorAll(ar ? '.fit[data-fit=ar] > div' : '.fit[data-fit=meal] > div, .ac .body')];
+  const els = [...curSlot().querySelectorAll(ar ? '.fit[data-fit=ar] > div' : '.fit[data-fit=meal] > div, .ac .body')];
   pz = {key, f: 1, els: els.map(el => [el, parseFloat(el.style.getPropertyValue('--fs')) || 16])};
   if (lp) { clearTimeout(lp.t); lp = null; }
 }
@@ -409,7 +420,7 @@ function catValue(c) {
   if (c === 'lang') return LANGS.find(l => l[0] === st.lang)[1];
   if (c === 'pack') return PERS ? t('Aktarıldı') : t('Aktarılmadı');
   if (c === 'audio') return reciterById(st.reciter).name.split(' ').pop();
-  if (c === 'speech') return t({ar: 'Sadece Arapça', ar_meal: 'Arapça + meal', meal: 'Sadece meal'}[st.audioMode]);
+  if (c === 'speech') return t({ar: 'Arapça', ar_meal: 'Arapça + meal', meal: 'Meal', ack: 'Açıklama'}[st.audioMode]);
   return '';
 }
 function openSettings() {
@@ -593,7 +604,7 @@ const Au = {
   play(i) {
     const r = reciterById(st.reciter); this.paused = false;
     const [s, a] = ay(i); this.basm = a === 1 && s !== 1 && s !== 9;
-    if (st.audioMode === 'meal') this.texts(i, () => this.next(i));
+    if (this.textOnly()) this.texts(i, () => this.next(i));
     else if (r.surah) this.startSurah(i); else this.startAyah(i);
   },
   async startAyah(i) {
@@ -635,12 +646,14 @@ const Au = {
     const nf = firstIdxOfSurah[this.sNum + 1]; const cur = this.playing;
     this.texts(cur, () => { if (nf == null) this.stop(); else this.startSurah(nf, true); });
   },
-  needTexts() { return st.audioMode !== 'ar' || (st.mode === 'aciklama' && st.ackRead); },
+  needTexts() { return st.audioMode !== 'ar'; },
+  textOnly() { return st.audioMode === 'meal' || st.audioMode === 'ack'; },
   /** âyetten sonra okunacak Türkçe metinler: meal, açıklama sayfasında açıklama */
   texts(i, then) {
     const list = [];
-    if (st.audioMode !== 'ar') { const m = mealPlain(i).replace(/⁽\d+⁾|\(\d+\)|\[\d+\]/g, '').trim(); if (m) list.push(m); }
-    if (st.mode === 'aciklama' && st.ackRead) { const [s, a] = ay(i); const A = ACK && ACK[s] && ACK[s].ayat[a]; if (A) list.push(A.t + '. ' + A.p.join(' ')); }
+    const meal = () => mealPlain(i).replace(/⁽\d+⁾|\(\d+\)|\[\d+\]/g, '').trim();
+    if (st.audioMode === 'ar_meal' || st.audioMode === 'meal') { const m = meal(); if (m) list.push(m); }
+    if (st.audioMode === 'ack') { const [s, a] = ay(i); const A = ACK && ACK[s] && ACK[s].ayat[a]; if (A) list.push(A.t + '. ' + A.p.join(' ')); else { const m = meal(); if (m) list.push(m); } }
     if (!list.length) { then(); return; }
     this.set(i, 'meal'); const tok = this.ttok = {};
     Sp.speak(list.join(' '), () => { if (tok === this.ttok && !this.paused) { this.phase = 'ar'; then(); } });
@@ -649,7 +662,7 @@ const Au = {
   next(i) {
     const n = i + 1; if (n >= Q.ayahs.length) { this.stop(); return; }
     const [s, a] = ay(n); this.basm = a === 1 && s !== 1 && s !== 9;
-    if (st.audioMode === 'meal') this.texts(n, () => this.next(n));
+    if (this.textOnly()) this.texts(n, () => this.next(n));
     else if (reciterById(st.reciter).surah) this.startSurah(n, a === 1); else this.startAyah(n);
   },
   toggle() {
@@ -665,8 +678,10 @@ Au.el.preload = 'auto';
 const hl = () => Au.playing != null ? Au.playing : sel;
 function updateHl() {
   const i = hl();
+  if (AM() && Au.playing != null && Au.playing !== curA) { goKey(Au.playing + 1); return; }
   if (i != null && Au.playing != null && ay(i)[2] !== cur) { goPage(ay(i)[2]); return; }
-  if (st.mode === 'aciklama') { document.querySelectorAll('.aitem.sel').forEach(e => e.classList.remove('sel')); const el = i != null && slots[cur - 1].querySelector(`.aitem[data-ai="${i}"]`); if (el) { el.classList.add('sel'); el.scrollIntoView({behavior: 'smooth', block: 'start'}); } }
+  document.querySelectorAll('.aitem.sel').forEach(e => e.classList.remove('sel'));
+  if (AM() && Au.playing != null) { const el = curSlot().querySelector('.aitem'); if (el) el.classList.add('sel'); }
   document.querySelectorAll('.slot [data-i].sel').forEach(e => e.classList.remove('sel'));
   if (i != null) document.querySelectorAll(`.slot [data-i="${i}"]`).forEach(e => e.classList.add('sel'));
 }
@@ -689,7 +704,7 @@ const SILENT = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAIlYAAESsAA
 function unlockAudio() { for (const el of [Au.el, Sp.el]) { if (el._ok) continue; try { el.src = SILENT; const p = el.play(); if (p) p.then(() => { el.pause(); el._ok = true; }).catch(() => {}); } catch (e) {} } }
 function onPlay() {
   unlockAudio();
-  if (Au.playing == null) { const idxs = ayahsOnPage(cur); Au.play(sel != null && idxs.includes(sel) ? sel : idxs[0]); } else Au.toggle();
+  if (Au.playing == null) { const idxs = ayahsOnPage(cur); Au.play(AM() && curA != null ? curA : sel != null && idxs.includes(sel) ? sel : idxs[0]); } else Au.toggle();
 }
 
 function audioSettings() {
@@ -710,8 +725,7 @@ function audioSettings() {
 }
 function speechSettings() {
   const vs = window.speechSynthesis ? Sp.voices() : [];
-  let h = `<div class="card"><h4>${t('Ne okunsun?')}</h4><div class="seg" style="margin:0">${[['ar', 'Sadece Arapça'], ['ar_meal', 'Arapça + meal'], ['meal', 'Sadece meal']].map(([k, n]) => `<button data-amode="${k}" class="${st.audioMode === k ? 'on' : ''}">${t(n)}</button>`).join('')}</div>
-    <button class="opt${st.ackRead ? ' on' : ''}" data-ackread style="margin:10px 0 0;padding:6px 0;box-shadow:none"><span class="rd"></span><span class="tx"><b>${t('Açıklama sayfasında açıklamayı da oku')}</b><small>${t('Açıklama sayfasındayken âyetten sonra açıklama Türkçe okunur')}</small></span></button></div>`;
+  let h = `<div class="card"><h4>${t('Ne okunsun?')}</h4><div class="seg seg4" style="margin:0">${[['ar', 'Arapça'], ['ar_meal', 'Arapça + meal'], ['meal', 'Meal'], ['ack', 'Açıklama']].map(([k, n]) => `<button data-amode="${k}" class="${st.audioMode === k ? 'on' : ''}">${t(n)}</button>`).join('')}</div><p class="muted" style="margin:8px 0 0">${t('Açıklama: açıklaması olan âyetlerde açıklama, olmayanlarda meal okunur.')}</p></div>`;
   const tr = mealSpeechLang() === 'tr'; const neu = Sp.useNeural();
   h += `<div class="card"><h4>${t('Ses')}</h4><select data-voice style="width:100%;height:40px;border-radius:10px;font-size:16px">${tr ? `<option value="neural" ${neu ? 'selected' : ''}>${t('Doğal erkek sesi (önerilen)')}</option>` : ''}${vs.map(v => `<option value="${esc(v.voiceURI)}" ${!neu && Sp.pick() === v ? 'selected' : ''}>${esc(v.name)} · ${t('telefonun sesi')}</option>`).join('')}</select>
     ${neu ? `<p class="muted">${t('Doğal ses telefonda çalışır; ilk kullanımda bir kere yaklaşık 90 MB indirilir, sonra internetsiz çalışır.')}</p>` : (!vs.length ? `<p class="muted">${t('Bu dilde konuşma sesi bulunamadı.')}</p>` : '')}
