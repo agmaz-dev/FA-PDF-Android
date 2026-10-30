@@ -1,4 +1,4 @@
-name: tmp tts
+name: tmp vits
 on:
   push:
     branches: [ dib-fetch ]
@@ -8,19 +8,14 @@ jobs:
   t:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-        with: { ref: dib-fetch }
-      - run: sudo apt-get install -y -qq ffmpeg >/dev/null; pip install -q piper-tts
       - run: |
-          mkdir out
-          H=https://huggingface.co/rhasspy/piper-voices/resolve/main/tr/tr_TR
-          for v in dfki fahrettin fettah; do
-            curl -sSLf -o $v.onnx $H/$v/medium/tr_TR-$v-medium.onnx && curl -sSLf -o $v.onnx.json $H/$v/medium/tr_TR-$v-medium.onnx.json || { echo "no $v" >> out/log.txt; continue; }
-            ls -la $v.onnx >> out/log.txt
-            for ls in 1.0 1.15; do
-              ( time piper -m $v.onnx --length_scale $ls -f t.wav < tools/sample.txt ) 2>> out/log.txt
-              ffmpeg -v error -y -i t.wav -b:a 64k out/${v}_${ls}.mp3
-            done
-          done
-          cat out/log.txt
-          cd out; git init -q -b dib-data; git config user.name b; git config user.email b@b; git add -A; git commit -qm d; git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" dib-data
+          mkdir -p out/pkg && cd out/pkg
+          npm pack @diffusionstudio/vits-web >/dev/null && tar xzf *.tgz && mv package vits-web && rm *.tgz
+          V=$(node -e "console.log(require('./vits-web/package.json').dependencies['onnxruntime-web']||'')"); echo "ort: $V" > ../info.txt
+          npm pack onnxruntime-web@1.18.0 >/dev/null && tar xzf *.tgz && mv package ort && rm *.tgz
+          cat vits-web/package.json >> ../info.txt; ls -R vits-web | head -50 >> ../info.txt; ls ort/dist >> ../info.txt
+          rm -rf ort/lib ort/types
+          cd ..; H=https://huggingface.co/rhasspy/piper-voices/resolve/main/tr/tr_TR/dfki/medium
+          curl -sSLf -o tr_TR-dfki-medium.onnx $H/tr_TR-dfki-medium.onnx; curl -sSLf -o tr_TR-dfki-medium.onnx.json $H/tr_TR-dfki-medium.onnx.json
+          du -sh . >> info.txt
+          git init -q -b dib-data; git config user.name b; git config user.email b@b; git add -A; git commit -qm d; git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" dib-data
