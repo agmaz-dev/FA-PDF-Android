@@ -305,7 +305,7 @@ document.addEventListener('click', e => {
   const go = e.target.closest('[data-go]'); if (go) { const i = +go.dataset.go; if (i >= 0 && i < Q.ayahs.length) { sel = i; const p = ay(i)[2]; if (p !== cur) goPage(p); else rerender(); } return; }
   if (e.target.closest('[data-x]')) { sel = null; rerender(); updateSel(); return; }
   if (e.target.closest('[data-open-ac]')) { setMode('aciklama'); return; }
-  if (e.target.closest('#pager')) { if (lp && lp.done) { lp = null; return; } bars(!document.body.classList.contains('barsOn')); }
+  if (e.target.closest('#pager')) { if (lp && lp.done) { lp = null; return; } if (Date.now() - pzBlock < 600) return; bars(!document.body.classList.contains('barsOn')); }
 });
 $('#tapTop').addEventListener('click', () => bars(!document.body.classList.contains('barsOn')));
 $('#bars').addEventListener('pointerdown', () => bars(true));
@@ -326,29 +326,37 @@ let rz = 0; addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout
 
 // ---------- iki parmakla büyütme (Android'deki gibi) ----------
 let pz = null;
-const tdist = e => Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
-$('#pager').addEventListener('touchstart', e => {
-  if (e.touches.length !== 2) return;
-  const box = (e.target.closest && e.target.closest('.fit')) || null; if (!box) return;
+function pzStart(target) {
+  const box = (target && target.closest && target.closest('.fit')) || slots[cur - 1].querySelector('.fit'); if (!box) return;
   const ar = box.dataset.fit === 'ar'; const key = ar ? 'arZoom' : 'mealZoom';
   const els = [...slots[cur - 1].querySelectorAll(ar ? '.fit[data-fit=ar] > div' : '.fit[data-fit=meal] > div, .ac .body')];
-  pz = {d0: tdist(e), key, f: 1, els: els.map(el => [el, parseFloat(el.style.getPropertyValue('--fs')) || 16])};
+  pz = {key, f: 1, els: els.map(el => [el, parseFloat(el.style.getPropertyValue('--fs')) || 16])};
   if (lp) { clearTimeout(lp.t); lp = null; }
-}, {passive: true});
-$('#pager').addEventListener('touchmove', e => {
-  if (!pz || e.touches.length !== 2) return;
-  e.preventDefault();
+}
+function pzMove(scale) {
+  if (!pz) return;
   const lim = pz.key === 'arZoom' ? [0.6, 2.5] : [0.6, 2.2];
-  pz.f = Math.max(lim[0] / st[pz.key], Math.min(lim[1] / st[pz.key], tdist(e) / pz.d0));
+  pz.f = Math.max(lim[0] / st[pz.key], Math.min(lim[1] / st[pz.key], scale));
   pz.els.forEach(([el, fs]) => el.style.setProperty('--fs', (fs * pz.f) + 'px'));
-}, {passive: false});
-$('#pager').addEventListener('touchend', e => {
-  if (!pz || e.touches.length) return;
-  const z = pz; pz = null;
+}
+function pzEnd() {
+  if (!pz) return; const z = pz; pz = null;
   if (Math.abs(z.f - 1) < 0.02) return;
-  st[z.key] = Math.round(st[z.key] * z.f * 100) / 100; save(); rerender();
-});
-document.addEventListener('gesturestart', e => e.preventDefault());
+  st[z.key] = Math.round(st[z.key] * z.f * 100) / 100; save(); rerender(); pzBlock = Date.now();
+}
+let pzBlock = 0;
+if ('ongesturechange' in window) {
+  // iPhone / iPad: Safari'nin kendi iki parmak hareketi
+  document.addEventListener('gesturestart', e => { e.preventDefault(); if (e.target.closest && e.target.closest('#pager')) pzStart(e.target); }, {passive: false});
+  document.addEventListener('gesturechange', e => { e.preventDefault(); pzMove(e.scale); }, {passive: false});
+  document.addEventListener('gestureend', e => { e.preventDefault(); pzEnd(); }, {passive: false});
+} else {
+  const tdist = e => Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+  let d0 = 0;
+  $('#pager').addEventListener('touchstart', e => { if (e.touches.length === 2) { d0 = tdist(e); pzStart(e.target); } }, {passive: true});
+  $('#pager').addEventListener('touchmove', e => { if (pz && e.touches.length === 2) { e.preventDefault(); pzMove(tdist(e) / d0); } }, {passive: false});
+  $('#pager').addEventListener('touchend', e => { if (!e.touches.length) pzEnd(); });
+}
 
 // ---------- alt sayfa ----------
 function openSheet(html) { $('#sheetIn').innerHTML = html; $('#sheet').classList.remove('hidden'); }

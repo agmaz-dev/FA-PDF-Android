@@ -176,3 +176,5 @@ body.barsOn #modes{transform:translate(-50%,0);opacity:1;pointer-events:auto}
 body.barsOn #apill{opacity:0;pointer-events:none}
 .apb{width:32px;height:32px;border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:14px}
 .apb.pri{background:var(--accent);color:#fff}.apb svg{width:16px;height:16px}
+
+.slot,.fit{touch-action:pan-x pan-y}
