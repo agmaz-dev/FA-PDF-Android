@@ -183,23 +183,25 @@ function mushafPage(p) {
 }
 const SHARE_SVG = '<svg viewBox="0 0 24 24"><circle cx="18" cy="5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="19" r="2.5"/><path d="M8.2 10.8l7.6-4.4M8.2 13.2l7.6 4.4"/></svg>';
 function aciklamaPage(p) {
-  const idxs = ayahsOnPage(p);
-  const cur = idxs.includes(hl()) ? hl() : idxs[0];
-  const [s, a] = ay(cur); const S = surah(s);
-  const l = mealLines(st.meal, [cur])[0];
-  let h = `<div class="ah"><b>${t('%1- %2 Sûresi, %3. âyet', s, sName(S), a)}</b><button class="round" data-share="${cur}" aria-label="${t('Paylaş')}">${SHARE_SVG}</button></div>`;
-  h += `<div class="arx" style="font-family:'${st.font}',amiri">${arWords(cur)} <span class="m" style="color:var(--gold)">${marker(a)}</span></div>`;
-  if (l) h += `<div class="ml"><b>${l.label}- </b>${mealHtml(l.text)}</div>`;
-  const A = ACK && ACK[s] && ACK[s].ayat[a];
-  if (A) {
-    h += `<div class="ex"><div class="et">${esc(A.t)}</div>`;
-    if (A.ar && A.ar.length) h += `<div class="ek">${A.ar.map(esc).join('<span>/</span>')}</div>`;
-    h += A.p.map(x => `<p class="ep">${esc(x)}</p>`).join('') + '</div>';
-  } else if (ACK) h += `<div class="none">${t('Bu sûrenin açıklaması henüz hazırlanmadı.')}</div>`;
+  // Sayfadaki bütün âyetler alt alta; sağa sola kaydırınca sonraki/önceki sayfa
+  let h = '';
+  for (const i of ayahsOnPage(p)) {
+    const [s, a] = ay(i); const S = surah(s);
+    const l = mealLines(st.meal, [i])[0];
+    h += `<div class="aitem${i === hl() ? ' sel' : ''}" data-ai="${i}"><div class="ah"><b>${t('%1- %2 Sûresi, %3. âyet', s, sName(S), a)}</b><button class="round" data-share="${i}" aria-label="${t('Paylaş')}">${SHARE_SVG}</button></div>`;
+    h += `<div class="arx" style="font-family:'${st.font}',amiri">${arWords(i)} <span class="m" style="color:var(--gold)">${marker(a)}</span></div>`;
+    if (l) h += `<div class="ml"><b>${l.label}- </b>${mealHtml(l.text)}</div>`;
+    const A = ACK && ACK[s] && ACK[s].ayat[a];
+    if (A) {
+      h += `<div class="ex"><div class="et">${esc(A.t)}</div>`;
+      if (A.ar && A.ar.length) h += `<div class="ek">${A.ar.map(esc).join('<span>/</span>')}</div>`;
+      h += A.p.map(x => `<p class="ep">${esc(x)}</p>`).join('') + '</div>';
+    } else if (ACK && (a === 1 || i === ayahsOnPage(p)[0])) h += `<div class="none">${t('Bu sûrenin açıklaması henüz hazırlanmadı.')}</div>`;
+    h += '</div>';
+  }
   return `<div class="paper ac"><h6>${t('AÇIKLAMA')}</h6><h2>${t("Kur'an Açıklamaları")}</h2>
     <div class="src">${t('Arapça anahtar ifadeler, kelime anlamları ve âyet açıklamaları')}</div><div class="rule" style="margin-top:8px"></div>
-    <div class="fit"><div class="body">${h}</div></div>
-    <div class="nav"><button class="btn" data-go="${cur - 1}" ${cur <= 0 ? 'disabled' : ''}>${t('‹ Önceki')}</button><button class="btn" data-go="${cur + 1}" ${cur >= Q.ayahs.length - 1 ? 'disabled' : ''}>${t('Sonraki ›')}</button></div></div>`;
+    <div class="fit"><div class="body">${h}</div></div></div>`;
 }
 const wide = () => innerWidth >= 760 && innerWidth > innerHeight;
 function slotHtml(p) {
@@ -235,7 +237,7 @@ function renderAround(p) {
   for (let q = p - 2; q <= p + 2; q++) if (q >= 1 && q <= PAGES && !rendered.has(q)) renderSlot(q);
   for (const q of [...rendered]) if (Math.abs(q - p) > 3) { slots[q - 1].innerHTML = ''; rendered.delete(q); }
 }
-function renderSlot(p) { const s = slots[p - 1]; s.innerHTML = slotHtml(p); rendered.add(p); fitAll(s); }
+function renderSlot(p) { const s = slots[p - 1]; s.innerHTML = slotHtml(p); rendered.add(p); fitAll(s); if (st.mode === 'aciklama') { const e = s.querySelector('.aitem.sel'); if (e) e.scrollIntoView({block: 'start', inline: 'nearest'}); } }
 function rerender() { const ps = [...rendered]; rendered.clear(); ps.forEach(renderSlot); renderAround(cur); }
 function onPage(p) {
   if (p === cur && rendered.has(p)) return;
@@ -634,7 +636,7 @@ const hl = () => Au.playing != null ? Au.playing : sel;
 function updateHl() {
   const i = hl();
   if (i != null && Au.playing != null && ay(i)[2] !== cur) { goPage(ay(i)[2]); return; }
-  if (st.mode === 'aciklama' && Au.playing != null) { renderSlot(cur); if (wide()) {} return; }
+  if (st.mode === 'aciklama') { document.querySelectorAll('.aitem.sel').forEach(e => e.classList.remove('sel')); const el = i != null && slots[cur - 1].querySelector(`.aitem[data-ai="${i}"]`); if (el) { el.classList.add('sel'); el.scrollIntoView({behavior: 'smooth', block: 'start'}); } }
   document.querySelectorAll('.slot [data-i].sel').forEach(e => e.classList.remove('sel'));
   if (i != null) document.querySelectorAll(`.slot [data-i="${i}"]`).forEach(e => e.classList.add('sel'));
 }
