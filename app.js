@@ -622,18 +622,18 @@ const Au = {
     const r = reciterFor(R, s); const T = TIMING[r.id] && TIMING[r.id][s];
     this.set(i, 'ar');
     const seek = (fromStart || a === 1 || !T) ? 0 : Math.max(0, T.t[a - 1][0] - 150) / 1000;
-    if (this.sRec === r.id && this.sNum === s && this.el.src) { this.el.currentTime = seek; this.el.play().catch(() => {}); return; }
+    if (this.sRec === r.id && this.sNum === s && this.el.src) { this.loading = true; this.el.currentTime = seek; this.el.play().catch(() => {}); setTimeout(() => { this.loading = false; }, 400); return; }
     this.sRec = r.id; this.sNum = s; this.sT = T; this.sFirst = firstIdxOfSurah[s];
     const tok = this.tok = {}; this.loading = true;
     const u = await this.src(surahUrl(r, s)); if (tok !== this.tok) return;
     this.el.onended = () => this.surahDone();
     this.el.ontimeupdate = () => this.tick();
     this.el.src = u;
-    const go = () => { this.el.currentTime = seek; this.el.play().then(() => { this.loading = false; }).catch(() => this.fail()); };
+    const go = () => { this.el.currentTime = seek; this.el.play().then(() => { setTimeout(() => { this.loading = false; }, 400); }).catch(() => this.fail()); };
     if (seek > 0) { this.el.addEventListener('loadedmetadata', go, {once: true}); this.el.load(); } else go();
   },
   tick() {
-    const T = this.sT; if (!T || this.phase !== 'ar' || this.paused || this.playing == null) return;
+    const T = this.sT; if (!T || this.phase !== 'ar' || this.paused || this.playing == null || this.loading) return;
     const pos = this.el.currentTime * 1000; let k = 0;
     while (k + 1 < T.t.length && pos >= T.t[k + 1][0] - 120) k++;
     const g = this.sFirst + k;
@@ -647,7 +647,7 @@ const Au = {
     this.texts(cur, () => { if (nf == null) this.stop(); else this.startSurah(nf, true); });
   },
   needTexts() { return st.audioMode !== 'ar'; },
-  textOnly() { return st.audioMode === 'meal'; },
+  textOnly() { return st.audioMode === 'meal' || st.audioMode === 'ack'; },
   /** âyetten sonra okunacak Türkçe metinler: meal, açıklama sayfasında açıklama */
   texts(i, then) {
     const list = [];
@@ -725,7 +725,7 @@ function audioSettings() {
 }
 function speechSettings() {
   const vs = window.speechSynthesis ? Sp.voices() : [];
-  let h = `<div class="card"><h4>${t('Ne okunsun?')}</h4><div class="seg seg4" style="margin:0">${[['ar', 'Arapça'], ['ar_meal', 'Arapça + meal'], ['meal', 'Meal'], ['ack', 'Açıklama']].map(([k, n]) => `<button data-amode="${k}" class="${st.audioMode === k ? 'on' : ''}">${t(n)}</button>`).join('')}</div><p class="muted" style="margin:8px 0 0">${t('Açıklama: önce âyetin Arapçası, sonra meali, sonra açıklaması okunur. Açıklaması olmayan âyetlerde Arapça ve meal okunur.')}</p></div>`;
+  let h = `<div class="card"><h4>${t('Ne okunsun?')}</h4><div class="seg seg4" style="margin:0">${[['ar', 'Arapça'], ['ar_meal', 'Arapça + meal'], ['meal', 'Meal'], ['ack', 'Açıklama']].map(([k, n]) => `<button data-amode="${k}" class="${st.audioMode === k ? 'on' : ''}">${t(n)}</button>`).join('')}</div><p class="muted" style="margin:8px 0 0">${t('Açıklama: Arapça okunmaz; her âyette önce meali, sonra açıklaması Türkçe okunur. Açıklaması olmayan âyetlerde sadece meal okunur.')}</p></div>`;
   const tr = mealSpeechLang() === 'tr'; const neu = Sp.useNeural();
   h += `<div class="card"><h4>${t('Ses')}</h4><select data-voice style="width:100%;height:40px;border-radius:10px;font-size:16px">${tr ? `<option value="neural" ${neu ? 'selected' : ''}>${t('Doğal erkek sesi (önerilen)')}</option>` : ''}${vs.map(v => `<option value="${esc(v.voiceURI)}" ${!neu && Sp.pick() === v ? 'selected' : ''}>${esc(v.name)} · ${t('telefonun sesi')}</option>`).join('')}</select>
     ${neu ? `<p class="muted">${t('Doğal ses telefonda çalışır; ilk kullanımda bir kere yaklaşık 90 MB indirilir, sonra internetsiz çalışır.')}</p>` : (!vs.length ? `<p class="muted">${t('Bu dilde konuşma sesi bulunamadı.')}</p>` : '')}
