@@ -1,4 +1,4 @@
-name: tmp vits
+name: tmp pw
 on:
   push:
     branches: [ dib-fetch ]
@@ -10,12 +10,12 @@ jobs:
     steps:
       - run: |
           mkdir -p out/pkg && cd out/pkg
-          npm pack @diffusionstudio/vits-web >/dev/null && tar xzf *.tgz && mv package vits-web && rm *.tgz
-          V=$(node -e "console.log(require('./vits-web/package.json').dependencies['onnxruntime-web']||'')"); echo "ort: $V" > ../info.txt
-          npm pack onnxruntime-web@1.18.0 >/dev/null && tar xzf *.tgz && mv package ort && rm *.tgz
-          cat vits-web/package.json >> ../info.txt; ls -R vits-web | head -50 >> ../info.txt; ls ort/dist >> ../info.txt
-          rm -rf ort/lib ort/types
+          npm pack @diffusionstudio/piper-wasm@1.0.0 >/dev/null && tar xzf *.tgz && mv package piper-wasm && rm *.tgz; ls -la piper-wasm/build > ../pw.txt
+          true
+          true
+          true
+          true
           cd ..; H=https://huggingface.co/rhasspy/piper-voices/resolve/main/tr/tr_TR/dfki/medium
-          curl -sSLf -o tr_TR-dfki-medium.onnx $H/tr_TR-dfki-medium.onnx; curl -sSLf -o tr_TR-dfki-medium.onnx.json $H/tr_TR-dfki-medium.onnx.json
+          true
           du -sh . >> info.txt
           git init -q -b dib-data; git config user.name b; git config user.email b@b; git add -A; git commit -qm d; git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" dib-data
