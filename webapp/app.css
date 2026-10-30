@@ -18,8 +18,8 @@ svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke
 #pager{position:fixed;inset:0;display:flex;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;scrollbar-width:none}
 #pager::-webkit-scrollbar{display:none}
 .slot{flex:0 0 100vw;width:100vw;height:100%;scroll-snap-align:start;scroll-snap-stop:always;direction:ltr;
-  padding:calc(var(--st) + 6px) 8px calc(var(--sb) + 64px);display:flex;gap:8px;transition:padding-top .2s}
-.paper{flex:1;min-width:0;background:var(--paper);border-radius:18px;box-shadow:0 1px 4px rgba(0,0,0,.13);padding:12px 16px 10px;display:flex;flex-direction:column;overflow:hidden}
+  padding:var(--st) 0 calc(var(--sb) * .5);display:flex;gap:0}
+.paper{flex:1;min-width:0;background:var(--paper);padding:6px 18px 8px;display:flex;flex-direction:column;overflow:hidden}
 .phead{display:flex;justify-content:space-between;gap:8px;font-size:13px;flex:0 0 auto}
 .phead b{font-weight:700}.phead i{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .rule{height:1.5px;background:var(--ink);margin:4px 0 6px;flex:0 0 auto}
@@ -157,3 +157,14 @@ body.barsOn #bars{transform:none;opacity:1;pointer-events:auto}
 .sl input{flex:1;accent-color:var(--accent)}
 .muted{color:var(--muted);font-size:13px;line-height:1.45}
 .backb{height:34px;padding:0 12px;border-radius:17px;background:var(--chip);font-weight:600;margin-bottom:10px}
+
+/* Tam ekran okuma: sayfa kenardan kenara, menüler dokununca açılır */
+html,body{background:var(--paper)}
+@media (min-width:760px) and (orientation:landscape){
+  html,body{background:var(--app)}
+  .slot{padding:calc(var(--st) + 8px) 8px calc(var(--sb) + 8px);gap:8px}
+  .paper{border-radius:18px;box-shadow:0 1px 4px rgba(0,0,0,.13);padding:12px 16px 10px}
+}
+#modes{transition:transform .22s,opacity .22s;transform:translate(-50%,160%);opacity:0;pointer-events:none}
+body.barsOn #modes{transform:translate(-50%,0);opacity:1;pointer-events:auto}
+#tapTop{display:none}

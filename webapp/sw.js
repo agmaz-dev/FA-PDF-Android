@@ -1,5 +1,5 @@
 // İnternetsiz çalışma: dosyalar ilk açılışta saklanır, sonra telefondan okunur
-const V = 'kuran-v1';
+const V = 'kuran-v2';
 const CORE = ['./', 'index.html', 'app.css', 'app.js', 'manifest.webmanifest', 'data/core.json', 'data/i18n.json', 'data/aciklama.json',
   'data/meal/tr.yazir.json', 'data/meal/feridun.json', 'fonts/medina.ttf', 'fonts/amiri.ttf', 'icons/icon-192.png'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(V).then(c => c.addAll(CORE)).then(() => self.skipWaiting())); });
