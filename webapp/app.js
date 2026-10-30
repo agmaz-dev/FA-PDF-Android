@@ -704,7 +704,12 @@ const SILENT = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAIlYAAESsAA
 function unlockAudio() { for (const el of [Au.el, Sp.el]) { if (el._ok) continue; try { el.src = SILENT; const p = el.play(); if (p) p.then(() => { el.pause(); el._ok = true; }).catch(() => {}); } catch (e) {} } }
 function onPlay() {
   unlockAudio();
-  if (Au.playing == null) { const idxs = ayahsOnPage(cur); Au.play(AM() && curA != null ? curA : sel != null && idxs.includes(sel) ? sel : idxs[0]); } else Au.toggle();
+  const idxs = ayahsOnPage(cur);
+  const start = AM() && curA != null ? curA : sel != null && idxs.includes(sel) ? sel : idxs[0];
+  // durdurulup başka sayfaya geçildiyse: kaldığı yerden değil, şimdi açık olan sayfadan başla
+  const moved = Au.playing != null && Au.paused && (AM() ? curA !== Au.playing : ay(Au.playing)[2] !== cur);
+  if (moved) Au.stop();
+  if (Au.playing == null) Au.play(start); else Au.toggle();
 }
 
 function audioSettings() {
