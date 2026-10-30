@@ -560,7 +560,7 @@ function drawDl() { const e = document.getElementById('dlp'); if (e) { e.querySe
 const Sp = {
   voices() { const l = mealSpeechLang(); return (speechSynthesis.getVoices() || []).filter(v => v.lang.toLowerCase().startsWith(l)); },
   pick() { const vs = this.voices(); return vs.find(v => v.voiceURI === st.voice) || vs.find(v => /male|erkek|cem|tolga|daniel|markus|majed|maged|tarik/i.test(v.name) && !/female/i.test(v.name)) || vs[0]; },
-  useNeural() { return mealSpeechLang() === 'tr' && (!st.voice || st.voice === 'neural'); },
+  useNeural() { return !st.voice || st.voice === 'neural'; },
   split(text) { return (text.match(/[^.!?;:]+[.!?;:]*\s*/g) || [text]).reduce((a, x) => { if (a.length && (a[a.length - 1] + x).length < 220) a[a.length - 1] += x; else a.push(x); return a; }, []).map(x => x.trim()).filter(Boolean); },
   speak(text, done) {
     Sp.stop();
@@ -584,7 +584,7 @@ const Sp = {
     const tok = Sp.tok = {}; const parts = this.split(text);
     let N;
     try {
-      N = await import('./tts/neural.js');
+      N = await import('./tts/neural.js'); N.setLang(mealSpeechLang());
       if (!(await N.isDownloaded())) toast(t('Doğal ses hazırlanıyor… (ilk seferde bir kere indirilir)'));
       await N.ensure((g, tot) => { if (tot) { const e = $('#toast'); e.textContent = t('Doğal ses indiriliyor… %1%', Math.round(g / tot * 100)); e.style.display = 'block'; clearTimeout(e._t); e._t = setTimeout(() => e.style.display = 'none', 3000); } });
     } catch (e) { if (tok === Sp.tok) { toast(t('Doğal ses yüklenemedi, telefonun sesi kullanılıyor.')); this.sysSpeak(text, done); } return; }
@@ -746,13 +746,13 @@ function speechSettings() {
   const vs = window.speechSynthesis ? Sp.voices() : [];
   let h = LBL(t('Ne okunsun?')) + GRP([['ar', 'Arapça'], ['ar_meal', 'Arapça + meal'], ['meal', 'Meal'], ['ack', 'Açıklama']].map(([k, n]) => CHK(t(n), '', st.audioMode === k, `data-amode="${k}"`)).join(''));
   h += FT(t('Açıklama seçeneği sadece Açıklama sayfasında geçerlidir: Arapça okunmaz, her âyette önce meal, sonra açıklama okunur. Meal ve Mushaf sayfasında bu seçenekle meal okunur.'));
-  const tr = mealSpeechLang() === 'tr'; const neu = Sp.useNeural();
+  const tr = true; const neu = Sp.useNeural();
   h += LBL(t('Ses')) + GRP((tr ? CHK(t('Doğal erkek sesi'), t('Önerilen · telefonda çalışır'), neu, 'data-vset="neural"') : '')
       + vs.map(v => CHK(esc(v.name), t('Telefonun kendi sesi'), !neu && Sp.pick() === v, `data-vset="${esc(v.voiceURI)}"`)).join('')) + GRP(''
     + (neu ? '' : `<div class="irow islr"><span class="itx"><span>${t('Ses kalınlığı')}</span></span><input type="range" min="0.5" max="1.5" step="0.05" value="${st.pitch}" data-sp="pitch"><b>${Math.round(st.pitch * 100)}%</b></div>`)
     + `<div class="irow islr"><span class="itx"><span>${t('Konuşma hızı')}</span></span><input type="range" min="0.5" max="1.5" step="0.05" value="${st.rate}" data-sp="rate"><b>${Math.round(st.rate * 100)}%</b></div>`
     + ACT('▶︎ ' + t('Örnek dinle'), 'data-sample'));
-  h += FT(neu ? t('Doğal ses telefonda çalışır; ilk kullanımda bir kere yaklaşık 90 MB indirilir, sonra internetsiz çalışır.') : (!vs.length ? t('Bu dilde konuşma sesi bulunamadı.') : ''));
+  h += FT(neu ? t('Doğal ses telefonda çalışır. Seçili mealin dili için ilk kullanımda bir kere indirilir (Türkçe, Almanca, İngilizce, Arapça; her biri yaklaşık 60–90 MB), sonra internetsiz çalışır.') : (!vs.length ? t('Bu dilde konuşma sesi bulunamadı.') : ''));
   return h;
 }
 function onAudioSetClick(b) {
