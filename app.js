@@ -595,7 +595,7 @@ const Sp = {
       pending = i + 1 < parts.length ? N.synth(parts[i + 1], st.rate) : null;
       if (!blob) continue;
       const u = URL.createObjectURL(blob);
-      await new Promise(res => { this.el.onended = res; this.el.onerror = res; this.el.src = u; this.el.play().catch(res); Sp.cur = res; });
+      await new Promise(res => { this.el.onended = () => { if (!(this.el.currentSrc || '').startsWith('data:')) res(); }; this.el.onerror = res; this.el.src = u; this.el.play().catch(res); Sp.cur = res; });
       URL.revokeObjectURL(u);
       if (tok !== Sp.tok) return;
     }
@@ -621,7 +621,7 @@ const Au = {
     const r = reciterById(st.reciter); const [s, a] = this.basm ? [1, 1] : ay(i);
     const tok = this.tok = {};
     const u = await this.src(ayahUrl(r, s, a)); if (tok !== this.tok) return;
-    this.el.onended = () => { if (this.basm) { this.basm = false; this.startAyah(i); } else this.texts(i, () => this.next(i)); };
+    this.el.onended = () => { if ((this.el.currentSrc || '').startsWith('data:')) return; if (this.basm) { this.basm = false; this.startAyah(i); } else this.texts(i, () => this.next(i)); };
     this.el.ontimeupdate = null;
     this.el.src = u; this.el.play().then(() => { this.loading = false; }).catch(() => this.fail());
   },
@@ -635,7 +635,7 @@ const Au = {
     this.sRec = r.id; this.sNum = s; this.sT = T; this.sFirst = firstIdxOfSurah[s];
     const tok = this.tok = {}; this.loading = true;
     const u = await this.src(surahUrl(r, s)); if (tok !== this.tok) return;
-    this.el.onended = () => this.surahDone();
+    this.el.onended = () => { if ((this.el.currentSrc || '').startsWith('data:')) return; this.surahDone(); };
     this.el.ontimeupdate = () => this.tick();
     this.el.src = u;
     const go = () => { this.el.currentTime = seek; this.el.play().then(() => { setTimeout(() => { this.loading = false; }, 400); }).catch(() => this.fail()); };
@@ -713,7 +713,7 @@ if ('mediaSession' in navigator) { navigator.mediaSession.setActionHandler('play
 const PLAY_SVG = '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z" fill="currentColor" stroke="none"/></svg>';
 const PAUSE_SVG = '<svg viewBox="0 0 24 24"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z" fill="currentColor" stroke="none"/></svg>';
 const SILENT = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAIlYAAESsAAACABAAZGF0YQAAAAA=';
-function unlockAudio() { for (const el of [Au.el, Sp.el]) { if (el._ok) continue; try { el.src = SILENT; const p = el.play(); if (p) p.then(() => { el.pause(); el._ok = true; }).catch(() => {}); } catch (e) {} } }
+function unlockAudio() { for (const el of [Au.el, Sp.el]) { if (el._ok || el.src) continue; try { el.src = SILENT; const p = el.play(); if (p) p.then(() => { if ((el.currentSrc || '').startsWith('data:')) el.pause(); el._ok = true; }).catch(() => {}); } catch (e) {} } }
 function onPlay() {
   unlockAudio();
   const idxs = ayahsOnPage(cur);
