@@ -142,18 +142,18 @@ fun PaperPage(
     val shape = when (side) {
         Side.LEFT -> RoundedCornerShape(topStart = 16.dp, bottomStart = 16.dp, topEnd = 3.dp, bottomEnd = 3.dp)
         Side.RIGHT -> RoundedCornerShape(topStart = 3.dp, bottomStart = 3.dp, topEnd = 16.dp, bottomEnd = 16.dp)
-        Side.SINGLE -> RoundedCornerShape(14.dp)
+        Side.SINGLE -> androidx.compose.ui.graphics.RectangleShape
     }
     val tap by rememberUpdatedState(onTap)
     val zoom by rememberUpdatedState(onPinch)
     Column(
         modifier
-            .shadow(6.dp, shape)
+            .shadow(if (side == Side.SINGLE) 0.dp else 6.dp, shape)
             .clip(shape)
             .background(pal.paper)
             .pinch { zoom(it) }
             .pointerInput(Unit) { detectTapGestures(onTap = { tap() }) }
-            .padding(horizontal = padding, vertical = if (padding < 10.dp) padding else 12.dp),
+            .padding(horizontal = if (side == Side.SINGLE && padding >= 10.dp) 18.dp else padding, vertical = if (padding < 10.dp) padding else if (side == Side.SINGLE) 6.dp else 12.dp),
         content = content,
     )
 }

@@ -20,6 +20,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
@@ -88,100 +90,91 @@ private fun pal0(st: AppState) = palette(st.theme).app
 @Composable
 private fun ReaderBody(q: Quran, st: AppState, wide: Boolean, twoUp: Boolean, onIndex: () -> Unit, onSettings: () -> Unit) {
     val pal = palette(st.theme)
-    val count = if (twoUp) (q.pageCount + 1) / 2 else q.pageCount
-    fun toIdx(p: Int) = (if (twoUp) (p - 1) / 2 else p - 1).coerceIn(0, count - 1)
-    fun toPage(i: Int) = if (twoUp) i * 2 + 1 else i + 1
-    val pager = rememberPagerState(initialPage = toIdx(st.lastPage)) { count }
-    val scope = rememberCoroutineScope()
-    var bars by remember { mutableStateOf(false) }
-    var touch by remember { mutableStateOf(0) }
+    val ack = st.mode == ReadMode.ACIKLAMA
+    val audio = de.fa.kuran.data.Audio
     var selected by remember { mutableStateOf<Int?>(null) }
-    var hint by remember { mutableStateOf(true) }
-    val page = if (twoUp && (st.lastPage - 1) / 2 == pager.currentPage) st.lastPage else toPage(pager.currentPage)
+    var bars by remember { mutableStateOf(true) }
+    var touch by remember { mutableStateOf(0) }
+    val scope = rememberCoroutineScope()
+    // Açıklamada her sayfa bir âyet; diğerlerinde bir mushaf sayfası
+    val startAyah = remember(ack) { selected ?: audio.playing ?: q.ayahsOnPage(st.lastPage).firstOrNull()?.idx ?: 0 }
+    val count = if (ack) q.ayahs.size else q.pageCount
+    val pager = androidx.compose.runtime.key(ack) { rememberPagerState(initialPage = if (ack) startAyah else (st.lastPage - 1).coerceIn(0, q.pageCount - 1)) { count } }
+    val page = if (ack) q.pageOf(pager.currentPage) else pager.currentPage + 1
+    val curAyah: Int? = if (ack) pager.currentPage else null
 
-    LaunchedEffect(pager.currentPage) {
-        if (!(twoUp && (st.lastPage - 1) / 2 == pager.currentPage)) st.lastPage = toPage(pager.currentPage)
-    }
+    LaunchedEffect(page) { st.lastPage = page }
     LaunchedEffect(st.jump) {
-        st.jump?.let { pager.scrollToPage(toIdx(it)); st.lastPage = it; st.jump = null }
+        st.jump?.let { p -> if (ack) pager.scrollToPage(q.ayahsOnPage(p).firstOrNull()?.idx ?: 0) else pager.scrollToPage(p - 1); st.lastPage = p; st.jump = null }
     }
-    LaunchedEffect(Unit) { delay(3500); hint = false }
-    // Menü çubukları bir süre dokunulmazsa kendiliğinden geri çekilir
-    LaunchedEffect(bars, touch, page, st.mode, st.arZoom, st.mealZoom) {
-        if (bars) { delay(6000); bars = false }
-    }
+    // Menüler bir süre dokunulmazsa kendiliğinden kapanır
+    LaunchedEffect(bars, touch, st.mode) { if (bars) { delay(6000); bars = false } }
 
-    val select: (Int) -> Unit = { idx ->
-        selected = if (selected == idx && st.mode != ReadMode.ACIKLAMA) null else idx
-        val p = q.pageOf(idx)
-        if (toIdx(p) != pager.currentPage) scope.launch { pager.animateScrollToPage(toIdx(p)) }
+    val goPage: (Int) -> Unit = { p ->
+        val pp = p.coerceIn(1, q.pageCount); touch++
+        scope.launch { if (ack) pager.scrollToPage(q.ayahsOnPage(pp).firstOrNull()?.idx ?: 0) else pager.scrollToPage(pp - 1) }
     }
-    // Sayfaya dokunmak menüyü açmaz, sadece açıksa kapatır; menü üstteki sayfa başlığına dokununca açılır
-    val toggle: () -> Unit = { if (bars) bars = false; hint = false }
-    val openBars: () -> Unit = { bars = !bars; hint = false }
+    val select: (Int) -> Unit = { idx ->
+        selected = if (selected == idx && !ack) null else idx
+        scope.launch { if (ack) pager.animateScrollToPage(idx) else { val p = q.pageOf(idx); if (p - 1 != pager.currentPage) pager.animateScrollToPage(p - 1) } }
+    }
+    // Sayfaya dokunmak menüleri açar / kapatır
+    val toggle: () -> Unit = { bars = !bars }
     val ctx = androidx.compose.ui.platform.LocalContext.current
     val share: (Int) -> Unit = { idx -> shareAyah(ctx, q, st, idx) }
-    val goTo: (Int) -> Unit = { p -> touch++; scope.launch { pager.animateScrollToPage(toIdx(p.coerceIn(1, q.pageCount))) } }
-    val step = if (twoUp) 2 else 1
-    val audio = de.fa.kuran.data.Audio
     val playIdx = audio.playing
     val hl = playIdx ?: selected
-    // meal sesi için âyetin meali
     audio.mealOf = { i -> mealOnly(mealLines(q, st.pack, st.meal, listOf(i)).firstOrNull()?.text ?: "") }
+    audio.ackOf = { i -> val a = q.ayahs[i]; AckData.get(a.s, a.a)?.let { it.title + ". " + it.paras.joinToString(" ") } }
+    audio.onAckPage = { st.mode == ReadMode.ACIKLAMA }
     audio.mealLang = mealSpeechLang(st.meal)
     val onPlay: () -> Unit = {
-        if (playIdx == null) audio.play(q, selected ?: q.ayahsOnPage(page).firstOrNull()?.idx ?: 0) else audio.toggle()
+        val start = curAyah ?: selected?.takeIf { q.pageOf(it) == page } ?: q.ayahsOnPage(page).firstOrNull()?.idx ?: 0
+        // durdurulup başka sayfaya geçildiyse şimdi açık olan yerden başla
+        val moved = playIdx != null && audio.paused && (if (ack) playIdx != curAyah else q.pageOf(playIdx) != page)
+        if (moved) audio.stop()
+        if (audio.playing == null) audio.play(q, start) else audio.toggle()
     }
-    // okunan âyet başka sayfadaysa sayfayı çevir
-    LaunchedEffect(playIdx) {
+    // okunan âyet başka yerdeyse oraya geç
+    LaunchedEffect(playIdx, ack) {
         val i = playIdx ?: return@LaunchedEffect
-        val p = toIdx(q.pageOf(i))
-        if (p != pager.currentPage) pager.animateScrollToPage(p)
+        if (ack) { if (i != pager.currentPage) pager.animateScrollToPage(i) }
+        else { val p = q.pageOf(i) - 1; if (p != pager.currentPage) pager.animateScrollToPage(p) }
     }
 
-    Box(Modifier.fillMaxSize().background(pal.app)) {
-        // Kitap: sayfalar sağdan sola çevrilir. Çubuklar sayfanın üstünde yüzer, sayfayı küçültmez.
+    Box(Modifier.fillMaxSize().background(if (wide) pal.app else pal.paper)) {
+        // Kitap: sayfalar sağdan sola çevrilir. Menüler sayfanın üstünde yüzer, sayfayı küçültmez.
         CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
             HorizontalPager(
                 state = pager,
-                modifier = Modifier.fillMaxSize().padding(top = if (bars) (if (wide) 124.dp else 184.dp) else 0.dp),
+                modifier = Modifier.fillMaxSize().windowInsetsPadding(androidx.compose.foundation.layout.WindowInsets.displayCutout.only(androidx.compose.foundation.layout.WindowInsetsSides.Top)),
                 beyondViewportPageCount = 1,
-                pageSpacing = if (twoUp) 0.dp else 12.dp,
+                pageSpacing = if (wide) 12.dp else 0.dp,
             ) { idx ->
                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                    if (twoUp) TwoUp(q, toPage(idx), st, pal, hl, select, toggle)
+                    if (ack) AckSpread(q, idx, st, pal, wide, playIdx == idx, hl, select, toggle)
                     else Spread(q, idx + 1, st, pal, wide, hl, select, toggle)
                 }
             }
         }
 
-        // Seçili âyet kartı
+        val bottomPad = if (bars) 74.dp else 20.dp
+        // Seçili âyet kartı (Mushaf)
         val sel = selected
         if (sel != null && st.mode == ReadMode.MUSHAF && q.pageOf(sel) == page) {
             val ay = q.ayahs[sel]
             Column(
-                Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 20.dp, start = 16.dp, end = 16.dp)
-                    .widthIn(max = 560.dp)
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(22.dp))
-                    .background(pal.glass)
-                    .padding(horizontal = 18.dp, vertical = 12.dp),
+                Modifier.align(Alignment.BottomCenter).padding(bottom = bottomPad, start = 16.dp, end = 16.dp).widthIn(max = 560.dp).fillMaxWidth()
+                    .shadow(8.dp, RoundedCornerShape(22.dp)).clip(RoundedCornerShape(22.dp)).background(pal.glass).padding(horizontal = 18.dp, vertical = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        t("%1 · %2. ÂYET", q.surah(ay.s).name().uppercase(java.util.Locale(L.lang)), ay.a),
-                        fontSize = 12.sp, fontWeight = FontWeight.Bold, color = pal.accent, modifier = Modifier.weight(1f),
-                    )
+                    Text(t("%1 · %2. ÂYET", q.surah(ay.s).name().uppercase(java.util.Locale(L.lang)), ay.a), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = pal.accent, modifier = Modifier.weight(1f))
                     RoundIcon(pal, Icons.Filled.Close, t("Kapat"), size = 36.dp) { selected = null }
                 }
                 Text(
-                    mealLines(q, st.pack, st.meal, listOf(ay.idx)).firstOrNull()?.text?.let { mealOnly(it) }?.replace(Regex("⁽\\d+⁾"), "")
-                        ?: t("Bu âyetin meâli bir önceki âyetle birlikte verilmiştir."),
-                    fontSize = 16.sp, lineHeight = 22.sp, color = pal.ink,
-                    modifier = Modifier.heightIn(max = 160.dp).verticalScroll(rememberScrollState()),
+                    mealLines(q, st.pack, st.meal, listOf(ay.idx)).firstOrNull()?.text?.let { mealOnly(it) }?.replace(Regex("⁽\\d+⁾"), "") ?: t("Bu âyetin meâli bir önceki âyetle birlikte verilmiştir."),
+                    style = mealStyle(16f, pal.ink), modifier = Modifier.heightIn(max = 160.dp).verticalScroll(rememberScrollState()),
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     SmallButton(pal, t("Paylaş")) { share(ay.idx) }
@@ -189,22 +182,22 @@ private fun ReaderBody(q: Quran, st: AppState, wide: Boolean, twoUp: Boolean, on
                 }
             }
         }
-        // Meal ve açıklamada: seçili âyet için küçük paylaş düğmesi
+        // Mealde: seçili âyet için paylaş
         if (sel != null && st.mode == ReadMode.MEAL && q.pageOf(sel) == page) {
             val ay = q.ayahs[sel]
             Row(
-                Modifier.align(Alignment.BottomCenter).padding(bottom = 22.dp)
+                Modifier.align(Alignment.BottomCenter).padding(bottom = bottomPad).shadow(8.dp, RoundedCornerShape(26.dp))
                     .clip(RoundedCornerShape(26.dp)).background(pal.glass).border(1.dp, pal.glassLine, RoundedCornerShape(26.dp)).padding(5.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Row(
-                    Modifier.height(44.dp).clip(RoundedCornerShape(22.dp)).background(pal.accent).clickable { share(ay.idx) }.padding(horizontal = 18.dp),
+                    Modifier.height(42.dp).clip(RoundedCornerShape(21.dp)).background(pal.accent).clickable { share(ay.idx) }.padding(horizontal = 18.dp),
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     androidx.compose.material3.Icon(Icons.Filled.Share, null, tint = Color.White, modifier = Modifier.size(20.dp))
                     Text(t("Paylaş") + " · " + q.surah(ay.s).name() + " " + ay.s + ":" + ay.a, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
                 }
-                RoundIcon(pal, Icons.Filled.Close, t("Kapat"), size = 44.dp) { selected = null }
+                RoundIcon(pal, Icons.Filled.Close, t("Kapat"), size = 42.dp) { selected = null }
             }
         }
         audio.error?.let {
@@ -212,107 +205,50 @@ private fun ReaderBody(q: Quran, st: AppState, wide: Boolean, twoUp: Boolean, on
             Text(
                 t("Ses çalınamadı. İnternet bağlantısını kontrol edin ya da sesleri Ayarlar'dan indirin."),
                 color = Color.White, fontSize = 13.sp,
-                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 22.dp, start = 16.dp, end = 16.dp)
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = bottomPad + 50.dp, start = 16.dp, end = 16.dp)
                     .clip(RoundedCornerShape(16.dp)).background(Color(0xE0B03030)).padding(horizontal = 14.dp, vertical = 9.dp),
             )
         }
-        // Üst kısım: sayfa başlığına dokununca menü açılır
-        if (!bars) {
-            Box(Modifier.align(Alignment.TopCenter).fillMaxWidth().height(64.dp).clickable(
-                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null,
-            ) { openBars() })
-        }
-        // Sesli okuma: kameranın hemen solunda küçük düğme (sadece ⏸/▶ ve ✕), sayfa kaymaz
-        if (playIdx != null) BoxWithConstraints(Modifier.fillMaxSize()) {
-            // açık telefon: kameranın solunda, sayfa numarası ile kamera arasında
-            // Fold 7 açıkken iç kamera ekranın sağ yarısının üst ortasında: düğme kameranın soluna
-            val cx = maxWidth * 0.75f
-            Row(
-                // aufgeklappt: links neben der Seitenzahl; zugeklappt: links neben der Kamera
-                (if (wide) Modifier.align(Alignment.TopStart).offset(x = cx - 100.dp) else Modifier.align(Alignment.TopCenter).offset(x = (-62).dp))
-                    .padding(top = if (bars) (if (wide) 128.dp else 188.dp) else if (wide) 14.dp else 6.dp)
-                    .height(38.dp).shadow(3.dp, RoundedCornerShape(19.dp))
-                    .clip(RoundedCornerShape(19.dp)).background(pal.glass).border(1.dp, pal.glassLine, RoundedCornerShape(19.dp))
-                    .padding(horizontal = 3.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(1.dp),
+
+        // Üstte tek ince sıra + sayfa çubuğu
+        AnimatedVisibility(
+            visible = bars, modifier = Modifier.align(Alignment.TopCenter),
+            enter = slideInVertically { -it } + fadeIn(), exit = slideOutVertically { -it } + fadeOut(),
+        ) {
+            Column(
+                Modifier.windowInsetsPadding(androidx.compose.foundation.layout.WindowInsets.displayCutout.only(androidx.compose.foundation.layout.WindowInsetsSides.Top))
+                    .pointerInput(Unit) { awaitEachGesture { awaitFirstDown(requireUnconsumed = false); touch++ } },
             ) {
-                Box(Modifier.size(32.dp).clip(CircleShape).background(pal.accent).clickable { audio.toggle() }, contentAlignment = Alignment.Center) {
-                    if (audio.paused) androidx.compose.material3.Icon(Icons.Filled.PlayArrow, t("Devam et"), tint = Color.White, modifier = Modifier.size(21.dp))
-                    else Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-                        Box(Modifier.size(width = 3.5.dp, height = 13.dp).clip(RoundedCornerShape(1.dp)).background(Color.White))
-                        Box(Modifier.size(width = 3.5.dp, height = 13.dp).clip(RoundedCornerShape(1.dp)).background(Color.White))
-                    }
-                }
-                Box(Modifier.size(32.dp).clip(CircleShape).clickable { audio.stop() }, contentAlignment = Alignment.Center) {
-                    androidx.compose.material3.Icon(Icons.Filled.Close, t("Durdur"), tint = pal.muted, modifier = Modifier.size(18.dp))
-                }
+                TopRow(q, st, pal, page, wide, onIndex, onSettings, onPlay)
+                PageSlider(q, pal, page, goPage)
             }
         }
-
-        if (hint && !bars) {
-            Text(
-                t("Menü için sayfanın üst kısmına dokunun · âyet için basılı tutun"),
-                color = Color.White, fontSize = 12.sp,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 22.dp)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(Color(0x8C1B1A17))
-                    .padding(horizontal = 14.dp, vertical = 7.dp),
-            )
-        }
-
+        // Altta: Meal / Mushaf / Açıklama
         AnimatedVisibility(
-            visible = bars,
-            modifier = Modifier.align(Alignment.TopCenter),
-            enter = slideInVertically { -it } + fadeIn(),
-            exit = slideOutVertically { -it } + fadeOut(),
+            visible = bars, modifier = Modifier.align(Alignment.BottomCenter),
+            enter = slideInVertically { it } + fadeIn(), exit = slideOutVertically { it } + fadeOut(),
         ) {
-            // Üstte: menü satırı ve hemen altında sayfa kaydırma çubuğu
-            Column(Modifier.pointerInput(Unit) { awaitEachGesture { awaitFirstDown(requireUnconsumed = false); touch++ } }) {
-                TopBars(q, st, pal, page, wide, onIndex, onSettings, onPlay)
-                BottomBar(q, st, pal, page, wide, step, goTo)
+            Row(
+                Modifier.padding(bottom = 14.dp).height(42.dp).shadow(8.dp, RoundedCornerShape(21.dp)).clip(RoundedCornerShape(21.dp))
+                    .background(pal.glass).border(1.dp, pal.glassLine, RoundedCornerShape(21.dp)).padding(3.dp)
+                    .pointerInput(Unit) { awaitEachGesture { awaitFirstDown(requireUnconsumed = false); touch++ } },
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                listOf(ReadMode.MEAL to t("Meal"), ReadMode.MUSHAF to t("Mushaf"), ReadMode.ACIKLAMA to t("Açıklama")).forEach { (m, label) ->
+                    ModePill(pal, label, st.mode == m) { if (m == ReadMode.ACIKLAMA && selected != null) Unit; st.mode = m }
+                }
             }
         }
     }
 }
 
 @Composable
-private fun Spread(
-    q: Quran,
-    page: Int,
-    st: AppState,
-    pal: Palette,
-    wide: Boolean,
-    selected: Int?,
-    select: (Int) -> Unit,
-    toggle: () -> Unit,
-) {
-    Row(Modifier.fillMaxSize().padding(horizontal = if (wide) 6.dp else 2.dp, vertical = 4.dp)) {
-        if (wide) {
-            when (st.mode) {
-                ReadMode.MUSHAF -> MushafPage(q, page, st, pal, Side.SINGLE, selected, select, toggle, Modifier.fillMaxSize())
-                ReadMode.MEAL -> {
-                    MealPage(q, page, st, pal, Side.LEFT, selected, select, toggle, Modifier.weight(1f).fillMaxHeight())
-                    Spine(pal)
-                    MushafPage(q, page, st, pal, Side.RIGHT, selected, select, toggle, Modifier.weight(1f).fillMaxHeight())
-                }
-                ReadMode.ACIKLAMA -> {
-                    AciklamaPage(q, page, st, pal, Side.LEFT, selected, select, toggle, Modifier.weight(1f).fillMaxHeight())
-                    Spine(pal)
-                    MushafPage(q, page, st, pal, Side.RIGHT, selected, select, toggle, Modifier.weight(1f).fillMaxHeight())
-                }
-            }
-        } else {
-            val m = Modifier.fillMaxSize()
-            when (st.mode) {
-                ReadMode.MUSHAF -> MushafPage(q, page, st, pal, Side.SINGLE, selected, select, toggle, m)
-                ReadMode.MEAL -> MealPage(q, page, st, pal, Side.SINGLE, selected, select, toggle, m)
-                ReadMode.ACIKLAMA -> AciklamaPage(q, page, st, pal, Side.SINGLE, selected, select, toggle, m)
-            }
-        }
-    }
+private fun AckSpread(q: Quran, idx: Int, st: AppState, pal: Palette, wide: Boolean, playing: Boolean, hl: Int?, select: (Int) -> Unit, toggle: () -> Unit) {
+    if (wide) Row(Modifier.fillMaxSize().padding(6.dp)) {
+        AciklamaAyah(q, idx, st, pal, Side.LEFT, playing, toggle, Modifier.weight(1f).fillMaxHeight())
+        Spine(pal)
+        MushafPage(q, q.pageOf(idx), st, pal, Side.RIGHT, hl, select, toggle, Modifier.weight(1f).fillMaxHeight())
+    } else AciklamaAyah(q, idx, st, pal, Side.SINGLE, playing, toggle, Modifier.fillMaxSize())
 }
 
 @Composable
@@ -361,78 +297,57 @@ private fun ModePill(pal: Palette, text: String, selected: Boolean, modifier: Mo
 }
 
 @Composable
-private fun TopBars(q: Quran, st: AppState, pal: Palette, page: Int, wide: Boolean, onIndex: () -> Unit, onSettings: () -> Unit, onPlay: () -> Unit) {
-    val modes = listOf(ReadMode.MEAL to (if (wide) t("Meal + Mushaf") else t("Meal")), ReadMode.ACIKLAMA to t("Açıklama"), ReadMode.MUSHAF to t("Mushaf"))
-    val title = t("Cüz %1 · Sayfa %2", q.juzOfPage(page), q.pageLabel(page))
-    val sub = q.surahsOnPage(page).joinToString(" · ") { it.name() }
+private fun SmallCircle(pal: Palette, onClick: () -> Unit, bg: Color = pal.glass, content: @Composable () -> Unit) {
+    Box(
+        Modifier.size(40.dp).shadow(4.dp, CircleShape).clip(CircleShape).background(bg).border(1.dp, pal.glassLine, CircleShape).clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) { content() }
+}
+
+@Composable
+private fun TopRow(q: Quran, st: AppState, pal: Palette, page: Int, wide: Boolean, onIndex: () -> Unit, onSettings: () -> Unit, onPlay: () -> Unit) {
     val marked = page in st.bookmarks
-    Column(Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, top = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            GlassCircle(pal, Icons.Filled.Menu, t("Fihrist"), onClick = onIndex)
-            // başlık ve sûre adı aynı satırda
-            GlassPill(pal, Modifier.weight(1f)) {
-                Spacer(Modifier.width(12.dp))
-                Text(title, fontSize = 17.sp, fontWeight = FontWeight.Bold, color = pal.ink, maxLines = 1, softWrap = false)
-                if (sub.isNotBlank()) {
-                    Box(Modifier.padding(horizontal = 8.dp).size(4.dp).clip(CircleShape).background(pal.muted))
-                    Text(sub, fontSize = 15.sp, color = pal.muted, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-                }
-            }
-            if (wide) {
-                GlassPill(pal) { modes.forEach { (m, label) -> ModePill(pal, label, st.mode == m) { st.mode = m } } }
-            }
-            PlayCircle(pal, onPlay)
-            GlassCircle(pal, Icons.Filled.Star, if (marked) t("Yer imini kaldır") else t("Yer imi ekle"), tint = if (marked) pal.gold else pal.ink) { st.toggleBookmark(page) }
-            GlassCircle(pal, Icons.Filled.Settings, t("Ayarlar"), onClick = onSettings)
+    val playing = de.fa.kuran.data.Audio.playing != null && !de.fa.kuran.data.Audio.paused
+    Row(
+        Modifier.fillMaxWidth().widthIn(max = 640.dp).padding(start = 10.dp, end = 10.dp, top = 6.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        SmallCircle(pal, onIndex) { androidx.compose.material3.Icon(Icons.Filled.Menu, t("Fihrist"), tint = pal.ink, modifier = Modifier.size(20.dp)) }
+        Row(
+            Modifier.weight(1f).height(40.dp).shadow(4.dp, RoundedCornerShape(20.dp)).clip(RoundedCornerShape(20.dp)).background(pal.glass)
+                .border(1.dp, pal.glassLine, RoundedCornerShape(20.dp)).clickable(onClick = onIndex).padding(horizontal = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(q.surahsOnPage(page).firstOrNull()?.name() ?: "", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = pal.ink, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+            Text("  · " + q.pageLabel(page), fontSize = 15.sp, color = pal.muted, maxLines = 1)
         }
-        if (!wide) {
-            GlassPill(pal, Modifier.fillMaxWidth()) {
-                modes.forEach { (m, label) -> ModePill(pal, label, st.mode == m, Modifier.weight(1f)) { st.mode = m } }
-            }
+        SmallCircle(pal, onPlay, bg = pal.accent) {
+            if (playing) PauseGlyph(Color.White) else androidx.compose.material3.Icon(Icons.Filled.PlayArrow, t("Sesli oku"), tint = Color.White, modifier = Modifier.size(22.dp))
         }
+        SmallCircle(pal, { st.toggleBookmark(page) }) { androidx.compose.material3.Icon(Icons.Filled.Star, if (marked) t("Yer imini kaldır") else t("Yer imi ekle"), tint = if (marked) pal.gold else pal.ink, modifier = Modifier.size(20.dp)) }
+        SmallCircle(pal, onSettings) { androidx.compose.material3.Icon(Icons.Filled.Settings, t("Ayarlar"), tint = pal.ink, modifier = Modifier.size(20.dp)) }
     }
 }
 
-/** İnce sayfa çubuğu (menünün altında) */
+/** İnce sayfa çubuğu (üst sıranın altında) */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun BottomBar(q: Quran, st: AppState, pal: Palette, page: Int, wide: Boolean, step: Int, goTo: (Int) -> Unit) {
+private fun PageSlider(q: Quran, pal: Palette, page: Int, goTo: (Int) -> Unit) {
     var drag by remember { mutableStateOf<Float?>(null) }
-    val shown = drag?.toInt() ?: page
-    Row(
-        Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp).height(36.dp)
-            .clip(RoundedCornerShape(18.dp)).background(pal.glass).border(1.dp, pal.glassLine, RoundedCornerShape(18.dp)).padding(horizontal = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        // Kitap sağdan sola: sol ok = sonraki sayfa
-        Box(Modifier.size(30.dp).clip(CircleShape).clickable { goTo(page + step) }, contentAlignment = Alignment.Center) {
-            androidx.compose.material3.Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, t("Sonraki sayfa"), tint = pal.muted, modifier = Modifier.size(20.dp))
-        }
-        val range = 1f..q.pageCount.toFloat()
-        val v = drag ?: page.toFloat()
-        CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
-            Slider(
-                value = v,
-                onValueChange = { drag = it },
-                onValueChangeFinished = { drag?.let { goTo(it.toInt()) }; drag = null },
-                valueRange = range,
-                modifier = Modifier.weight(1f).height(30.dp),
-                thumb = {
-                    Box(Modifier.size(18.dp).shadow(2.dp, CircleShape).clip(CircleShape).background(Color.White))
-                },
-                track = {
-                    val frac = ((v - range.start) / (range.endInclusive - range.start)).coerceIn(0f, 1f)
-                    Box(Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)).background(pal.muted.copy(alpha = 0.3f))) {
-                        Box(Modifier.fillMaxWidth(frac).fillMaxHeight().clip(RoundedCornerShape(2.dp)).background(pal.accent))
-                    }
-                },
-            )
-        }
-        Text(q.pageLabel(shown), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = pal.ink, modifier = Modifier.width(44.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center, maxLines = 1)
-        Box(Modifier.size(30.dp).clip(CircleShape).clickable { goTo(page - step) }, contentAlignment = Alignment.Center) {
-            androidx.compose.material3.Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, t("Önceki sayfa"), tint = pal.muted, modifier = Modifier.size(20.dp))
-        }
+    val range = 1f..q.pageCount.toFloat()
+    val v = drag ?: page.toFloat()
+    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+        Slider(
+            value = v, onValueChange = { drag = it }, onValueChangeFinished = { drag?.let { goTo(it.toInt()) }; drag = null },
+            valueRange = range, modifier = Modifier.fillMaxWidth().widthIn(max = 600.dp).padding(horizontal = 28.dp).height(26.dp),
+            thumb = { Box(Modifier.size(16.dp).shadow(2.dp, CircleShape).clip(CircleShape).background(pal.accent).border(2.dp, Color.White, CircleShape)) },
+            track = {
+                val frac = ((v - range.start) / (range.endInclusive - range.start)).coerceIn(0f, 1f)
+                Box(Modifier.fillMaxWidth().height(3.dp).clip(RoundedCornerShape(2.dp)).background(pal.muted.copy(alpha = 0.3f))) {
+                    Box(Modifier.fillMaxWidth(frac).fillMaxHeight().background(pal.accent))
+                }
+            },
+        )
     }
 }
 

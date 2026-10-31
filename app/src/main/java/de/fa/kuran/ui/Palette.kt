@@ -22,6 +22,13 @@ data class Palette(
     val card: Color,
     val highlight: Color,
     val chip: Color,
+    // Apple tarzı alt sayfalar (ayarlar, fihrist)
+    val shBg: Color = Color(0xFFF3EEE3),
+    val shCard: Color = Color(0xFFFFFDF8),
+    val shAcc: Color = Color(0xFF8B6B2E),
+    val shSep: Color = Color(0xFFE5DDCD),
+    val shMuted: Color = Color(0xFF8A8172),
+    val shSeg: Color = Color(0xFFE9E2D4),
 )
 
 fun palette(name: String): Palette = when (name) {
@@ -31,6 +38,7 @@ fun palette(name: String): Palette = when (name) {
         cartouche = Color(0xFFFAF6EA), cartoucheInk = Color(0xFF1F3A35),
         glass = Color(0xE6FFFFFF), glassLine = Color(0xFFFFFFFF), accent = Color(0xFF0A66D8),
         red = Color(0xFFB3263A), card = Color(0xFFFFFFFF), highlight = Color(0x2E0A66D8), chip = Color(0x0F000000),
+        shBg = Color(0xFFF2F2F7), shCard = Color(0xFFFFFFFF), shAcc = Color(0xFF007AFF), shSep = Color(0xFFE3E3E8), shMuted = Color(0xFF6D6D72), shSeg = Color(0xFFE4E4E9),
     )
     "gece" -> Palette(
         app = Color(0xFF0F1113), paper = Color(0xFF1C1E21), ink = Color(0xFFECE6D6), muted = Color(0xFFA9A293),
@@ -38,6 +46,7 @@ fun palette(name: String): Palette = when (name) {
         cartouche = Color(0xFF2A2C2F), cartoucheInk = Color(0xFFE7D7A8),
         glass = Color(0xE62C2E32), glassLine = Color(0x1FFFFFFF), accent = Color(0xFF4C9BFF),
         red = Color(0xFFE0707F), card = Color(0xFF26282C), highlight = Color(0x554C9BFF), chip = Color(0x1FFFFFFF),
+        shBg = Color(0xFF1C1C1E), shCard = Color(0xFF2C2C2E), shAcc = Color(0xFFD8B66A), shSep = Color(0xFF3A3A3C), shMuted = Color(0xFF98989F), shSeg = Color(0xFF3A3A3C),
     )
     else -> Palette(
         app = Color(0xFFECE9F2), paper = Color(0xFFFBF6EA), ink = Color(0xFF1B1A17), muted = Color(0xFF5F584C),
@@ -67,6 +76,8 @@ object Fonts {
     val messiri = FontFamily(Font(R.font.el_messiri))
     val rakkas = FontFamily(Font(R.font.rakkas))
     val qahiri = FontFamily(Font(R.font.qahiri))
+    /** Meal ve açıklama yazısı */
+    val serif = FontFamily(Font(R.font.source_serif))
 
     /** Osman Taha neshi (Kral Fahd) – kişisel pakette */
     var taha: FontFamily? = null

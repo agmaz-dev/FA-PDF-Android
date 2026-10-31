@@ -77,6 +77,13 @@ object Audio {
     /** Okuma ekranı verir: âyetin seçili mealdeki metni ve dili */
     var mealOf: (Int) -> String = { "" }
     var mealLang: String = "tr"
+    /** Açıklama metni (varsa) ve şu an Açıklama sayfasında mıyız */
+    var ackOf: (Int) -> String? = { null }
+    var onAckPage: () -> Boolean = { false }
+    /** "Açıklama" seçeneği sadece Açıklama sayfasında geçerli; başka sayfada meal okunur */
+    private fun eff(): String = if (mode == "ack" && !onAckPage()) "meal" else mode
+    private fun textOnly() = eff() == "meal" || eff() == "ack"
+    private fun needTexts() = eff() != "ar"
 
     private var app: Context? = null
     private var mp: MediaPlayer? = null
@@ -111,7 +118,7 @@ object Audio {
         q = quran
         val ay = quran.ayahs[idx]
         basmalaFirst = ay.a == 1 && ay.s != 1 && ay.s != 9
-        if (mode == "meal") speakMeal(idx)
+        if (textOnly()) speakMeal(idx)
         else if (reciterById(reciter).surah) startSurah(idx)
         else start(idx)
     }
@@ -163,7 +170,7 @@ object Audio {
         val g = sFirst + k
         val cur = playing ?: return
         if (g != cur) {
-            if (mode == "ar_meal" && g == cur + 1) {
+            if (needTexts() && g == cur + 1) {
                 runCatching { p.pause() }
                 p.seekTo((t.start[k] - 120).coerceAtLeast(0))
                 speakMeal(cur, resume = g); return
@@ -176,7 +183,7 @@ object Audio {
         val quran = q ?: return
         val cur = playing ?: return
         val nextFirst = quran.ayahs.indexOfFirst { it.s == sNum + 1 }
-        if (mode == "ar_meal") { speakMeal(cur, resume = if (nextFirst >= 0) -nextFirst - 2 else -1); return }
+        if (needTexts()) { speakMeal(cur, resume = if (nextFirst >= 0) -nextFirst - 2 else -1); return }
         if (nextFirst < 0) { stop(); return }
         startSurah(nextFirst, fromStart = true)
     }
@@ -206,7 +213,7 @@ object Audio {
     private fun onArabicDone() {
         val cur = playing ?: return
         if (basmalaFirst) { basmalaFirst = false; start(cur); return }
-        if (mode == "ar_meal") speakMeal(cur) else next(cur)
+        if (needTexts()) speakMeal(cur) else next(cur)
     }
 
     /** resume: sûre kaydında meal bitince devam edilecek âyet (>=0: aynı dosyada, <=-2: sonraki sûre, -1: son) */
@@ -215,7 +222,8 @@ object Audio {
         if (resume == null) release()
         resumeTo = resume
         playing = idx; paused = false; loading = false; phase = "meal"
-        val text = mealOf(idx).replace(Regex("⁽\\d+⁾|\\(\\d+\\)|\\[\\d+\\]"), "").trim()
+        val meal = mealOf(idx).replace(Regex("⁽\\d+⁾|\\(\\d+\\)|\\[\\d+\\]"), "").trim()
+        val text = if (eff() == "ack") listOfNotNull(meal.takeIf { it.isNotBlank() }, ackOf(idx)).joinToString(" ") else meal
         if (text.isBlank()) { afterMeal(idx); return }
         Speech.speak(text, mealLang) { if (playing == idx && phase == "meal" && !paused) afterMeal(idx) }
     }
@@ -236,7 +244,7 @@ object Audio {
         if (n >= quran.ayahs.size) { stop(); return }
         val ay = quran.ayahs[n]
         basmalaFirst = ay.a == 1 && ay.s != 1 && ay.s != 9
-        if (mode == "meal") speakMeal(n) else if (reciterById(reciter).surah) startSurah(n, fromStart = ay.a == 1) else start(n)
+        if (textOnly()) speakMeal(n) else if (reciterById(reciter).surah) startSurah(n, fromStart = ay.a == 1) else start(n)
     }
 
     fun toggle() {

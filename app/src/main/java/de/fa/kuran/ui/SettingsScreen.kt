@@ -120,164 +120,192 @@ fun SettingsScreen(q: Quran, st: AppState, onBack: () -> Unit) {
         Triple("pack", t("Sayfa paketi"), Color(0xFF6D6A64)),
         Triple("about", t("Hakkında ve kaynaklar"), Color(0xFF9A948A)),
     )
-    val glyph = mapOf("view" to "ع", "meal" to "M", "lang" to "A", "audio" to "▶", "speech" to "♪", "pack" to "▣", "about" to "i")
-    val keywords = mapOf(
-        "view" to "tema gece beyaz krem yazı stil font hat hüsrev medine boyut büyüt arapça theme schrift größe خط مظهر",
-        "meal" to "meal tefsir hayrat elmalılı çeviri açıklama hâşiye übersetzung translation تفسير",
-        "lang" to "dil language sprache türkçe deutsch english arapça لغة",
-        "audio" to "ses okuyucu hafız indir dinle sudais afasi husari danış çollak audio rezitator reciter تلاوة قارئ",
-        "speech" to "meal sesi konuşma erkek kalın hız ses stimme speech voice صوت",
-        "pack" to "paket sayfa zip klasör paket pack paket حزمة",
-        "about" to "kaynak hakkında lisans quellen sources مصادر",
-    )
+    val glyph = mapOf("view" to "Aa", "meal" to "M", "lang" to "A", "audio" to "▶", "speech" to "♪", "pack" to "▣", "about" to "i")
     fun value(c: String): String = when (c) {
-        "view" -> (fonts.firstOrNull { it.key == st.font }?.title ?: "") + " · " + when (st.theme) { "gece" -> t("Gece"); "beyaz" -> t("Beyaz"); else -> t("Krem kâğıt") }
+        "view" -> (fonts.firstOrNull { it.key == st.font }?.title ?: "")
         "meal" -> mealInfo(st.meal).short
         "lang" -> LANGS.firstOrNull { it.first == L.lang }?.second ?: ""
         "audio" -> de.fa.kuran.data.reciterById(st.reciter).name.split(' ', '-').last()
-        "speech" -> when (st.audioMode) { "ar_meal" -> t("Arapça + meal"); "meal" -> t("Sadece meal"); else -> t("Sadece Arapça") }
+        "speech" -> when (st.audioMode) { "ar_meal" -> t("Arapça + meal"); "meal" -> t("Meal"); "ack" -> t("Açıklama"); else -> t("Arapça") }
         "pack" -> if (st.pack != null) t("Paket yüklü") else t("Paket seçilmedi")
         else -> ""
     }
-    var query by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf("") }
     var sel by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf<String?>(null) }
 
-    BoxWithConstraints(Modifier.fillMaxSize().background(pal.app).windowInsetsPadding(WindowInsets.safeDrawing)) {
+    BoxWithConstraints(Modifier.fillMaxSize().background(pal.shBg).windowInsetsPadding(WindowInsets.safeDrawing)) {
         val wide = maxWidth >= 600.dp
         val cur = sel ?: if (wide) "view" else null
         if (!wide && sel != null) androidx.activity.compose.BackHandler { sel = null }
+        val curName = cats.firstOrNull { it.first == cur }?.second ?: ""
 
         val list: @Composable (Modifier) -> Unit = { mod ->
-            Column(mod.verticalScroll(rememberScrollState()).padding(horizontal = 14.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                Row(Modifier.padding(top = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Glass(pal) { RoundIcon(pal, Icons.AutoMirrored.Filled.ArrowBack, t("Geri"), onClick = onBack) }
-                    Text(t("Ayarlar"), fontSize = 28.sp, fontWeight = FontWeight.Bold, color = pal.ink)
-                }
-                androidx.compose.foundation.text.BasicTextField(
-                    value = query, onValueChange = { query = it }, singleLine = true,
-                    textStyle = androidx.compose.ui.text.TextStyle(fontSize = 16.sp, color = pal.ink),
-                    modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(pal.card).padding(horizontal = 16.dp, vertical = 14.dp),
-                    decorationBox = { inner -> Box { if (query.isEmpty()) Text(t("Ayarlarda ara"), color = pal.muted, fontSize = 16.sp); inner() } },
-                )
-                val qn = query.trim().lowercase()
-                val shown = cats.filter { (k, name, _) -> qn.isEmpty() || name.lowercase().contains(qn) || keywords[k].orEmpty().contains(qn) }
-                val groups = listOf(listOf("view", "meal", "lang"), listOf("audio", "speech"), listOf("pack", "about"))
-                groups.forEach { g ->
-                    val items = shown.filter { it.first in g }
-                    if (items.isNotEmpty()) Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(pal.card)) {
-                        items.forEachIndexed { i, (k, name, color) ->
-                            val on = wide && k == cur
-                            Row(
-                                Modifier.fillMaxWidth().background(if (on) pal.accent else Color.Transparent).clickable { sel = k }.padding(horizontal = 14.dp, vertical = 12.dp),
-                                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            ) {
-                                Box(Modifier.size(34.dp).clip(RoundedCornerShape(9.dp)).background(color), contentAlignment = Alignment.Center) {
-                                    Text(glyph[k] ?: "", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                                }
-                                Text(name, color = if (on) Color.White else pal.ink, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, modifier = Modifier.weight(1f), maxLines = 1)
-                                Text(value(k), color = if (on) Color.White.copy(alpha = 0.85f) else pal.muted, fontSize = 13.sp, maxLines = 1)
-                                Text("›", color = if (on) Color.White else pal.muted, fontSize = 20.sp)
+            Column(mod.verticalScroll(rememberScrollState()).padding(horizontal = 16.dp)) {
+                IGroup(pal) {
+                    cats.forEachIndexed { i, (k, name, color) ->
+                        if (i > 0) ISep(pal, 58.dp)
+                        Row(
+                            Modifier.fillMaxWidth().background(if (wide && k == cur) pal.chip else Color.Transparent).clickable { sel = k }.padding(horizontal = 16.dp, vertical = 9.dp),
+                            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            Box(Modifier.size(30.dp).clip(RoundedCornerShape(7.dp)).background(color), contentAlignment = Alignment.Center) {
+                                Text(glyph[k] ?: "", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                             }
-                            if (i < items.lastIndex) Box(Modifier.fillMaxWidth().padding(start = 60.dp).height(1.dp).background(pal.chip))
+                            Text(name, color = pal.ink, fontSize = 17.sp, modifier = Modifier.weight(1f), maxLines = 1)
+                            Text(value(k), color = pal.shMuted, fontSize = 15.sp, maxLines = 1, modifier = Modifier.widthIn(max = 150.dp), overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                            Text("›", color = pal.shMuted, fontSize = 22.sp)
                         }
                     }
                 }
-                Spacer(Modifier.height(20.dp))
+                Spacer(Modifier.height(24.dp))
             }
         }
 
         val detail: @Composable (Modifier) -> Unit = { mod ->
-            Column(mod.verticalScroll(rememberScrollState()).padding(horizontal = 18.dp)) {
-                Row(Modifier.padding(vertical = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    if (!wide) Glass(pal) { RoundIcon(pal, Icons.AutoMirrored.Filled.ArrowBack, t("Geri"), onClick = { sel = null }) }
-                    Text(cats.firstOrNull { it.first == cur }?.second ?: "", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = pal.ink)
-                }
-                Column(Modifier.widthIn(max = 900.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(22.dp)) {
-                    if (cur == "view") Box(
-                        Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(pal.paper).border(2.dp, pal.gold, RoundedCornerShape(14.dp)).padding(horizontal = 16.dp, vertical = 10.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        val fam = Fonts.arabic(if (st.font == "hayrat") "amiri" else st.font)
-                        Text(
-                            androidx.compose.ui.text.buildAnnotatedString {
-                                append("ٱلْحَمْدُ "); val st0 = length; append("لِلَّهِ"); addStyle(androidx.compose.ui.text.SpanStyle(color = pal.red), st0, length); append(" رَبِّ ٱلْعَٰلَمِينَ ﴿٢﴾ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ ﴿٣﴾")
-                            },
-                            style = arabicStyle(fam, 26f * st.arZoom.coerceIn(0.7f, 1.6f), pal.ink, TextAlign.Center), maxLines = 2,
-                        )
-                    }
-                    if (cur == "lang") Section(pal, "Dil · Sprache · Language", t("Menülerin dili. Meal de bu dile geçer, aşağıdan ayrıca değiştirebilirsiniz.")) {
-                        Segmented(pal, LANGS, L.lang, Modifier.fillMaxWidth()) { st.lang = it; st.meal = defaultMealFor(it) }
-                    }
-                    if (cur == "pack") Section(pal, t("Sayfa paketi"), t("Kitap sayfaları, Hayrat meali, Elmalılı meali ve Risale-i Nur hâşiyeleri bu klasörde durur.")) {
-                        val pk = st.pack
-                        Row(
-                            Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(pal.card).padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        ) {
-                            Column(Modifier.weight(1f)) {
-                                Text(
-                                    when { st.packLoading -> t("Paket yükleniyor…"); pk != null -> t("Paket yüklü"); else -> t("Paket seçilmedi") },
-                                    fontWeight = FontWeight.Bold, color = pal.ink,
-                                )
-                                Text(pk?.summary ?: t("Paketi açtığınız klasörü seçin (içinde h000.webp … dosyaları olmalı)."), fontSize = 13.sp, color = pal.muted)
-                            }
-                            SmallButton(pal, t("Zip dosyalarını seç")) { zipPicker.launch(arrayOf("application/zip", "application/x-zip-compressed", "application/octet-stream")) }
+            Column(mod.verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).widthIn(max = 900.dp)) {
+                when (cur) {
+                    "view" -> {
+                        ILabel(pal, t("Tema"))
+                        ISeg(pal, listOf("krem" to t("Krem"), "beyaz" to t("Beyaz"), "gece" to t("Gece")), st.theme) { st.theme = it }
+                        ILabel(pal, t("Yazı büyüklüğü"))
+                        IGroup(pal) {
+                            ISlider(pal, t("Arapça"), st.arZoom, 0.6f..2.5f) { st.arZoom = it }
+                            ISep(pal)
+                            ISlider(pal, t("Meal"), st.mealZoom, 0.6f..2.2f) { st.mealZoom = it }
                         }
-                        st.importInfo?.let { Text(it, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = pal.accent) }
-                        Text(t("İndirdiğiniz Kuran-Parca zip dosyalarının hepsini birden seçin. Uygulama onları kendisi açar."), fontSize = 13.sp, color = pal.muted)
-                    }
-                    if (cur == "view") Section(pal, t("Arapça yazı stili"), t("Size en kolay okunan yazıyı seçin. Yazı tiplerinde Allah lafızları kırmızıdır.")) {
+                        IFoot(pal, t("Sayfada iki parmakla da büyütüp küçültebilirsiniz."))
+                        ILabel(pal, t("Arapça yazı şekli"))
                         val perRow = if (wide) 4 else 2
-                        fonts.chunked(perRow).forEach { row ->
-                            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                row.forEach { f ->
-                                    FontCard(pal, f, st.font == f.key, st.pack?.images?.size ?: 0, Modifier.weight(1f), onPick = { picker.launch(null) }) { st.font = f.key }
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            fonts.chunked(perRow).forEach { row ->
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    row.forEach { f -> FontCard(pal, f, st.font == f.key, st.pack?.images?.size ?: 0, Modifier.weight(1f), onPick = { picker.launch(null) }) { st.font = f.key } }
+                                    repeat(perRow - row.size) { Spacer(Modifier.weight(1f)) }
                                 }
-                                repeat(perRow - row.size) { Spacer(Modifier.weight(1f)) }
                             }
                         }
-                        Text(t("Kur'an işaretleri eksik olan yazılarda bu işaretler telefonun kendi yazısıyla gösterilir."), fontSize = 12.sp, color = pal.muted)
                     }
-                    if (cur == "audio") Section(pal, t("Sesli okuma"), t("Okuyucuyu seçin. Sesleri telefona indirirseniz internetsiz dinlersiniz; indirmezseniz internetten çalınır.")) {
-                        AudioSettings(q, st, pal)
+                    "meal" -> {
+                        ILabel(pal, t("Meal"))
+                        IGroup(pal) { MEALLER.forEachIndexed { i, m -> if (i > 0) ISep(pal); ICheck(pal, m.short, m.name, st.meal == m.id) { st.meal = m.id } } }
                     }
-                    if (cur == "speech") Section(pal, t("Meal sesi"), t("Okuyucu Arapçayı okuduktan sonra telefon o âyetin mealini sesli okur. Hangi meal seçiliyse o okunur.")) {
-                        SpeechSettings(st, pal)
+                    "lang" -> {
+                        ILabel(pal, t("Dil"))
+                        IGroup(pal) { LANGS.forEachIndexed { i, (k, n) -> if (i > 0) ISep(pal); ICheck(pal, n, null, L.lang == k) { st.lang = k; st.meal = defaultMealFor(k) } } }
+                        IFoot(pal, t("Menülerin dili. Meal de bu dile geçer, aşağıdan ayrıca değiştirebilirsiniz."))
                     }
-                    if (cur == "meal") Section(pal, t("Meal"), t("Sol sayfada gösterilecek meal.")) {
-                        MEALLER.forEach { m -> RadioRow(pal, m.name, st.meal == m.id) { st.meal = m.id } }
+                    "audio" -> AudioSettings(q, st, pal)
+                    "speech" -> SpeechSettings(st, pal)
+                    "pack" -> {
+                        ILabel(pal, t("Sayfa paketi"))
+                        IGroup(pal) {
+                            IRow(pal, t("Durum"), when { st.packLoading -> t("Paket yükleniyor…"); st.pack != null -> t("Paket yüklü"); else -> t("Paket seçilmedi") })
+                            ISep(pal)
+                            IAction(pal, t("Zip dosyalarını seç")) { zipPicker.launch(arrayOf("application/zip", "application/x-zip-compressed", "application/octet-stream")) }
+                        }
+                        st.importInfo?.let { IFoot(pal, it) }
+                        IFoot(pal, t("Kitap sayfaları, Hayrat meali ve tevâfuk kırmızı kelimeleri bu pakettedir. İndirdiğiniz Kuran-Parca zip dosyalarının hepsini birden seçin."))
                     }
-                    if (cur == "meal") Section(pal, t("Açıklama"), t("Âyete dokunup \"Açıklama\"yı açınca Risale-i Nur hâşiyeleri gösterilir (Hayrat baskısının hâşiye bölümünden).")) {}
-                    if (cur == "view") Section(pal, t("Tema"), null) {
-                        Segmented(pal, listOf("krem" to t("Krem kâğıt"), "beyaz" to t("Beyaz"), "gece" to t("Gece")), st.theme, Modifier.fillMaxWidth()) { st.theme = it }
+                    else -> {
+                        ILabel(pal, t("Hakkında ve kaynaklar"))
+                        IGroup(pal) {
+                            IRow(pal, "Kur'an metni", null, "Tanzil / alquran.cloud (Osmanî hat)"); ISep(pal)
+                            IRow(pal, t("Mealler"), null, "Elmalılı, Gölpınarlı, Bubenheim, Saheeh, Müyesser, Diyanet"); ISep(pal)
+                            IRow(pal, "Feridun A.", null, "Uzun Meal ve Kur'an Açıklamaları"); ISep(pal)
+                            IRow(pal, t("Sesler"), null, "EveryAyah, archive.org (İshak Danış, Fatih Çollak)"); ISep(pal)
+                            IRow(pal, t("Kişisel paket"), null, "Hayrat Neşriyat sayfaları ve meali (kişisel kullanım)")
+                        }
                     }
-                    if (cur == "view") Section(pal, t("Yazı boyutu"), t("Okurken iki parmakla da büyütüp küçültebilirsiniz.")) {
-                        SizeSlider(pal, t("Arapça"), st.arZoom, 0.6f..2.5f) { st.arZoom = it }
-                        SizeSlider(pal, t("Meal ve açıklama"), st.mealZoom, 0.6f..2.2f) { st.mealZoom = it }
-                    }
-                    if (cur == "about") Section(pal, t("Kaynaklar"), null) {
-                        Text(
-                            "Arapça metin (yazı tipleri için): Tanzil Uthmani metni. Kitap sayfaları, Hayrat meali ve hâşiyeler: Kur'ân-ı Kerîm ve Muhtasar Kelime Meâli, Hayrat Neşriyat (kişisel kullanım). " +
-                                "Hayrat meali ve hâşiyeler yazı tanıma ile çıkarılıp otomatik düzeltildi; hata görürseniz bildirin. " +
-                                "Yazı tipleri: Amiri Quran, Scheherazade New, Noto Naskh Arabic (SIL Open Font License).",
-                            fontSize = 13.sp, color = pal.muted, lineHeight = 19.sp,
-                        )
-                    }
-                    Spacer(Modifier.height(30.dp))
-
-                    Spacer(Modifier.height(24.dp))
                 }
+                Spacer(Modifier.height(30.dp))
             }
         }
 
-        if (wide) {
-            Row(Modifier.fillMaxSize()) {
-                Box(Modifier.width(340.dp).fillMaxHeight().background(pal.chip.copy(alpha = 0.35f))) { list(Modifier.fillMaxSize()) }
-                Box(Modifier.fillMaxHeight().width(1.dp).background(pal.chip))
-                detail(Modifier.weight(1f).fillMaxHeight())
+        Column(Modifier.fillMaxSize()) {
+            // Üst çubuk: ‹ Ayarlar · başlık · Bitti
+            Row(Modifier.fillMaxWidth().height(50.dp).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.weight(1f)) {
+                    if (!wide && sel != null) Text("‹ " + t("Ayarlar"), color = pal.shAcc, fontSize = 17.sp, maxLines = 1, modifier = Modifier.clickable { sel = null })
+                }
+                Text(if (!wide && sel != null) curName else t("Ayarlar"), color = pal.ink, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 220.dp))
+                Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
+                    Text(t("Bitti"), color = pal.shAcc, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.clickable { onBack() })
+                }
             }
-        } else {
-            if (cur == null) list(Modifier.fillMaxSize()) else detail(Modifier.fillMaxSize())
+            if (wide) {
+                Row(Modifier.fillMaxSize()) {
+                    list(Modifier.width(360.dp).fillMaxHeight())
+                    detail(Modifier.weight(1f).fillMaxHeight())
+                }
+            } else {
+                if (cur == null) list(Modifier.fillMaxSize()) else detail(Modifier.fillMaxSize())
+            }
+        }
+    }
+}
+
+// ---- Apple tarzı satırlar ----
+@Composable
+fun ILabel(pal: Palette, text: String) {
+    Text(text.uppercase(java.util.Locale(L.lang)), color = pal.shMuted, fontSize = 13.sp, letterSpacing = 0.3.sp, modifier = Modifier.padding(start = 16.dp, top = 18.dp, bottom = 6.dp))
+}
+@Composable
+fun IFoot(pal: Palette, text: String) {
+    Text(text, color = pal.shMuted, fontSize = 13.sp, lineHeight = 18.sp, modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 6.dp))
+}
+@Composable
+fun IGroup(pal: Palette, content: @Composable ColumnScope.() -> Unit) {
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(pal.shCard), content = content)
+}
+@Composable
+fun ISep(pal: Palette, start: androidx.compose.ui.unit.Dp = 16.dp) {
+    Box(Modifier.fillMaxWidth().padding(start = start).height(0.6.dp).background(pal.shSep))
+}
+@Composable
+fun ICheck(pal: Palette, title: String, sub: String?, on: Boolean, enabled: Boolean = true, onClick: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().clickable(enabled = enabled, onClick = onClick).heightIn(min = 46.dp).padding(horizontal = 16.dp, vertical = 9.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(title, color = if (enabled) pal.ink else pal.shMuted, fontSize = 17.sp)
+            if (sub != null) Text(sub, color = pal.shMuted, fontSize = 13.sp)
+        }
+        if (on) Text("✓", color = pal.shAcc, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+    }
+}
+@Composable
+fun IRow(pal: Palette, title: String, value: String?, sub: String? = null) {
+    Row(Modifier.fillMaxWidth().heightIn(min = 46.dp).padding(horizontal = 16.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(title, color = pal.ink, fontSize = 17.sp)
+            if (sub != null) Text(sub, color = pal.shMuted, fontSize = 13.sp)
+        }
+        if (value != null) Text(value, color = pal.shMuted, fontSize = 15.sp)
+    }
+}
+@Composable
+fun IAction(pal: Palette, title: String, red: Boolean = false, enabled: Boolean = true, onClick: () -> Unit) {
+    Text(
+        title, color = if (!enabled) pal.shMuted else if (red) Color(0xFFD33A2C) else pal.shAcc, fontSize = 17.sp,
+        modifier = Modifier.fillMaxWidth().clickable(enabled = enabled, onClick = onClick).padding(horizontal = 16.dp, vertical = 12.dp),
+    )
+}
+@Composable
+fun ISlider(pal: Palette, label: String, value: Float, range: ClosedFloatingPointRange<Float>, onChange: (Float) -> Unit) {
+    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text(label, color = pal.ink, fontSize = 17.sp, modifier = Modifier.widthIn(min = 90.dp))
+        Slider(value = value, onValueChange = onChange, valueRange = range, colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = pal.shAcc, inactiveTrackColor = pal.shSep), modifier = Modifier.weight(1f))
+        Text("${(value * 100).toInt()}%", color = pal.shMuted, fontSize = 15.sp, modifier = Modifier.widthIn(min = 44.dp), textAlign = TextAlign.End)
+    }
+}
+@Composable
+fun ISeg(pal: Palette, items: List<Pair<String, String>>, value: String, onPick: (String) -> Unit) {
+    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(9.dp)).background(pal.shSeg).padding(2.dp)) {
+        items.forEach { (k, n) ->
+            Box(
+                Modifier.weight(1f).height(32.dp).clip(RoundedCornerShape(7.dp)).background(if (k == value) pal.shCard else Color.Transparent).clickable { onPick(k) },
+                contentAlignment = Alignment.Center,
+            ) { Text(n, color = pal.ink, fontSize = 14.sp, fontWeight = FontWeight.Medium, maxLines = 1) }
         }
     }
 }
@@ -317,8 +345,8 @@ private fun FontCard(pal: Palette, f: FontOpt, sel: Boolean, scanCount: Int, mod
     Column(
         modifier
             .clip(RoundedCornerShape(16.dp))
-            .background(pal.card)
-            .border(2.5.dp, if (sel) pal.accent else Color.Transparent, RoundedCornerShape(16.dp))
+            .background(pal.shCard)
+            .border(2.5.dp, if (sel) pal.shAcc else Color.Transparent, RoundedCornerShape(16.dp))
             .clickable(onClick = { if (f.family == null && scanCount == 0) onPick() else onSelect() })
             .padding(horizontal = 10.dp, vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -351,52 +379,35 @@ private fun AudioSettings(q: de.fa.kuran.data.Quran, st: AppState, pal: Palette)
     val ver = de.fa.kuran.data.Downloads.version
     val active = de.fa.kuran.data.Downloads.active
     val curSurah = q.surahsOnPage(st.lastPage).firstOrNull()?.n ?: 1
+    ILabel(pal, t("Okuyucu"))
     de.fa.kuran.data.RECITERS.forEach { r ->
         val sel = st.reciter == r.id
         val cnt = remember(ver, active, de.fa.kuran.data.Downloads.done / 50) { de.fa.kuran.data.Downloads.count(r) }
-        Column(
-            Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(pal.card).clickable { st.reciter = r.id }.padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Radio(pal, sel)
-                Column(Modifier.weight(1f)) {
-                    Text(r.name, color = pal.ink, fontWeight = FontWeight.SemiBold)
-                    val all = if (r.surah) 114 else q.ayahs.size
-                    Text(
-                        if (cnt >= all) t("Tamamı indirildi") else if (cnt > 0) (if (r.surah) t("%1 / %2 sûre indirildi", cnt, all) else t("%1 / %2 âyet indirildi", cnt, all)) else t("İnternetten çalınır · tamamı yaklaşık %1 MB", r.approxMb),
-                        fontSize = 12.sp, color = pal.muted,
-                    )
-                    if (r.surah) {
-                        val miss = remember(r.id) { de.fa.kuran.data.Audio.missing(r) }
-                        if (miss.isNotEmpty()) Text(
-                            t("Kaydı olmayan sûreler (%1): %2 – bunları İshak Danış okur.", miss.size, miss.joinToString(", ") { q.surahs[it - 1].name() }),
-                            fontSize = 12.sp, color = pal.red,
-                        )
+        val all = if (r.surah) 114 else q.ayahs.size
+        val stt = if (cnt >= all) t("Tamamı indirildi") else if (cnt > 0) (if (r.surah) t("%1 / %2 sûre indirildi", cnt, all) else t("%1 / %2 âyet indirildi", cnt, all)) else t("İnternetten çalınır · tamamı yaklaşık %1 MB", r.approxMb)
+        IGroup(pal) {
+            ICheck(pal, r.name, (if (r.surah) t("Türk hafız · sûre sûre") + " · " else "") + stt, sel) { st.reciter = r.id }
+            if (sel) {
+                if (active == r.id) {
+                    val d = de.fa.kuran.data.Downloads.done; val tot = de.fa.kuran.data.Downloads.total
+                    ISep(pal)
+                    Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
+                        androidx.compose.material3.LinearProgressIndicator(progress = { if (tot > 0) d.toFloat() / tot else 0f }, modifier = Modifier.fillMaxWidth(), color = pal.shAcc)
+                        Text(t("İndiriliyor… %1 / %2", d, tot), fontSize = 13.sp, color = pal.shMuted, modifier = Modifier.padding(top = 6.dp))
                     }
+                    ISep(pal); IAction(pal, t("Durdur"), red = true) { de.fa.kuran.data.Downloads.cancel() }
+                } else {
+                    ISep(pal); IAction(pal, t("Bu sûreyi indir"), enabled = active == null) { de.fa.kuran.data.Downloads.start(r, de.fa.kuran.data.Downloads.itemsFor(q, r, curSurah)) }
+                    ISep(pal); IAction(pal, t("Tümünü indir"), enabled = active == null) { de.fa.kuran.data.Downloads.start(r, de.fa.kuran.data.Downloads.itemsFor(q, r, null)) }
+                    if (cnt > 0) { ISep(pal); IAction(pal, t("Sil"), red = true) { de.fa.kuran.data.Downloads.delete(r) } }
                 }
-            }
-            if (active == r.id) {
-                val d = de.fa.kuran.data.Downloads.done; val tot = de.fa.kuran.data.Downloads.total
-                androidx.compose.material3.LinearProgressIndicator(
-                    progress = { if (tot > 0) d.toFloat() / tot else 0f },
-                    modifier = Modifier.fillMaxWidth(), color = pal.accent,
-                )
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(t("İndiriliyor… %1 / %2", d, tot), fontSize = 12.sp, color = pal.muted, modifier = Modifier.weight(1f))
-                    SmallButton(pal, t("Durdur")) { de.fa.kuran.data.Downloads.cancel() }
-                }
-            } else {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    SmallButton(pal, t("Bu sûreyi indir"), enabled = active == null) { st.reciter = r.id; de.fa.kuran.data.Downloads.start(r, de.fa.kuran.data.Downloads.itemsFor(q, r, curSurah)) }
-                    SmallButton(pal, t("Tümünü indir"), enabled = active == null) { st.reciter = r.id; de.fa.kuran.data.Downloads.start(r, de.fa.kuran.data.Downloads.itemsFor(q, r, null)) }
-                    if (cnt > 0) SmallButton(pal, t("Sil")) { de.fa.kuran.data.Downloads.delete(r) }
-                }
-                if (de.fa.kuran.data.Downloads.failed > 0 && de.fa.kuran.data.Downloads.total > 0 && sel)
-                    Text(t("%1 dosya indirilemedi. İnternet bağlantısını kontrol edip tekrar deneyin.", de.fa.kuran.data.Downloads.failed), fontSize = 12.sp, color = pal.red)
             }
         }
+        if (sel && de.fa.kuran.data.Downloads.failed > 0 && de.fa.kuran.data.Downloads.total > 0)
+            IFoot(pal, t("%1 dosya indirilemedi. İnternet bağlantısını kontrol edip tekrar deneyin.", de.fa.kuran.data.Downloads.failed))
+        Spacer(Modifier.height(8.dp))
     }
+    IFoot(pal, t("İndirilen sesler telefonda kalır ve internetsiz çalınır. Kaynaklar: EveryAyah, archive.org."))
 }
 
 
@@ -405,25 +416,28 @@ private fun SpeechSettings(st: AppState, pal: Palette) {
     val sp = de.fa.kuran.data.Speech
     val lang = mealSpeechLang(st.meal)
     androidx.compose.runtime.LaunchedEffect(sp.ready, lang) { if (sp.ready) sp.loadVoices(lang) }
-    Segmented(pal, listOf("ar" to t("Sadece Arapça"), "ar_meal" to t("Arapça + meal"), "meal" to t("Sadece meal")), st.audioMode, Modifier.fillMaxWidth()) { st.audioMode = it }
-    if (!sp.ready) {
-        Text(t("Telefonun konuşma motoru hazırlanıyor…"), fontSize = 13.sp, color = pal.muted)
-    } else if (sp.voices.isEmpty()) {
-        Text(t("Bu dil için telefonda ses yüklü değil. Telefon Ayarları → Genel yönetim → Metin okuma'dan Google'ın sesini indirebilirsiniz."), fontSize = 13.sp, color = pal.red)
-    } else {
-        val current = sp.voiceName?.takeIf { n -> sp.voices.any { it.name == n } } ?: sp.voices.firstOrNull { it.male }?.name ?: sp.voices.first().name
-        sp.voices.forEach { v ->
-            Row(
-                Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(pal.card).clickable { sp.voiceName = v.name; st.saveSpeech() }.padding(14.dp),
-                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                Radio(pal, v.name == current)
-                Text(t(v.label), color = pal.ink, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                SmallButton(pal, "▶") { sp.voiceName = v.name; st.saveSpeech(); sp.sample(lang) }
-            }
+    ILabel(pal, t("Ne okunsun?"))
+    IGroup(pal) {
+        listOf("ar" to t("Arapça"), "ar_meal" to t("Arapça + meal"), "meal" to t("Meal"), "ack" to t("Açıklama")).forEachIndexed { i, (k, n) ->
+            if (i > 0) ISep(pal); ICheck(pal, n, null, st.audioMode == k) { st.audioMode = k }
         }
     }
-    SizeSlider(pal, t("Ses kalınlığı"), 2f - sp.pitch, 0.9f..1.6f) { sp.pitch = 2f - it; st.saveSpeech() }
-    SizeSlider(pal, t("Konuşma hızı"), sp.rate, 0.6f..1.4f) { sp.rate = it; st.saveSpeech() }
-    SmallButton(pal, "▶ " + t("Örnek dinle")) { sp.sample(lang) }
+    IFoot(pal, t("Açıklama seçeneği sadece Açıklama sayfasında geçerlidir: Arapça okunmaz, her âyette önce meal, sonra açıklama okunur. Meal ve Mushaf sayfasında bu seçenekle meal okunur."))
+    ILabel(pal, t("Ses"))
+    IGroup(pal) {
+        if (!sp.ready) IRow(pal, t("Telefonun konuşma motoru hazırlanıyor…"), null)
+        else if (sp.voices.isEmpty()) IRow(pal, t("Bu dil için telefonda ses yüklü değil."), null, t("Telefon Ayarları → Genel yönetim → Metin okuma'dan Google'ın sesini indirebilirsiniz."))
+        else {
+            val current = sp.voiceName?.takeIf { n -> sp.voices.any { it.name == n } } ?: sp.voices.firstOrNull { it.male }?.name ?: sp.voices.first().name
+            sp.voices.forEachIndexed { i, v -> if (i > 0) ISep(pal); ICheck(pal, t(v.label), t("Google sesi"), v.name == current) { sp.voiceName = v.name; st.saveSpeech(); sp.sample(lang) } }
+        }
+    }
+    Spacer(Modifier.height(8.dp))
+    IGroup(pal) {
+        ISlider(pal, t("Ses kalınlığı"), 2f - sp.pitch, 0.9f..1.6f) { sp.pitch = 2f - it; st.saveSpeech() }
+        ISep(pal)
+        ISlider(pal, t("Konuşma hızı"), sp.rate, 0.6f..1.4f) { sp.rate = it; st.saveSpeech() }
+        ISep(pal)
+        IAction(pal, "▶ " + t("Örnek dinle")) { sp.sample(lang) }
+    }
 }

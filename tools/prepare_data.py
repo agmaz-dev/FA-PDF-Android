@@ -165,6 +165,7 @@ def main():
         "el_messiri": "ofl/elmessiri",
         "rakkas": "ofl/rakkas",
         "qahiri": "ofl/qahiri",
+        "source_serif": "ofl/sourceserif4",
     }
     for key, d in fonts.items():
         items = get_json(f"https://api.github.com/repos/google/fonts/contents/{d}", gh)
