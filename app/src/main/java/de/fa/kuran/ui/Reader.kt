@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
@@ -249,6 +250,20 @@ private fun AckSpread(q: Quran, idx: Int, st: AppState, pal: Palette, wide: Bool
         Spine(pal)
         MushafPage(q, q.pageOf(idx), st, pal, Side.RIGHT, hl, select, toggle, Modifier.weight(1f).fillMaxHeight())
     } else AciklamaAyah(q, idx, st, pal, Side.SINGLE, playing, toggle, Modifier.fillMaxSize())
+}
+
+@Composable
+private fun Spread(q: Quran, page: Int, st: AppState, pal: Palette, wide: Boolean, selected: Int?, select: (Int) -> Unit, toggle: () -> Unit) {
+    Row(Modifier.fillMaxSize().padding(horizontal = if (wide) 6.dp else 0.dp, vertical = if (wide) 6.dp else 0.dp)) {
+        if (wide && st.mode == ReadMode.MEAL) {
+            MealPage(q, page, st, pal, Side.LEFT, selected, select, toggle, Modifier.weight(1f).fillMaxHeight())
+            Spine(pal)
+            MushafPage(q, page, st, pal, Side.RIGHT, selected, select, toggle, Modifier.weight(1f).fillMaxHeight())
+        } else when (st.mode) {
+            ReadMode.MEAL -> MealPage(q, page, st, pal, Side.SINGLE, selected, select, toggle, Modifier.fillMaxSize())
+            else -> MushafPage(q, page, st, pal, Side.SINGLE, selected, select, toggle, Modifier.fillMaxSize())
+        }
+    }
 }
 
 @Composable
