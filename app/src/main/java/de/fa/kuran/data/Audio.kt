@@ -109,6 +109,8 @@ object Audio {
     private var sNum = 0
     private var sFirst = 0
     private var sT: Timing.T? = null
+    /** atladıktan hemen sonra konum bir an eski değeri verir; bu sürede âyet takibi beklesin */
+    private var guardUntil = 0L
     private val h = android.os.Handler(android.os.Looper.getMainLooper())
     private val tick = object : Runnable {
         override fun run() { onTick(); if (mp != null) h.postDelayed(this, 80) }
@@ -134,6 +136,7 @@ object Audio {
         val seek = if (fromStart || ay.a == 1 || t == null) 0 else (t.start[ay.a - 1] - 150).coerceAtLeast(0)
         val cur = mp
         if (cur != null && sRec?.id == r.id && sNum == ay.s && !loading) {
+            guardUntil = android.os.SystemClock.uptimeMillis() + 700
             cur.seekTo(seek); if (!cur.isPlaying) cur.start(); h.removeCallbacks(tick); h.post(tick); return
         }
         release()
@@ -149,6 +152,7 @@ object Audio {
         }
         p.setOnPreparedListener {
             loading = false
+            guardUntil = android.os.SystemClock.uptimeMillis() + 700
             if (seek > 0) it.seekTo(seek)
             if (!paused) it.start()
             h.removeCallbacks(tick); h.post(tick)
@@ -164,6 +168,7 @@ object Audio {
         val p = mp ?: return
         val t = sT ?: return
         if (loading || phase != "ar" || paused) return
+        if (android.os.SystemClock.uptimeMillis() < guardUntil) return
         val pos = runCatching { p.currentPosition }.getOrDefault(0)
         var k = 0
         while (k + 1 < t.start.size && pos >= t.start[k + 1] - 120) k++
