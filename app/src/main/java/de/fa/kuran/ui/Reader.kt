@@ -245,11 +245,7 @@ private fun ReaderBody(q: Quran, st: AppState, wide: Boolean, twoUp: Boolean, on
 
 @Composable
 private fun AckSpread(q: Quran, idx: Int, st: AppState, pal: Palette, wide: Boolean, playing: Boolean, hl: Int?, select: (Int) -> Unit, toggle: () -> Unit) {
-    if (wide) Row(Modifier.fillMaxSize().padding(6.dp)) {
-        AciklamaAyah(q, idx, st, pal, Side.LEFT, playing, toggle, Modifier.weight(1f).fillMaxHeight())
-        Spine(pal)
-        MushafPage(q, q.pageOf(idx), st, pal, Side.RIGHT, hl, select, toggle, Modifier.weight(1f).fillMaxHeight())
-    } else AciklamaAyah(q, idx, st, pal, Side.SINGLE, playing, toggle, Modifier.fillMaxSize())
+    AciklamaAyah(q, idx, st, pal, Side.SINGLE, playing, toggle, Modifier.fillMaxSize())
 }
 
 @Composable
