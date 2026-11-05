@@ -20,7 +20,7 @@ const MEALLER = [
   {id:'elmalili', short:'Elmalılı', name:'Elmalılı Hamdi Yazır Meâli', file:'tr.yazir'},
   {id:'tr.diyanet', short:'Diyanet', name:'Diyanet İşleri Başkanlığı Meâli (Altuntaş – Şahin)', file:'tr.diyanet'},
   {id:'tr.golpinarli', short:'Gölpınarlı', name:'Abdülbâki Gölpınarlı Meâli', file:'tr.golpinarli'},
-  {id:'feridun', short:'Feridun A.', name:'Feridun A. – Uzun Meal', file:'feridun'},
+  {id:'feridun', short:'Feridun Agmaz', name:'Feridun Agmaz – Uzun Meal', file:'feridun'},
   {id:'de.bubenheim', short:'Bubenheim', name:'Deutsch – Bubenheim & Elyas', file:'de.bubenheim'},
   {id:'en.sahih', short:'Saheeh Intl.', name:'English – Saheeh International', file:'en.sahih'},
   {id:'ar.muyassar', short:'الميسر', name:'العربية – التفسير الميسر', file:'ar.muyassar'},
@@ -190,13 +190,13 @@ function aciklamaAyah(i) {
   if (l) h += `<div class="ml"><b>${l.label}- </b>${mealHtml(l.text)}</div>`;
   const A = ACK && ACK[s] && ACK[s].ayat[a];
   if (A) {
-    h += `<div class="ex"><div class="et">${esc(A.t)}</div>`;
+    h += `<div class="ex">` + (a === 1 && ACK[s].intro ? `<div class="et">${t('Sûre hakkında')}</div>` + ACK[s].intro.split('\n').map(x => `<p class="ep">${esc(x)}</p>`).join('') + `<div class="et">${t('Açıklama')}</div>` : (A.t ? `<div class="et">${esc(A.t)}</div>` : ''));
     if (A.ar && A.ar.length) h += `<div class="ek">${A.ar.map(esc).join('<span>/</span>')}</div>`;
     h += A.p.map(x => `<p class="ep">${esc(x)}</p>`).join('') + '</div>';
   } else if (ACK) h += `<div class="none">${t('Bu sûrenin açıklaması henüz hazırlanmadı.')}</div>`;
   h += '</div>';
   return `<div class="paper ac"><h6>${t('AÇIKLAMA')}</h6><h2>${t("Kur'an Açıklamaları")}</h2>
-    <div class="src">${t('Arapça anahtar ifadeler, kelime anlamları ve âyet açıklamaları')}</div><div class="rule" style="margin-top:8px"></div>
+    <div class="src">Feridun Agmaz</div><div class="rule" style="margin-top:8px"></div>
     <div class="fit"><div class="body">${h}</div></div></div>`;
 }
 const wide = () => innerWidth >= 760 && innerWidth > innerHeight;
@@ -463,7 +463,7 @@ function drawSettings() {
     h += FT(t('Hayrat meali ve tevâfuk kırmızı kelimeleri kişisel izinle kullanıldığı için uygulamanın içinde değildir. Size verilen Kuran-Kisisel.json dosyasını bir kere aktarın; telefonda saklanır ve internetsiz çalışır.'));
   } else {
     const R = (a, b) => `<div class="irow"><span class="itx"><span>${a}</span><small>${b}</small></span></div>`;
-    h += LBL(t('Hakkında ve kaynaklar')) + GRP(R("Kur'an metni", 'Tanzil / alquran.cloud (Osmanî hat)') + R('Mealler', 'Elmalılı, Gölpınarlı, Bubenheim, Saheeh, Müyesser: alquran.cloud') + R("Feridun A.", "Uzun Meal ve Kur'an Açıklamaları") +
+    h += LBL(t('Hakkında ve kaynaklar')) + GRP(R("Kur'an metni", 'Tanzil / alquran.cloud (Osmanî hat)') + R('Mealler', 'Elmalılı, Gölpınarlı, Bubenheim, Saheeh, Müyesser: alquran.cloud') + R("Feridun Agmaz", "Uzun Meal ve Kur'an Açıklamaları") +
       R('Sesler', 'EveryAyah (Arap kâriler), archive.org (İshak Danış, Fatih Çollak), Piper (doğal Türkçe ses)') + R('Yazı tipleri', "Kral Fahd Kur'an Matbaası, Google Fonts (OFL)") + R('Diyanet', 'Diyanet İşleri Başkanlığı Meâli (Altuntaş – Şahin)') + R('Kişisel dosya', 'Hayrat meali, kırmızı kelimeler'));
   }
   $('#setD').innerHTML = h;
@@ -665,7 +665,7 @@ const Au = {
     const meal = () => mealPlain(i).replace(/⁽\d+⁾|\(\d+\)|\[\d+\]/g, '').trim();
     const md = this.mode();
     if (md === 'ar_meal' || md === 'meal') { const m = meal(); if (m) list.push(m); }
-    if (md === 'ack') { const m = meal(); if (m) list.push(m); const [s, a] = ay(i); const A = ACK && ACK[s] && ACK[s].ayat[a]; if (A) list.push(A.t + '. ' + A.p.join(' ')); }
+    if (md === 'ack') { const m = meal(); if (m) list.push(m); const [s, a] = ay(i); const A = ACK && ACK[s] && ACK[s].ayat[a]; if (A) list.push((A.t ? A.t + '. ' : '') + A.p.join(' ')); }
     if (!list.length) { then(); return; }
     this.set(i, 'meal'); const tok = this.ttok = {};
     Sp.speak(list.join(' '), () => { if (tok === this.ttok && !this.paused) { this.phase = 'ar'; then(); } });
