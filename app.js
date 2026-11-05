@@ -202,7 +202,7 @@ function aciklamaAyah(i) {
 const wide = () => innerWidth >= 760 && innerWidth > innerHeight;
 const AM = () => st.mode === 'aciklama';
 function slotHtml(k) {
-  if (AM()) { const i = k - 1; return aciklamaAyah(i) + (wide() ? mushafPage(ay(i)[2]) : ''); }
+  if (AM()) { const i = k - 1; return aciklamaAyah(i); }
   if (st.mode === 'mushaf') return mushafPage(k);
   return mealPage(k) + (wide() ? mushafPage(k) : '');
 }
