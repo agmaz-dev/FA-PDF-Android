@@ -232,7 +232,7 @@ val MEALLER = listOf(
     MealInfo2("elmalili", "Elmalılı", "Elmalılı Hamdi Yazır Meâli"),
     MealInfo2("tr.diyanet", "Diyanet", "Diyanet İşleri Başkanlığı Meâli (Altuntaş – Şahin)"),
     MealInfo2("tr.golpinarli", "Gölpınarlı", "Abdülbâki Gölpınarlı Meâli"),
-    MealInfo2("feridun", "Feridun A.", "Feridun A. – Uzun Meal"),
+    MealInfo2("feridun", "Feridun Agmaz", "Feridun Agmaz – Uzun Meal"),
     MealInfo2("de.bubenheim", "Bubenheim", "Deutsch – Bubenheim & Elyas"),
     MealInfo2("en.sahih", "Saheeh Intl.", "English – Saheeh International"),
     MealInfo2("ar.muyassar", "الميسر", "العربية – التفسير الميسر"),

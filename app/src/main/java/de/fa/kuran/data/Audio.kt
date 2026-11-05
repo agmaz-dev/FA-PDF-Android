@@ -143,12 +143,41 @@ object Audio {
         sRec = r; sNum = ay.s; sT = t; sFirst = quran.ayahs.indexOfFirst { it.s == ay.s }
         loading = true
         val f = surahFile(r, ay.s)
+        val my = ++tok
+        if (f.exists() && f.length() > 0) { openSurah(f.path, seek, my); return }
+        main.launch {
+            val u = withContext(Dispatchers.IO) { resolve(surahUrl(r, ay.s)) }
+            if (my != tok) return@launch
+            if (u == null) { error = "net: ${lastErr ?: "?"}"; playing = null; loading = false; return@launch }
+            openSurah(u, seek, my)
+        }
+    }
+
+    /** Yönlendirmeleri (archive.org) önceden çözer */
+    private fun resolve(u: String): String? = try {
+        var url = u; var n = 0; var out: String? = null
+        while (n++ < 6) {
+            val c = URL(url).openConnection() as HttpURLConnection
+            c.connectTimeout = 15000; c.readTimeout = 15000; c.instanceFollowRedirects = false
+            c.requestMethod = "HEAD"; c.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android) KuranKerim")
+            val code = c.responseCode
+            if (code in 300..399) { url = URL(URL(url), c.getHeaderField("Location")).toString(); c.disconnect(); continue }
+            c.disconnect()
+            if (code in 200..299) out = url else lastErr = "HTTP $code"
+            break
+        }
+        out
+    } catch (e: Exception) { lastErr = e.javaClass.simpleName + (e.message?.let { ": " + it.take(60) } ?: ""); null }
+
+    private fun openSurah(src: String, seek: Int, my: Int) {
+        if (my != tok) return
         val p = MediaPlayer()
         p.setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build())
         try {
-            if (f.exists() && f.length() > 0) p.setDataSource(f.path) else p.setDataSource(surahUrl(r, ay.s))
+            if (src.startsWith("http")) p.setDataSource(app!!, android.net.Uri.parse(src), mapOf("User-Agent" to "Mozilla/5.0 (Linux; Android) KuranKerim"))
+            else p.setDataSource(src)
         } catch (e: Exception) {
-            error = "net"; playing = null; loading = false; p.release(); return
+            error = "src: ${e.javaClass.simpleName}"; playing = null; loading = false; p.release(); return
         }
         p.setOnPreparedListener {
             loading = false
@@ -158,7 +187,7 @@ object Audio {
             h.removeCallbacks(tick); h.post(tick)
         }
         p.setOnCompletionListener { onSurahDone() }
-        p.setOnErrorListener { _, _, _ -> error = "net"; loading = false; playing = null; release(); true }
+        p.setOnErrorListener { _, w, x -> error = "mp $w/$x"; loading = false; playing = null; release(); true }
         p.prepareAsync()
         mp = p
     }
@@ -201,16 +230,69 @@ object Audio {
         val r = reciterById(reciter)
         val (s, a) = if (basmalaFirst) 1 to 1 else ay.s to ay.a
         val f = file(r, s, a)
+        val my = ++tok
+        if (f.exists() && f.length() > 0) { playFile(f, my); prefetch(idx + 1); return }
+        main.launch {
+            val c = withContext(Dispatchers.IO) { cached(url(r, s, a), "${r.folder}_${code(s, a)}.mp3") }
+            if (my != tok) return@launch
+            if (c == null) { error = "net: ${lastErr ?: "?"}"; playing = null; loading = false; return@launch }
+            playFile(c, my); prefetch(idx + 1)
+        }
+    }
+
+    private var tok = 0
+    private var lastErr: String? = null
+    private val main = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private fun streamDir() = File(app!!.cacheDir, "stream").apply { mkdirs() }
+
+    /** İnternetten âyet dosyasını önce indirir (MediaPlayer'ın kendi bağlantısı bazı telefonlarda çalışmıyor) */
+    private fun cached(u: String, name: String): File? {
+        val f = File(streamDir(), name)
+        if (f.exists() && f.length() > 1000) return f
+        return try {
+            var url = u; var c: HttpURLConnection; var n = 0
+            while (true) {
+                c = URL(url).openConnection() as HttpURLConnection
+                c.connectTimeout = 15000; c.readTimeout = 30000; c.instanceFollowRedirects = true
+                c.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android) KuranKerim")
+                val code = c.responseCode
+                if (code in 300..399 && n++ < 5) { url = URL(URL(url), c.getHeaderField("Location")).toString(); c.disconnect(); continue }
+                if (code != 200) { lastErr = "HTTP $code"; c.disconnect(); return null }
+                break
+            }
+            val tmp = File(f.parentFile, f.name + ".part")
+            c.inputStream.use { i -> tmp.outputStream().use { o -> i.copyTo(o) } }
+            c.disconnect()
+            if (tmp.length() > 1000 && tmp.renameTo(f)) f else { lastErr = "boş dosya"; null }
+        } catch (e: Exception) { lastErr = e.javaClass.simpleName + (e.message?.let { ": " + it.take(60) } ?: ""); null }
+    }
+
+    private fun prefetch(idx: Int) {
+        val quran = q ?: return
+        if (idx >= quran.ayahs.size) return
+        val ay = quran.ayahs[idx]; val r = reciterById(reciter)
+        if (r.surah || file(r, ay.s, ay.a).exists()) return
+        main.launch(Dispatchers.IO) { runCatching { cached(url(r, ay.s, ay.a), "${r.folder}_${code(ay.s, ay.a)}.mp3") } }
+        // önbellek 60 MB'ı geçerse eski dosyaları sil
+        main.launch(Dispatchers.IO) {
+            runCatching {
+                val fs = streamDir().listFiles()?.sortedBy { it.lastModified() } ?: return@runCatching
+                var total = fs.sumOf { it.length() }
+                for (x in fs) { if (total < 60L shl 20) break; total -= x.length(); x.delete() }
+            }
+        }
+    }
+
+    private fun playFile(f: File, my: Int) {
+        if (my != tok) return
         val p = MediaPlayer()
         p.setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build())
-        try {
-            if (f.exists() && f.length() > 0) p.setDataSource(f.path) else p.setDataSource(url(r, s, a))
-        } catch (e: Exception) {
-            error = "net"; playing = null; loading = false; p.release(); return
+        try { p.setDataSource(f.path) } catch (e: Exception) {
+            error = "file: ${e.javaClass.simpleName}"; playing = null; loading = false; p.release(); return
         }
         p.setOnPreparedListener { loading = false; if (!paused) it.start() }
         p.setOnCompletionListener { onArabicDone() }
-        p.setOnErrorListener { _, _, _ -> error = "net"; loading = false; playing = null; release(); true }
+        p.setOnErrorListener { _, w, x -> f.delete(); error = "mp $w/$x"; loading = false; playing = null; release(); true }
         p.prepareAsync()
         mp = p
     }
@@ -264,7 +346,7 @@ object Audio {
 
     fun stop() { release(); Speech.stop(); playing = null; paused = false; loading = false; phase = "ar"; resumeTo = null }
 
-    private fun release() { h.removeCallbacks(tick); mp?.let { runCatching { it.stop() }; it.release() }; mp = null; sRec = null; sT = null }
+    private fun release() { tok++; h.removeCallbacks(tick); mp?.let { runCatching { it.stop() }; it.release() }; mp = null; sRec = null; sT = null }
 }
 
 /** Telefonun konuşma motoru (meal sesi). Erkek sesi tercih edilir, ses kalınlığı ayarlanabilir. */

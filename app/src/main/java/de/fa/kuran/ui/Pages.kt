@@ -227,16 +227,19 @@ fun MealPage(q: Quran, page: Int, st: AppState, pal: Palette, side: Side, select
     }
 }
 
-/** Kur'an Açıklamaları (Feridun A.) – assets/aciklama.json: sûre → âyet → başlık, Arapça ifadeler, paragraflar */
+/** Kur'an Açıklamaları (Feridun Agmaz) – assets/aciklama.json: sûre → âyet → başlık, Arapça ifadeler, paragraflar */
 object AckData {
     class A(val title: String, val ar: List<String>, val paras: List<String>)
     private var m: Map<Int, Map<Int, A>> = emptyMap()
+    private var intros: Map<Int, String> = emptyMap()
+    fun intro(s: Int): String? = intros[s]?.takeIf { it.isNotBlank() }
     fun init(ctx: android.content.Context) {
         if (m.isNotEmpty()) return
         runCatching {
             val o = org.json.JSONObject(ctx.assets.open("aciklama.json").bufferedReader().use { it.readText() })
-            val out = HashMap<Int, Map<Int, A>>()
+            val out = HashMap<Int, Map<Int, A>>(); val ins = HashMap<Int, String>()
             o.keys().forEach { sk ->
+                ins[sk.toInt()] = o.getJSONObject(sk).optString("intro", "")
                 val ay = o.getJSONObject(sk).getJSONObject("ayat"); val mm = HashMap<Int, A>()
                 ay.keys().forEach { ak ->
                     val e = ay.getJSONObject(ak); val ar = e.getJSONArray("ar"); val p = e.getJSONArray("p")
@@ -244,7 +247,7 @@ object AckData {
                 }
                 out[sk.toInt()] = mm
             }
-            m = out
+            m = out; intros = ins
         }
     }
     fun get(s: Int, a: Int): A? = m[s]?.get(a)
@@ -263,7 +266,7 @@ fun AciklamaAyah(q: Quran, idx: Int, st: AppState, pal: Palette, side: Side, pla
     PaperPage(pal, modifier, side, onTap, onPinch = { f -> st.mealZoom = (st.mealZoom * f).coerceIn(0.6f, 2.2f) }) {
         Text(t("AÇIKLAMA"), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = pal.band, letterSpacing = 0.6.sp)
         Text(t("Kur'an Açıklamaları"), fontSize = 20.sp, fontWeight = FontWeight.Bold, color = pal.ink, fontFamily = Fonts.serif)
-        Text(t("Arapça anahtar ifadeler, kelime anlamları ve âyet açıklamaları"), fontSize = 12.sp, fontStyle = FontStyle.Italic, color = pal.muted)
+        Text("Feridun Agmaz", fontSize = 13.sp, fontStyle = FontStyle.Italic, color = pal.muted)
         Box(Modifier.fillMaxWidth().padding(vertical = 8.dp).height(1.5.dp).background(pal.ink))
         Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             val ctx = androidx.compose.ui.platform.LocalContext.current
@@ -281,7 +284,12 @@ fun AciklamaAyah(q: Quran, idx: Int, st: AppState, pal: Palette, side: Side, pla
             if (line != null) Text(mealAnnotated(line.label, line.text, pal.red, false, pal.highlight), style = mealStyle(15f * z, pal.ink))
             Box(Modifier.fillMaxWidth().height(1.dp).background(pal.chip))
             if (ack != null) {
-                Text(ack.title, style = mealStyle(15f * z, green).copy(fontWeight = FontWeight.Bold))
+                val intro = if (cur.a == 1) AckData.intro(cur.s) else null
+                if (intro != null) {
+                    Text(t("Sûre hakkında"), style = mealStyle(15f * z, green).copy(fontWeight = FontWeight.Bold))
+                    intro.split('\n').forEach { Text(it, style = mealStyle(15f * z, pal.ink).copy(lineHeight = (15f * z * 1.5f).sp)) }
+                    Text(t("Açıklama"), style = mealStyle(15f * z, green).copy(fontWeight = FontWeight.Bold))
+                } else if (ack.title.isNotBlank()) Text(ack.title, style = mealStyle(15f * z, green).copy(fontWeight = FontWeight.Bold))
                 if (ack.ar.isNotEmpty()) Text(
                     buildAnnotatedString { ack.ar.forEachIndexed { i, x -> if (i > 0) withStyle(SpanStyle(color = pal.gold)) { append("  /  ") }; append(x) } },
                     style = arabicStyle(Fonts.amiri, 20f * z.coerceIn(0.8f, 1.6f), pal.ink, TextAlign.Start), modifier = Modifier.fillMaxWidth(),

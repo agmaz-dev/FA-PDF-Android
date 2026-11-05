@@ -126,7 +126,7 @@ private fun ReaderBody(q: Quran, st: AppState, wide: Boolean, twoUp: Boolean, on
     val playIdx = audio.playing
     val hl = playIdx ?: selected
     audio.mealOf = { i -> mealOnly(mealLines(q, st.pack, st.meal, listOf(i)).firstOrNull()?.text ?: "") }
-    audio.ackOf = { i -> val a = q.ayahs[i]; AckData.get(a.s, a.a)?.let { it.title + ". " + it.paras.joinToString(" ") } }
+    audio.ackOf = { i -> val a = q.ayahs[i]; AckData.get(a.s, a.a)?.let { (if (it.title.isNotBlank()) it.title + ". " else "") + it.paras.joinToString(" ") } }
     audio.onAckPage = { st.mode == ReadMode.ACIKLAMA }
     audio.mealLang = mealSpeechLang(st.meal)
     val onPlay: () -> Unit = {
@@ -204,7 +204,7 @@ private fun ReaderBody(q: Quran, st: AppState, wide: Boolean, twoUp: Boolean, on
         audio.error?.let {
             LaunchedEffect(it) { delay(4000); audio.error = null }
             Text(
-                t("Ses çalınamadı. İnternet bağlantısını kontrol edin ya da sesleri Ayarlar'dan indirin."),
+                t("Ses çalınamadı. İnternet bağlantısını kontrol edin ya da sesleri Ayarlar'dan indirin.") + "\n(" + it + ")",
                 color = Color.White, fontSize = 13.sp,
                 modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = bottomPad + 50.dp, start = 16.dp, end = 16.dp)
                     .clip(RoundedCornerShape(16.dp)).background(Color(0xE0B03030)).padding(horizontal = 14.dp, vertical = 9.dp),

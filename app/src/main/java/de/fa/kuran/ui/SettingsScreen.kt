@@ -210,7 +210,7 @@ fun SettingsScreen(q: Quran, st: AppState, onBack: () -> Unit) {
                         IGroup(pal) {
                             IRow(pal, "Kur'an metni", null, "Tanzil / alquran.cloud (Osmanî hat)"); ISep(pal)
                             IRow(pal, t("Mealler"), null, "Elmalılı, Gölpınarlı, Bubenheim, Saheeh, Müyesser, Diyanet"); ISep(pal)
-                            IRow(pal, "Feridun A.", null, "Uzun Meal ve Kur'an Açıklamaları"); ISep(pal)
+                            IRow(pal, "Feridun Agmaz", null, "Uzun Meal ve Kur'an Açıklamaları"); ISep(pal)
                             IRow(pal, t("Sesler"), null, "EveryAyah, archive.org (İshak Danış, Fatih Çollak)"); ISep(pal)
                             IRow(pal, t("Kişisel paket"), null, "Hayrat Neşriyat sayfaları ve meali (kişisel kullanım)")
                         }
