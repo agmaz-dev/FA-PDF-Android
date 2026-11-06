@@ -426,7 +426,7 @@ object Speech {
                 c.disconnect()
                 if (!File(d, v.model).exists()) throw java.io.IOException("model yok")
                 File(d, "ok").writeText("1")
-            } catch (e: Exception) { err = e.javaClass.simpleName + (e.message?.let { ": " + it.take(60) } ?: "") }
+            } catch (e: Throwable) { err = e.javaClass.simpleName + (e.message?.let { ": " + it.take(60) } ?: "") }
             main.post {
                 dl = null; dlErr = err; ver++
                 val w = ArrayList(waiting); waiting.clear()
