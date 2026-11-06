@@ -36,7 +36,7 @@ class AppState(ctx: Context) {
 
     init {
         Speech.voiceName = sp.getString("ttsVoice", null)
-        Speech.pitch = sp.getFloat("ttsPitch", 0.8f)
+        Speech.pitch = 1f
         Speech.rate = sp.getFloat("ttsRate", 0.95f)
     }
     fun saveSpeech() { sp.edit().putString("ttsVoice", Speech.voiceName).putFloat("ttsPitch", Speech.pitch).putFloat("ttsRate", Speech.rate).apply() }

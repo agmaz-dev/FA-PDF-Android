@@ -11,3 +11,4 @@ captures/
 # Derleme sırasında üretilir (tools/prepare_data.py)
 app/src/main/assets/quran.json
 app/src/main/res/font/*.ttf
+app/src/main/jniLibs/

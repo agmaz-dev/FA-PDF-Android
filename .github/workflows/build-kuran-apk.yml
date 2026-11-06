@@ -28,6 +28,14 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: python tools/prepare_data.py 2>&1 | tee data.log; exit ${PIPESTATUS[0]}
 
+      - name: Doğal ses motoru (sherpa-onnx) indir
+        run: |
+          curl -sSL -o /tmp/so.tar.bz2 https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.13.8/sherpa-onnx-v1.13.8-android.tar.bz2
+          mkdir -p /tmp/so app/src/main/jniLibs/arm64-v8a
+          tar xjf /tmp/so.tar.bz2 -C /tmp/so ./jniLibs/arm64-v8a/libsherpa-onnx-jni.so ./jniLibs/arm64-v8a/libonnxruntime.so
+          cp /tmp/so/jniLibs/arm64-v8a/*.so app/src/main/jniLibs/arm64-v8a/
+          ls -la app/src/main/jniLibs/arm64-v8a
+
       - name: JDK 17 einrichten
         uses: actions/setup-java@v4
         with:

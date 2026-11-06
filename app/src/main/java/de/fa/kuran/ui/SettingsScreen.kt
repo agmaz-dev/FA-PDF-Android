@@ -415,7 +415,6 @@ private fun AudioSettings(q: de.fa.kuran.data.Quran, st: AppState, pal: Palette)
 private fun SpeechSettings(st: AppState, pal: Palette) {
     val sp = de.fa.kuran.data.Speech
     val lang = mealSpeechLang(st.meal)
-    androidx.compose.runtime.LaunchedEffect(sp.ready, lang) { if (sp.ready) sp.loadVoices(lang) }
     ILabel(pal, t("Ne okunsun?"))
     IGroup(pal) {
         listOf("ar" to t("Arapça"), "ar_meal" to t("Arapça + meal"), "meal" to t("Meal"), "ack" to t("Açıklama")).forEachIndexed { i, (k, n) ->
@@ -424,20 +423,28 @@ private fun SpeechSettings(st: AppState, pal: Palette) {
     }
     IFoot(pal, t("Açıklama seçeneği sadece Açıklama sayfasında geçerlidir: Arapça okunmaz, her âyette önce meal, sonra açıklama okunur. Meal ve Mushaf sayfasında bu seçenekle meal okunur."))
     ILabel(pal, t("Ses"))
+    val v0 = sp.ver
     IGroup(pal) {
-        if (!sp.ready) IRow(pal, t("Telefonun konuşma motoru hazırlanıyor…"), null)
-        else if (sp.voices.isEmpty()) IRow(pal, t("Bu dil için telefonda ses yüklü değil."), null, t("Telefon Ayarları → Genel yönetim → Metin okuma'dan Google'ın sesini indirebilirsiniz."))
-        else {
-            val current = sp.voiceName?.takeIf { n -> sp.voices.any { it.name == n } } ?: sp.voices.firstOrNull { it.male }?.name ?: sp.voices.first().name
-            sp.voices.forEachIndexed { i, v -> if (i > 0) ISep(pal); ICheck(pal, t(v.label), t("Google sesi"), v.name == current) { sp.voiceName = v.name; st.saveSpeech(); sp.sample(lang) } }
+        sp.NVOICES.forEachIndexed { i, v ->
+            if (i > 0) ISep(pal)
+            val inst = v0 >= 0 && sp.installed(v.lang)
+            val sub = when {
+                sp.dl == v.lang -> t("İndiriliyor… %1%", sp.dlPct)
+                inst -> t("İndirildi – internetsiz çalışır")
+                else -> t("İndirmek için dokunun (%1 MB)", v.mb)
+            }
+            ICheck(pal, t("Doğal erkek sesi") + " – " + v.name, sub, v.lang == lang && inst) {
+                if (inst) sp.sample(v.lang) else sp.download(v.lang)
+            }
         }
     }
+    sp.dlErr?.let { IFoot(pal, t("İndirilemedi. İnternet bağlantısını kontrol edip tekrar deneyin.") + " (" + it + ")") }
+    IFoot(pal, t("Meal hangi dildeyse o dilin sesi okur. Ses indirilmemişse ilk okumada kendiliğinden indirilir."))
     Spacer(Modifier.height(8.dp))
     IGroup(pal) {
-        ISlider(pal, t("Ses kalınlığı"), 2f - sp.pitch, 0.9f..1.6f) { sp.pitch = 2f - it; st.saveSpeech() }
-        ISep(pal)
         ISlider(pal, t("Konuşma hızı"), sp.rate, 0.6f..1.4f) { sp.rate = it; st.saveSpeech() }
         ISep(pal)
         IAction(pal, "▶ " + t("Örnek dinle")) { sp.sample(lang) }
+        if (sp.installed(lang)) { ISep(pal); IAction(pal, t("Bu sesi telefondan sil"), red = true) { sp.delete(lang) } }
     }
 }

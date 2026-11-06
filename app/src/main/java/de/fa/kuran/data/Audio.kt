@@ -349,81 +349,164 @@ object Audio {
     private fun release() { tok++; h.removeCallbacks(tick); mp?.let { runCatching { it.stop() }; it.release() }; mp = null; sRec = null; sT = null }
 }
 
-/** Telefonun konuşma motoru (meal sesi). Erkek sesi tercih edilir, ses kalınlığı ayarlanabilir. */
+/** Doğal erkek sesi (Piper, telefonun içinde çalışır – sherpa-onnx). Her dil bir kez indirilir, sonra internetsiz çalışır. */
 object Speech {
-    data class V(val name: String, val label: String, val male: Boolean)
+    class NV(val lang: String, val name: String, val pkg: String, val mb: Int) { val model get() = pkg.removePrefix("vits-piper-") + ".onnx" }
+    val NVOICES = listOf(
+        NV("tr", "Türkçe", "vits-piper-tr_TR-dfki-medium", 64),
+        NV("de", "Deutsch", "vits-piper-de_DE-thorsten-medium", 64),
+        NV("en", "English", "vits-piper-en_US-ryan-medium", 64),
+        NV("ar", "العربية", "vits-piper-ar_JO-kareem-medium", 64),
+    )
 
-    var ready by mutableStateOf(false)
-    var voices by mutableStateOf<List<V>>(emptyList())
-    var voiceName by mutableStateOf<String?>(null)
-    var pitch by mutableStateOf(0.8f)
+    var ready by mutableStateOf(true)
+    var voiceName by mutableStateOf<String?>(null)   // eski ayar (kullanılmıyor)
+    var pitch by mutableStateOf(1f)                  // eski ayar (kullanılmıyor)
     var rate by mutableStateOf(0.95f)
+    var dl by mutableStateOf<String?>(null)          // indirilen dil
+    var dlPct by mutableIntStateOf(0)
+    var dlErr by mutableStateOf<String?>(null)
+    var ver by mutableIntStateOf(0)
 
-    private var tts: android.speech.tts.TextToSpeech? = null
-    private var lang = "tr"
+    private var app: Context? = null
     private val main = android.os.Handler(android.os.Looper.getMainLooper())
-    private val done = HashMap<String, () -> Unit>()
-    private var n = 0
+    private val exec = java.util.concurrent.Executors.newSingleThreadExecutor()
+    @Volatile private var gen = 0
+    @Volatile private var track: android.media.AudioTrack? = null
+    private var engine: com.k2fsa.sherpa.onnx.OfflineTts? = null
+    private var engineLang: String? = null
+    private val waiting = ArrayList<() -> Unit>()
 
-    fun init(ctx: Context) {
-        if (tts != null) return
-        tts = android.speech.tts.TextToSpeech(ctx.applicationContext) { st ->
-            if (st == android.speech.tts.TextToSpeech.SUCCESS) {
-                tts?.setOnUtteranceProgressListener(object : android.speech.tts.UtteranceProgressListener() {
-                    override fun onStart(id: String) {}
-                    override fun onDone(id: String) { main.post { done.remove(id)?.invoke() } }
-                    @Deprecated("") override fun onError(id: String) { main.post { done.remove(id)?.invoke() } }
-                })
-                main.post { ready = true; loadVoices("tr") }
+    fun init(ctx: Context) { app = ctx.applicationContext }
+    fun voiceFor(l: String) = NVOICES.firstOrNull { it.lang == l } ?: NVOICES[0]
+    private fun dir(v: NV) = File(app!!.filesDir, "tts/${v.pkg}")
+    fun installed(l: String) = app != null && File(dir(voiceFor(l)), "ok").exists()
+
+    /** Sesi GitHub'dan (sherpa-onnx) indirip açar */
+    fun download(l: String, then: (() -> Unit)? = null) {
+        if (then != null) waiting += then
+        if (dl != null) return
+        val v = voiceFor(l)
+        dl = v.lang; dlPct = 0; dlErr = null
+        Thread {
+            var err: String? = null
+            try {
+                val d = dir(v); d.deleteRecursively(); d.mkdirs()
+                var url = "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/${v.pkg}.tar.bz2"
+                var c: HttpURLConnection; var n = 0
+                while (true) {
+                    c = URL(url).openConnection() as HttpURLConnection
+                    c.connectTimeout = 20000; c.readTimeout = 60000; c.instanceFollowRedirects = false
+                    c.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android) KuranKerim")
+                    val code = c.responseCode
+                    if (code in 300..399 && n++ < 6) { url = URL(URL(url), c.getHeaderField("Location")).toString(); c.disconnect(); continue }
+                    if (code != 200) throw java.io.IOException("HTTP $code")
+                    break
+                }
+                val total = c.contentLengthLong.takeIf { it > 0 } ?: (v.mb * 1_000_000L)
+                var read = 0L
+                val counting = object : java.io.FilterInputStream(java.io.BufferedInputStream(c.inputStream, 1 shl 16)) {
+                    private fun add(k: Int): Int { if (k > 0) { read += k; val p = (read * 100 / total).toInt().coerceAtMost(99); if (p != dlPct) main.post { dlPct = p } }; return k }
+                    override fun read(): Int = super.read().also { if (it >= 0) add(1) }
+                    override fun read(b: ByteArray, o: Int, len: Int): Int = add(super.read(b, o, len))
+                }
+                val tar = org.apache.commons.compress.archivers.tar.TarArchiveInputStream(
+                    org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream(counting))
+                tar.use { t ->
+                    while (true) {
+                        val e = t.nextEntry ?: break
+                        val rel = e.name.removePrefix("./").substringAfter('/', "")
+                        if (rel.isEmpty() || rel.contains("..")) continue
+                        val out = File(d, rel)
+                        if (e.isDirectory) { out.mkdirs(); continue }
+                        out.parentFile?.mkdirs()
+                        out.outputStream().use { o -> t.copyTo(o) }
+                    }
+                }
+                c.disconnect()
+                if (!File(d, v.model).exists()) throw java.io.IOException("model yok")
+                File(d, "ok").writeText("1")
+            } catch (e: Exception) { err = e.javaClass.simpleName + (e.message?.let { ": " + it.take(60) } ?: "") }
+            main.post {
+                dl = null; dlErr = err; ver++
+                val w = ArrayList(waiting); waiting.clear()
+                if (err == null) w.forEach { it() }
             }
-        }
+        }.start()
     }
 
-    private fun locale(l: String) = when (l) { "de" -> java.util.Locale.GERMANY; "en" -> java.util.Locale.US; "ar" -> java.util.Locale("ar"); else -> java.util.Locale("tr", "TR") }
-
-    /** Erkek sesi tahmini: ses adında "male" / Samsung "m00" / Google'ın bilinen erkek kodları */
-    private fun guessMale(name: String): Boolean {
-        val n = name.lowercase()
-        if (n.contains("female") || Regex("smtf\\d|#female").containsMatchIn(n)) return false
-        if (n.contains("male") || Regex("smtm\\d").containsMatchIn(n)) return true
-        return listOf("-x-cfs", "-x-tmc", "-x-mfm", "-x-iom", "-x-iol", "-x-tpd", "-x-gbd", "-x-rjs", "-x-ard", "-x-deb", "-x-arz").any { n.contains(it) }
+    fun delete(l: String) {
+        val v = voiceFor(l)
+        exec.execute { if (engineLang == l) { engine?.release(); engine = null; engineLang = null }; dir(v).deleteRecursively(); main.post { ver++ } }
     }
 
-    fun loadVoices(l: String) {
-        val t = tts ?: return
-        lang = l
-        val loc = locale(l)
-        val list = runCatching { t.voices?.filter { it.locale.language == loc.language && !it.features.contains("notInstalled") } }.getOrNull().orEmpty()
-            .sortedWith(compareBy({ it.isNetworkConnectionRequired }, { it.name }))
-        var mi = 0; var fi = 0
-        voices = list.map { v ->
-            val m = guessMale(v.name)
-            val lbl = (if (m) "Erkek sesi " + (++mi) else "Ses " + (++fi)) + if (v.isNetworkConnectionRequired) " (internet)" else ""
-            V(v.name, lbl, m)
-        }.let { all -> if (all.any { it.male }) all.filter { it.male } else all }
+    private fun engineFor(l: String): com.k2fsa.sherpa.onnx.OfflineTts {
+        if (engineLang == l) engine?.let { return it }
+        engine?.release(); engine = null
+        val v = voiceFor(l); val d = dir(v)
+        val cfg = com.k2fsa.sherpa.onnx.OfflineTtsConfig(
+            model = com.k2fsa.sherpa.onnx.OfflineTtsModelConfig(
+                vits = com.k2fsa.sherpa.onnx.OfflineTtsVitsModelConfig(
+                    model = File(d, v.model).path, tokens = File(d, "tokens.txt").path, dataDir = File(d, "espeak-ng-data").path,
+                ),
+                numThreads = 4, provider = "cpu",
+            ),
+            maxNumSentences = 1,
+        )
+        return com.k2fsa.sherpa.onnx.OfflineTts(null, cfg).also { engine = it; engineLang = l }
     }
 
     fun speak(text: String, l: String, onDone: () -> Unit) {
-        val t = tts ?: run { onDone(); return }
-        if (l != lang || voices.isEmpty()) loadVoices(l)
-        t.language = locale(l)
-        val chosen = t.voices?.firstOrNull { it.name == voiceName && it.locale.language == locale(l).language }
-            ?: voices.firstOrNull { it.male }?.let { m -> t.voices?.firstOrNull { it.name == m.name } }
-        chosen?.let { t.voice = it }
-        t.setPitch(pitch); t.setSpeechRate(rate)
-        val id = "u" + (++n)
-        done[id] = onDone
-        // uzun metni parçalara böl (motor sınırı)
-        val max = android.speech.tts.TextToSpeech.getMaxSpeechInputLength() - 10
-        val parts = if (text.length <= max) listOf(text) else text.chunked(max)
-        parts.forEachIndexed { i, p ->
-            t.speak(p, if (i == 0) android.speech.tts.TextToSpeech.QUEUE_FLUSH else android.speech.tts.TextToSpeech.QUEUE_ADD, null, if (i == parts.lastIndex) id else "$id-$i")
+        stop()
+        val my = ++gen
+        if (app == null || text.isBlank()) { onDone(); return }
+        if (!installed(l)) { download(l) { if (my == gen) speak(text, l, onDone) }; return }
+        val speed = rate
+        exec.execute {
+            var tr: android.media.AudioTrack? = null
+            try {
+                val tts = engineFor(l)
+                if (my != gen) return@execute
+                val sr = tts.sampleRate()
+                val min = android.media.AudioTrack.getMinBufferSize(sr, android.media.AudioFormat.CHANNEL_OUT_MONO, android.media.AudioFormat.ENCODING_PCM_FLOAT)
+                tr = android.media.AudioTrack.Builder()
+                    .setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build())
+                    .setAudioFormat(android.media.AudioFormat.Builder().setEncoding(android.media.AudioFormat.ENCODING_PCM_FLOAT).setSampleRate(sr).setChannelMask(android.media.AudioFormat.CHANNEL_OUT_MONO).build())
+                    .setTransferMode(android.media.AudioTrack.MODE_STREAM)
+                    .setBufferSizeInBytes(maxOf(min, sr * 4 / 2))
+                    .build()
+                track = tr
+                tr.play()
+                var frames = 0L
+                val clean = text.replace(Regex("\\s+"), " ").trim()
+                tts.generateWithCallback(clean, 0, speed) { samples ->
+                    if (my != gen) 0 else { tr.write(samples, 0, samples.size, android.media.AudioTrack.WRITE_BLOCKING); frames += samples.size; 1 }
+                }
+                // çalma bitene kadar bekle
+                var last = -1; var still = 0
+                while (my == gen) {
+                    val pos = tr.playbackHeadPosition
+                    if (pos >= frames) break
+                    if (pos == last) { if (++still > 100) break } else still = 0
+                    last = pos; Thread.sleep(30)
+                }
+            } catch (e: Throwable) {
+                main.post { if (my == gen) dlErr = "ses: " + e.javaClass.simpleName }
+            } finally {
+                runCatching { tr?.stop() }; runCatching { tr?.release() }
+                if (track === tr) track = null
+            }
+            main.post { if (my == gen) onDone() }
         }
     }
 
-    fun sample(l: String) { speak(when (l) { "de" -> "Im Namen Allahs, des Allerbarmers, des Barmherzigen."; "en" -> "In the name of Allah, the Entirely Merciful, the Especially Merciful."; "ar" -> "بسم الله الرحمن الرحيم"; else -> "Rahmân ve Rahîm olan Allah'ın adıyla." }, l) {} }
+    fun sample(l: String) { speak(when (l) { "de" -> "Im Namen Allahs, des Allerbarmers, des Barmherzigen."; "en" -> "In the name of Allah, the Entirely Merciful, the Especially Merciful."; "ar" -> "بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ"; else -> "Rahmân ve Rahîm olan Allah'ın adıyla." }, l) {} }
 
-    fun stop() { done.clear(); tts?.stop() }
+    fun stop() {
+        gen++
+        waiting.clear()
+        track?.let { runCatching { it.pause(); it.flush() } }
+    }
 }
 
 /** Okuyucu seslerini telefona indirir (yarıda kalırsa kaldığı yerden devam eder) */

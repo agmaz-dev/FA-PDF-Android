@@ -201,6 +201,14 @@ private fun ReaderBody(q: Quran, st: AppState, wide: Boolean, twoUp: Boolean, on
                 RoundIcon(pal, Icons.Filled.Close, t("Kapat"), size = 42.dp) { selected = null }
             }
         }
+        de.fa.kuran.data.Speech.dl?.let {
+            Text(
+                t("Doğal ses indiriliyor… %1%", de.fa.kuran.data.Speech.dlPct),
+                color = Color.White, fontSize = 13.sp,
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = bottomPad + 50.dp, start = 16.dp, end = 16.dp)
+                    .clip(RoundedCornerShape(16.dp)).background(Color(0xE0333333)).padding(horizontal = 14.dp, vertical = 9.dp),
+            )
+        }
         audio.error?.let {
             LaunchedEffect(it) { delay(4000); audio.error = null }
             Text(
