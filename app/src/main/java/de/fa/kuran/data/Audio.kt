@@ -478,10 +478,27 @@ object Speech {
                 track = tr
                 tr.play()
                 var frames = 0L
-                val clean = text.replace(Regex("\\s+"), " ").trim()
-                tts.generateWithCallback(clean, 0, speed) { samples ->
-                    if (my != gen) 0 else { tr.write(samples, 0, samples.size, android.media.AudioTrack.WRITE_BLOCKING); frames += samples.size; 1 }
+                // cümle cümle üret; bir cümle çalarken sonraki üretilir
+                val q = java.util.concurrent.LinkedBlockingQueue<FloatArray>(3)
+                val END = FloatArray(0)
+                val player = Thread {
+                    try {
+                        while (true) {
+                            val x = q.take()
+                            if (x === END || my != gen) break
+                            tr.write(x, 0, x.size, android.media.AudioTrack.WRITE_BLOCKING); frames += x.size
+                        }
+                    } catch (_: Throwable) {}
                 }
+                player.start()
+                for (part in sentences(text)) {
+                    if (my != gen) break
+                    val au = tts.generate(part, 0, speed)
+                    if (my != gen) break
+                    while (!q.offer(au.samples, 100, java.util.concurrent.TimeUnit.MILLISECONDS)) if (my != gen) break
+                }
+                while (player.isAlive && !q.offer(END, 100, java.util.concurrent.TimeUnit.MILLISECONDS)) { if (my != gen) break }
+                player.join(if (my == gen) 0L else 500L)
                 // çalma bitene kadar bekle
                 var last = -1; var still = 0
                 while (my == gen) {
@@ -498,6 +515,21 @@ object Speech {
             }
             main.post { if (my == gen) onDone() }
         }
+    }
+
+    /** Metni kısa cümlelere böler (ilk ses çabuk gelsin diye) */
+    private fun sentences(text: String): List<String> {
+        val clean = text.replace(Regex("\\s+"), " ").trim()
+        val out = ArrayList<String>()
+        Regex("[^.!?;:…]+[.!?;:…]*[\"”’)]*\\s*").findAll(clean).forEach { m ->
+            var x = m.value.trim()
+            while (x.length > 220) {
+                val cut = x.lastIndexOf(", ", 220).takeIf { it > 60 } ?: x.lastIndexOf(' ', 220).takeIf { it > 60 } ?: 220
+                out += x.substring(0, cut + 1).trim(); x = x.substring(cut + 1).trim()
+            }
+            if (x.any { it.isLetterOrDigit() }) out += x
+        }
+        return out
     }
 
     fun sample(l: String) { speak(when (l) { "de" -> "Im Namen Allahs, des Allerbarmers, des Barmherzigen."; "en" -> "In the name of Allah, the Entirely Merciful, the Especially Merciful."; "ar" -> "بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ"; else -> "Rahmân ve Rahîm olan Allah'ın adıyla." }, l) {} }

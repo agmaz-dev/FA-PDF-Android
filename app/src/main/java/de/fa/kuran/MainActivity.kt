@@ -44,6 +44,14 @@ import kotlinx.coroutines.withContext
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // çökme olursa sebebini kaydet, bir sonraki açılışta göster
+        val crash = java.io.File(filesDir, "crash.txt")
+        if (crash.exists()) { runCatching { android.widget.Toast.makeText(this, "Önceki hata: " + crash.readText().take(300), android.widget.Toast.LENGTH_LONG).show() }; crash.delete() }
+        val prev = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { th, e ->
+            runCatching { crash.writeText(e.toString() + "\n" + e.stackTrace.take(6).joinToString("\n")) }
+            prev?.uncaughtException(th, e)
+        }
         WindowCompat.setDecorFitsSystemWindows(window, false)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         @Suppress("DEPRECATION")
