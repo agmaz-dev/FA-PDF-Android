@@ -7,21 +7,26 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.calculateCentroid
+import androidx.compose.foundation.gestures.calculatePan
 import androidx.compose.foundation.gestures.calculateZoom
+import androidx.compose.foundation.gestures.rememberScrollableState
+import androidx.compose.foundation.gestures.scrollable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -33,6 +38,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -74,8 +80,9 @@ class PageGestures(
 )
 
 /**
- * Scrollbare, zoombare Seitenansicht. Zwei-Finger-Geste zoomt (1×–4×), bei Zoom kann
- * waagerecht gescrollt werden. [overlay] zeichnet Auswahl, Felder usw. über jede Seite.
+ * Scrollbare, zoombare Seitenansicht. Zwei-Finger-Geste zoomt (1×–4×) um den Punkt zwischen den Fingern und
+ * verschiebt die Seite gleichzeitig; bei Zoom kann einfach waagerecht gezogen werden. Im Lesemodus zoomt
+ * Doppeltippen auf die getippte Stelle. [overlay] zeichnet Auswahl, Felder usw. über jede Seite.
  */
 @Composable
 fun PdfPagesView(
@@ -90,43 +97,114 @@ fun PdfPagesView(
     modifier: Modifier = Modifier,
     overlay: @Composable (page: Int, pxPerPt: Float) -> Unit = { _, _ -> },
 ) {
-    val currentZoom by rememberUpdatedState(zoom)
     val zoomCallback by rememberUpdatedState(onZoom)
-    BoxWithConstraints(
-        modifier
-            .fillMaxSize()
-            .background(FaColors.PageArea)
-            .pointerInput(Unit) {
+    val currentGestures by rememberUpdatedState(gestures)
+    var hScroll by remember { mutableFloatStateOf(0f) }
+    var appliedZoom by remember { mutableFloatStateOf(zoom) }
+    BoxWithConstraints(modifier.fillMaxSize().background(FaColors.PageArea).clipToBounds()) {
+        val density = LocalDensity.current
+        val padPx = with(density) { 12.dp.toPx() }
+        val gapPx = with(density) { 12.dp.toPx() }
+        val viewportW = with(density) { maxWidth.toPx() }
+        val viewportH = with(density) { maxHeight.toPx() }
+        val pageWidthPx = (viewportW - 2 * padPx) * zoom
+        val contentW = pageWidthPx + 2 * padPx
+        val maxScroll = (contentW - viewportW).coerceAtLeast(0f)
+        val x = hScroll.coerceIn(0f, maxScroll)
+        val pageSizes = source.pageSizes
+        val sizesRef by rememberUpdatedState(pageSizes)
+        val viewportRef by rememberUpdatedState(Size(viewportW, viewportH))
+        val maxScrollRef by rememberUpdatedState(maxScroll)
+
+        /** Wendet Zoomänderung und Fingerbewegung an; der Fokuspunkt bleibt unter den Fingern. */
+        fun applyTransform(focal: Offset, pan: Offset, zoomChange: Float, notify: Boolean = true) {
+            val oldZoom = appliedZoom
+            val newZoom = ZoomMath.clampZoom(oldZoom * zoomChange)
+            val ratio = newZoom / oldZoom
+            val vp = viewportRef
+            val oldPageW = (vp.width - 2 * padPx) * oldZoom
+            val newPageW = (vp.width - 2 * padPx) * newZoom
+            val oldHeights = ZoomMath.itemHeights(sizesRef, oldPageW, gapPx)
+            val newHeights = ZoomMath.itemHeights(sizesRef, newPageW, gapPx)
+            val oldAbs = ZoomMath.absoluteScroll(oldHeights, listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset)
+            val newAbs = ZoomMath.newVerticalScroll(oldAbs, focal.y, pan.y, ratio, newHeights, vp.height)
+            val (idx, off) = ZoomMath.indexAndOffset(newHeights, newAbs)
+            hScroll = ZoomMath.newScroll(hScroll.coerceIn(0f, maxScrollRef), focal.x, pan.x, ratio, padPx, newPageW + 2 * padPx, vp.width)
+            appliedZoom = newZoom
+            if (notify && newZoom != oldZoom) zoomCallback(newZoom)
+            listState.requestScrollToItem(idx, off)
+        }
+
+        // Zoom von außen (+/−-Tasten): um die Bildschirmmitte statt um die linke obere Ecke
+        LaunchedEffect(zoom) {
+            if (zoom != appliedZoom) {
+                val ratio = zoom / appliedZoom
+                applyTransform(Offset(viewportRef.width / 2f, viewportRef.height / 2f), Offset.Zero, ratio, notify = false)
+            }
+        }
+
+        Box(
+            Modifier.fillMaxSize().pointerInput(Unit) {
+                var lastTapTime = 0L
+                var lastTapPos = Offset.Zero
                 awaitEachGesture {
-                    awaitFirstDown(requireUnconsumed = false)
+                    val first = awaitFirstDown(requireUnconsumed = false)
+                    var multi = false
+                    var moved = false
                     do {
                         val event = awaitPointerEvent(PointerEventPass.Initial)
-                        if (event.changes.count { it.pressed } >= 2) {
+                        val pressed = event.changes.count { it.pressed }
+                        if (pressed >= 2) {
+                            multi = true
                             val z = event.calculateZoom()
-                            if (z != 1f) {
-                                zoomCallback((currentZoom * z).coerceIn(1f, 4f))
+                            val pan = event.calculatePan()
+                            if (z != 1f || pan != Offset.Zero) {
+                                applyTransform(event.calculateCentroid(useCurrent = true), pan, z)
                                 event.changes.forEach { it.consume() }
                             }
+                        } else if ((event.changes.firstOrNull()?.position ?: first.position).let { (it - first.position).getDistance() } > viewConfiguration.touchSlop) {
+                            moved = true
                         }
                     } while (event.changes.any { it.pressed })
+                    // Doppeltippen (nur im Lesemodus, damit Tippen zum Bearbeiten nicht gestört wird)
+                    val g = currentGestures
+                    if (!multi && !moved && g.onTap == null && !g.dragEnabled) {
+                        val now = System.currentTimeMillis()
+                        if (now - lastTapTime < 300 && (first.position - lastTapPos).getDistance() < 60.dp.toPx()) {
+                            val target = if (appliedZoom > 1.3f) ZoomMath.MIN_ZOOM else ZoomMath.DOUBLE_TAP_ZOOM
+                            applyTransform(first.position, Offset.Zero, target / appliedZoom)
+                            lastTapTime = 0L
+                        } else {
+                            lastTapTime = now; lastTapPos = first.position
+                        }
+                    }
                 }
-            }
-    ) {
-        val density = LocalDensity.current
-        val pageWidthDp = (maxWidth - 24.dp) * zoom
-        val pageWidthPx = with(density) { pageWidthDp.toPx() }
-        val hScroll = rememberScrollState()
-        Box(Modifier.fillMaxSize().horizontalScroll(hScroll, enabled = zoom > 1.01f && scrollEnabled)) {
+            }.scrollable(
+                orientation = Orientation.Horizontal,
+                enabled = zoom > 1.01f && scrollEnabled,
+                state = rememberScrollableState { delta ->
+                    val old = hScroll.coerceIn(0f, maxScrollRef)
+                    val new = (old - delta).coerceIn(0f, maxScrollRef)
+                    hScroll = new
+                    old - new
+                },
+            )
+        ) {
             LazyColumn(
                 state = listState,
                 userScrollEnabled = scrollEnabled,
-                modifier = Modifier.width(pageWidthDp + 24.dp).fillMaxHeight(),
+                modifier = Modifier
+                    .wrapContentWidth(Alignment.Start, unbounded = true)
+                    .width(with(density) { contentW.toDp() })
+                    .fillMaxHeight()
+                    .offset { IntOffset(-x.roundToInt(), 0) },
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 items(count = source.pageCount, key = { "$versionKey-$it" }) { page ->
-                    val (wPt, hPt) = source.pageSizes[page]
+                    val (wPt, hPt) = pageSizes[page]
                     val pxPerPt = pageWidthPx / wPt
-                    PageItem(source, versionKey, cache, page, pageWidthPx, wPt / hPt, pxPerPt, gestures, Modifier.width(pageWidthDp)) {
+                    PageItem(source, versionKey, cache, page, pageWidthPx, wPt / hPt, pxPerPt, gestures,
+                        Modifier.width(with(density) { pageWidthPx.toDp() })) {
                         overlay(page, pxPerPt)
                     }
                 }
