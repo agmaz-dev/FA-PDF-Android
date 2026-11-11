@@ -131,7 +131,7 @@ object FontCatalog {
     val fonts = listOf(
         CatalogFont("carlito", "Carlito (wie Calibri)", FontFamily.SANS, "Carlito", listOf("calibri", "carlito")),
         CatalogFont("lato", "Lato", FontFamily.SANS, "Lato", listOf("lato", "opensans", "segoe", "myriad", "frutiger", "helveticaneue")),
-        CatalogFont("ptsans", "PT Sans", FontFamily.SANS, "PTSans", listOf("ptsans", "tahoma", "verdana", "trebuchet", "century", "gothic")),
+        CatalogFont("ptsans", "PT Sans", FontFamily.SANS, "PTSans", listOf("ptsans", "tahoma", "verdana", "trebuchet", "centurygothic")),
         CatalogFont("ubuntu", "Ubuntu", FontFamily.SANS, "Ubuntu", listOf("ubuntu")),
         CatalogFont("caladea", "Caladea (wie Cambria)", FontFamily.SERIF, "Caladea", listOf("cambria", "caladea")),
         CatalogFont("crimson", "Crimson Text", FontFamily.SERIF, "CrimsonText", listOf("crimson", "georgia", "garamond", "minion", "palatino", "bookantiqua", "baskerville", "bembo")),
