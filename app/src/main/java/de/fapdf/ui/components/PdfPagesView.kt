@@ -107,11 +107,16 @@ fun PdfPagesView(
         val gapPx = with(density) { 12.dp.toPx() }
         val viewportW = with(density) { maxWidth.toPx() }
         val viewportH = with(density) { maxHeight.toPx() }
-        val pageWidthPx = (viewportW - 2 * padPx) * zoom
-        val contentW = pageWidthPx + 2 * padPx
+        val pageSizes = source.pageSizes
+        // Breites Fenster (aufgeklapptes Fold): bei Zoom 1 ist die ganze Seite sichtbar, nicht nur die Breite gefüllt
+        val wide = viewportW >= with(density) { 600.dp.toPx() }
+        val firstAspect = pageSizes.firstOrNull()?.let { it.first / it.second } ?: 0f
+        val baseW = ZoomMath.basePageWidth(viewportW, viewportH, padPx, gapPx, firstAspect, wide)
+        val pageWidthPx = baseW * zoom
+        val contentW = ZoomMath.contentWidth(pageWidthPx, viewportW, padPx)
         val maxScroll = (contentW - viewportW).coerceAtLeast(0f)
         val x = hScroll.coerceIn(0f, maxScroll)
-        val pageSizes = source.pageSizes
+        val baseRef by rememberUpdatedState(baseW)
         val sizesRef by rememberUpdatedState(pageSizes)
         val viewportRef by rememberUpdatedState(Size(viewportW, viewportH))
         val maxScrollRef by rememberUpdatedState(maxScroll)
@@ -122,14 +127,18 @@ fun PdfPagesView(
             val newZoom = ZoomMath.clampZoom(oldZoom * zoomChange)
             val ratio = newZoom / oldZoom
             val vp = viewportRef
-            val oldPageW = (vp.width - 2 * padPx) * oldZoom
-            val newPageW = (vp.width - 2 * padPx) * newZoom
+            val oldPageW = baseRef * oldZoom
+            val newPageW = baseRef * newZoom
             val oldHeights = ZoomMath.itemHeights(sizesRef, oldPageW, gapPx)
             val newHeights = ZoomMath.itemHeights(sizesRef, newPageW, gapPx)
             val oldAbs = ZoomMath.absoluteScroll(oldHeights, listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset)
             val newAbs = ZoomMath.newVerticalScroll(oldAbs, focal.y, pan.y, ratio, newHeights, vp.height)
             val (idx, off) = ZoomMath.indexAndOffset(newHeights, newAbs)
-            hScroll = ZoomMath.newScroll(hScroll.coerceIn(0f, maxScrollRef), focal.x, pan.x, ratio, padPx, newPageW + 2 * padPx, vp.width)
+            hScroll = ZoomMath.newScroll(
+                hScroll.coerceIn(0f, maxScrollRef), focal.x, pan.x, ratio,
+                ZoomMath.margin(oldPageW, vp.width, padPx), ZoomMath.margin(newPageW, vp.width, padPx),
+                ZoomMath.contentWidth(newPageW, vp.width, padPx), vp.width,
+            )
             appliedZoom = newZoom
             if (notify && newZoom != oldZoom) zoomCallback(newZoom)
             listState.requestScrollToItem(idx, off)

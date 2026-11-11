@@ -12,20 +12,20 @@ class ZoomMathTest {
         val pad = 24f
         val newContent = 2 * (1000f - 48f) + 48f
         val focal = 600f
-        val s = ZoomMath.newScroll(0f, focal, 0f, 2f, pad, newContent, 1000f)
+        val s = ZoomMath.newScroll(0f, focal, 0f, 2f, pad, pad, newContent, 1000f)
         // Punkt unter dem Finger: vorher Inhalt x = 600 → relativ 576 → nachher 1152 + 24 = 1176; Sicht = 1176 - s
         near(1176f - s, focal)
     }
 
     @Test fun panMovesContentWithFingers() {
-        val s = ZoomMath.newScroll(300f, 500f, -40f, 1f, 24f, 2000f, 1000f)
+        val s = ZoomMath.newScroll(300f, 500f, -40f, 1f, 24f, 24f, 2000f, 1000f)
         near(s, 340f) // Finger nach links → Inhalt folgt → Scroll wächst
     }
 
     @Test fun scrollIsClamped() {
-        near(ZoomMath.newScroll(0f, 100f, 500f, 1f, 24f, 1500f, 1000f), 0f)
-        near(ZoomMath.newScroll(400f, 900f, -500f, 1f, 24f, 1500f, 1000f), 500f)
-        near(ZoomMath.newScroll(0f, 100f, 0f, 1f, 24f, 800f, 1000f), 0f) // Inhalt kleiner als Fenster
+        near(ZoomMath.newScroll(0f, 100f, 500f, 1f, 24f, 24f, 1500f, 1000f), 0f)
+        near(ZoomMath.newScroll(400f, 900f, -500f, 1f, 24f, 24f, 1500f, 1000f), 500f)
+        near(ZoomMath.newScroll(0f, 100f, 0f, 1f, 24f, 24f, 800f, 1000f), 0f) // Inhalt kleiner als Fenster
     }
 
     @Test fun indexAndOffsetRoundTrip() {
@@ -42,5 +42,25 @@ class ZoomMathTest {
         val s = ZoomMath.newVerticalScroll(500f, 300f, 0f, 2f, h2, 800f)
         near(1600f - s, 300f)
         org.junit.Assert.assertTrue(h1.sum() * 2 == h2.sum())
+    }
+
+    @Test fun wideWindowShowsWholePageAtZoomOne() {
+        // Fold innen ca. 960 x 870 dp, A4 hochkant: Seite so breit wie hoch passt
+        val w = ZoomMath.basePageWidth(960f, 870f, 12f, 12f, 595f / 842f, wide = true)
+        near(w, (870f - 12f) * 595f / 842f)
+        // Handy: volle Breite
+        near(ZoomMath.basePageWidth(400f, 800f, 12f, 12f, 595f / 842f, wide = false), 376f)
+        // Querformat-Seite auf breitem Fenster: nie breiter als das Fenster
+        near(ZoomMath.basePageWidth(960f, 870f, 12f, 12f, 842f / 595f, wide = true), 936f)
+    }
+
+    @Test fun centeredPageKeepsFocalPointWhenZoomingFromNarrowContent() {
+        // Seite 600 px mittig in 960 px Fenster, Zoom 1→2: Fokus auf Seitenmitte (x = 480)
+        val oldMargin = ZoomMath.margin(600f, 960f, 12f)       // 180
+        val newMargin = ZoomMath.margin(1200f, 960f, 12f)      // 12
+        val newContent = ZoomMath.contentWidth(1200f, 960f, 12f)
+        val s = ZoomMath.newScroll(0f, 480f, 0f, 2f, oldMargin, newMargin, newContent, 960f)
+        // Punkt lag 300 px rechts der Seitenkante → jetzt 600 px rechts; Sicht = margin + 600 - scroll
+        near(newMargin + 600f - s, 480f)
     }
 }
