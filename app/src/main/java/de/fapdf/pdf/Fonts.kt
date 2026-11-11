@@ -78,7 +78,16 @@ class FontLibrary(
         return null
     }
 
-    /** Ersatzschrift für eine Originalschrift: passende Systemschrift, sonst Liberation. */
+    /** Lädt eine Bibliotheksschrift; null, wenn sie deutsche/türkische Sonderzeichen nicht darstellen kann. */
+    fun loadCatalog(doc: PDDocument, font: CatalogFont, bold: Boolean, italic: Boolean): PDType0Font? = runCatching {
+        val data = open("fonts/${font.assetBase}-${styleSuffix(bold, italic)}.ttf").use { it.readBytes() }
+        val f = PDType0Font.load(doc, ByteArrayInputStream(data), true)
+        f.encode("äöüßÄÖÜğşıİç")
+        PendingSubsets.register(doc, f)
+        f
+    }.getOrNull()
+
+    /** Ersatzschrift für eine Originalschrift: passende Systemschrift, dann Bibliothek, sonst Liberation. */
     fun loadMatching(doc: PDDocument, originalName: String?, family: FontFamily, bold: Boolean, italic: Boolean): PDType0Font {
         val sys = originalName?.let { systemMatch(it, bold, italic) }
         if (sys != null) {
@@ -91,6 +100,7 @@ class FontLibrary(
             }.getOrNull()
             if (ok != null) { PendingSubsets.register(doc, ok); return ok }
         }
+        originalName?.let { FontCatalog.matchByName(it) }?.let { c -> loadCatalog(doc, c, bold, italic)?.let { return it } }
         return load(doc, family, bold, italic)
     }
 
@@ -101,6 +111,41 @@ class FontLibrary(
             italic -> "Italic"
             else -> "Regular"
         }
+    }
+}
+
+
+/** Eine mitgelieferte freie Schrift (Regular/Bold/Italic/BoldItalic als TTF in assets/fonts). */
+data class CatalogFont(
+    val id: String, val title: String, val family: FontFamily, val assetBase: String,
+    /** Namensteile (klein, nur Buchstaben) von Originalschriften, die diese Schrift ersetzt. */
+    val replaces: List<String>,
+)
+
+/**
+ * Bibliothek freier Schriften. Wird automatisch gewählt, wenn eine Originalschrift (z. B. Calibri, Cambria, Georgia)
+ * nicht vollständig eingebettet ist, und steht in der Schriftauswahl zur Verfügung.
+ * Arial/Helvetica, Times und Courier ersetzt weiterhin Liberation (metrisch kompatibel).
+ */
+object FontCatalog {
+    val fonts = listOf(
+        CatalogFont("carlito", "Carlito (wie Calibri)", FontFamily.SANS, "Carlito", listOf("calibri", "carlito")),
+        CatalogFont("lato", "Lato", FontFamily.SANS, "Lato", listOf("lato", "opensans", "segoe", "myriad", "frutiger", "helveticaneue")),
+        CatalogFont("ptsans", "PT Sans", FontFamily.SANS, "PTSans", listOf("ptsans", "tahoma", "verdana", "trebuchet", "century", "gothic")),
+        CatalogFont("ubuntu", "Ubuntu", FontFamily.SANS, "Ubuntu", listOf("ubuntu")),
+        CatalogFont("caladea", "Caladea (wie Cambria)", FontFamily.SERIF, "Caladea", listOf("cambria", "caladea")),
+        CatalogFont("crimson", "Crimson Text", FontFamily.SERIF, "CrimsonText", listOf("crimson", "georgia", "garamond", "minion", "palatino", "bookantiqua", "baskerville", "bembo")),
+        CatalogFont("ptserif", "PT Serif", FontFamily.SERIF, "PTSerif", listOf("ptserif", "charter", "constantia")),
+        CatalogFont("courierprime", "Courier Prime", FontFamily.MONO, "CourierPrime", listOf("courierprime", "lucidaconsole")),
+        CatalogFont("comicneue", "Comic Neue", FontFamily.SANS, "ComicNeue", listOf("comic", "chalkboard")),
+    )
+
+    fun byId(id: String?): CatalogFont? = fonts.firstOrNull { it.id == id }
+
+    /** Passende Bibliotheksschrift für den Namen einer Originalschrift oder null. */
+    fun matchByName(originalName: String): CatalogFont? {
+        val n = FontMeta.cleanName(originalName).lowercase().replace(Regex("[^a-z]"), "")
+        return fonts.firstOrNull { f -> f.replaces.any { it in n } }
     }
 }
 
@@ -128,11 +173,17 @@ class DocFontCache(private val doc: PDDocument, private val library: FontLibrary
     fun get(family: FontFamily, bold: Boolean, italic: Boolean): PDType0Font =
         cache.getOrPut("$family/$bold/$italic") { library.load(doc, family, bold, italic) }
 
-    /** Ersatzschrift passend zur Originalschrift (z. B. Roboto aus dem System). */
-    fun matching(originalName: String?, family: FontFamily, bold: Boolean, italic: Boolean): PDType0Font {
-        val sys = originalName?.let { library.systemMatch(it, bold, italic) }
-        return if (sys == null) get(family, bold, italic)
-        else cache.getOrPut("sys/${sys.path}") { library.loadMatching(doc, originalName, family, bold, italic) }
+    /** Ersatzschrift passend zur Originalschrift (System-, Bibliotheks- oder Liberation-Schrift). */
+    fun matching(originalName: String?, family: FontFamily, bold: Boolean, italic: Boolean): PDType0Font =
+        if (originalName == null) get(family, bold, italic)
+        else cache.getOrPut("m/${FontMeta.cleanName(originalName)}/$family/$bold/$italic") {
+            library.loadMatching(doc, originalName, family, bold, italic)
+        }
+
+    /** Vom Benutzer gewählte Bibliotheksschrift ([fontId]) oder die Familie; fehlen Zeichen, wird Liberation genommen. */
+    fun forStyle(fontId: String?, family: FontFamily, bold: Boolean, italic: Boolean): PDType0Font {
+        val c = FontCatalog.byId(fontId) ?: return get(family, bold, italic)
+        return cache.getOrPut("c/${c.id}/$bold/$italic") { library.loadCatalog(doc, c, bold, italic) ?: library.load(doc, c.family, bold, italic) }
     }
 }
 

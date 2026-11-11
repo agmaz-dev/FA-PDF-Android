@@ -31,6 +31,8 @@ import androidx.compose.material.icons.outlined.Remove
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -68,6 +70,7 @@ import de.fapdf.pdf.Alignment as TextAlignment
 import de.fapdf.pdf.AutofillSuggestion
 import de.fapdf.pdf.FieldKind
 import de.fapdf.pdf.FieldValue
+import de.fapdf.pdf.FontCatalog
 import de.fapdf.pdf.FontFamily
 import de.fapdf.pdf.FormFieldInfo
 import de.fapdf.pdf.TextStyle
@@ -75,6 +78,7 @@ import de.fapdf.ui.WorkspaceMode
 import de.fapdf.ui.components.Biometric
 import de.fapdf.ui.components.FileActions
 import de.fapdf.ui.components.PrimaryButton
+import de.fapdf.ui.components.rememberCatalogFontFamily
 import de.fapdf.ui.theme.FaColors
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -106,9 +110,25 @@ fun StyleEditor(style: TextStyle, allowOriginal: Boolean, detectedColor: Int?, o
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             FontFamily.entries.forEach { f ->
                 FilterChip(
-                    selected = style.family == f, onClick = { onChange(style.copy(family = f, useOriginalFont = false)) },
+                    selected = style.family == f && style.fontId == null, onClick = { onChange(style.copy(family = f, useOriginalFont = false, fontId = null)) },
                     label = { Text(f.title) },
                 )
+            }
+        }
+        // Weitere Schriften der mitgelieferten Bibliothek, jede in ihrer eigenen Gestalt
+        var catalogOpen by remember { mutableStateOf(false) }
+        Box {
+            FilterChip(
+                selected = style.fontId != null, onClick = { catalogOpen = true },
+                label = { Text(FontCatalog.byId(style.fontId)?.title ?: "Weitere Schriften …") },
+            )
+            DropdownMenu(catalogOpen, { catalogOpen = false }) {
+                FontCatalog.fonts.forEach { c ->
+                    DropdownMenuItem(
+                        text = { Text(c.title, fontFamily = rememberCatalogFontFamily(c)) },
+                        onClick = { catalogOpen = false; onChange(style.copy(fontId = c.id, family = c.family, useOriginalFont = false)) },
+                    )
+                }
             }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {

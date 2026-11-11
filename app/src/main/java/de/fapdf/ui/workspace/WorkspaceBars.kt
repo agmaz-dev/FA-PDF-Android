@@ -29,6 +29,7 @@ import androidx.compose.material.icons.outlined.FormatBold
 import androidx.compose.material.icons.outlined.FormatItalic
 import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.MoreVert
+import androidx.compose.material.icons.outlined.TextFields
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -71,10 +72,12 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.IntOffset
 import kotlin.math.roundToInt
 import de.fapdf.pdf.Alignment as TextAlignment
+import de.fapdf.pdf.FontCatalog
 import de.fapdf.pdf.FontFamily
 import de.fapdf.pdf.PdfPageSource
 import de.fapdf.pdf.TextStyle
 import de.fapdf.ui.components.PageThumb
+import de.fapdf.ui.components.rememberCatalogFontFamily
 import de.fapdf.ui.theme.FaColors
 
 private val sizes = listOf(6f, 7f, 8f, 9f, 10f, 11f, 12f, 14f, 16f, 18f, 20f, 24f, 28f, 32f, 36f, 48f, 60f, 72f)
@@ -102,7 +105,7 @@ fun FormatBar(
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         Box {
-            val fontLabel = if (style.useOriginalFont && originalName != null) originalName else style.family.title
+            val fontLabel = if (style.useOriginalFont && originalName != null) originalName else FontCatalog.byId(style.fontId)?.title ?: style.family.title
             Row(
                 Modifier.clip(RoundedCornerShape(8.dp)).clickable { fontMenu = true }.padding(horizontal = 8.dp, vertical = 8.dp).widthIn(max = 120.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -116,7 +119,14 @@ fun FormatBar(
                     onClick = { fontMenu = false; onStyle(style.copy(useOriginalFont = true)) },
                 )
                 FontFamily.entries.forEach { f ->
-                    DropdownMenuItem(text = { Text(f.title) }, onClick = { fontMenu = false; onStyle(style.copy(family = f, useOriginalFont = false)) })
+                    DropdownMenuItem(text = { Text(f.title) }, onClick = { fontMenu = false; onStyle(style.copy(family = f, useOriginalFont = false, fontId = null)) })
+                }
+                HorizontalDivider()
+                FontCatalog.fonts.forEach { c ->
+                    DropdownMenuItem(
+                        text = { Text(c.title, fontFamily = rememberCatalogFontFamily(c), fontWeight = if (style.fontId == c.id) FontWeight.Bold else null) },
+                        onClick = { fontMenu = false; onStyle(style.copy(fontId = c.id, family = c.family, useOriginalFont = false)) },
+                    )
                 }
             }
         }
@@ -181,20 +191,25 @@ fun InlineTextEditor(vm: WorkspaceViewModel, sel: TextSelection, onMore: () -> U
     var text by remember(sel) { mutableStateOf(sel.text) }
     var style by remember(sel) { mutableStateOf(sel.detected.toTextStyle().copy(useOriginalFont = sel.canUseOriginalFont)) }
     var align by remember(sel) { mutableStateOf(sel.detected.alignment) }
+    // Schrift, Größe und Farbe sind automatisch aus dem PDF erkannt; die Formatleiste ist nur auf Wunsch sichtbar
+    var showFormat by remember(sel) { mutableStateOf(false) }
     val original = if (sel.canUseOriginalFont) sel.detected.fontName else null
     Column {
-        Row(Modifier.fillMaxWidth().padding(start = 12.dp, end = 4.dp, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().padding(start = 12.dp, end = 4.dp, top = 6.dp, bottom = 2.dp), verticalAlignment = Alignment.CenterVertically) {
             OutlinedTextField(
-                text, { text = it }, Modifier.weight(1f), maxLines = 3, shape = RoundedCornerShape(10.dp),
+                text, { text = it }, Modifier.weight(1f), maxLines = 2, shape = RoundedCornerShape(10.dp),
                 textStyle = MaterialTheme.typography.bodyMedium,
             )
+            IconButton(onClick = { showFormat = !showFormat }) {
+                Icon(Icons.Outlined.TextFields, "Schrift und Format", tint = if (showFormat) FaColors.Accent else FaColors.Label)
+            }
             IconButton(onClick = { vm.applyTextEdit(sel, text, style, align, false) }, enabled = text.isNotBlank()) {
                 Icon(Icons.Outlined.Check, "Übernehmen", tint = FaColors.Accent)
             }
             IconButton(onClick = onMore) { Icon(Icons.Outlined.MoreVert, "Weitere Optionen") }
         }
         // Bei Fett/Kursiv abweichend vom Original setzt die Engine automatisch die passende Ersatzschrift
-        FormatBar(style, align, original, sel.detected.colorArgb, onStyle = { style = it }, onAlign = { align = it })
+        if (showFormat) FormatBar(style, align, original, sel.detected.colorArgb, onStyle = { style = it }, onAlign = { align = it })
         HorizontalDivider(color = FaColors.Separator)
     }
 }

@@ -18,6 +18,8 @@ data class TextStyle(
     /** Schriftgröße in PDF-Punkten. */
     val size: Float = 11f,
     val colorArgb: Int = 0xFF000000.toInt(),
+    /** Gewählte Schrift aus der mitgelieferten Bibliothek ([FontCatalog]); null = Familie (Sans/Serif/Mono). */
+    val fontId: String? = null,
 )
 
 /** Automatisch erkannte Formatierung einer Zeile. */
@@ -70,7 +72,7 @@ class TextEditEngine(private val fontLibrary: FontLibrary) {
         val useOriginal = style.useOriginalFont && meta != null && meta.bold == style.bold && meta.italic == style.italic
         val substitute = {
             if (style.useOriginalFont && meta != null) cache.matching(meta.rawName, style.family, style.bold, style.italic)
-            else cache.get(style.family, style.bold, style.italic)
+            else cache.forStyle(style.fontId, style.family, style.bold, style.italic)
         }
         if (!useOriginal) return TextRunEncoder(null, emptyMap(), substitute)
         val f = pt.fonts.fonts[originalFontId!!]

@@ -282,7 +282,9 @@ fun WorkspaceScreen(
                         if (sel != null) InlineTextEditor(vm, sel, onMore = { fullEditor = true })
                         else FormatBar(vm.newTextStyle, newTextAlign, null, null, onStyle = { vm.newTextStyle = it.copy(useOriginalFont = false) }, onAlign = { newTextAlign = it })
                     }
-                    BottomTools(vm, currentPage, commentsOpen = commentsOpen, onToggleComments = { commentsOpen = !commentsOpen }, onSheet = { sheet = it }, onPickImage = {
+                    // Beim Bearbeiten einer Zeile bleibt nur die schmale Eingabeleiste: mehr Platz für die Seite
+                    val editingLine = vm.mode == WorkspaceMode.EDIT && vm.selection != null && vm.placement == null && vm.moveState == null
+                    if (!editingLine) BottomTools(vm, currentPage, commentsOpen = commentsOpen, onToggleComments = { commentsOpen = !commentsOpen }, onSheet = { sheet = it }, onPickImage = {
                         imagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
                     }, onDraw = {
                         vm.switchMode(WorkspaceMode.ANNOTATE); vm.annotTool = AnnotTool.INK
