@@ -78,6 +78,7 @@ import de.fapdf.pdf.PdfPageSource
 import de.fapdf.pdf.TextStyle
 import de.fapdf.ui.components.PageThumb
 import de.fapdf.ui.components.rememberCatalogFontFamily
+import de.fapdf.ui.components.rememberUserFonts
 import de.fapdf.ui.theme.FaColors
 
 private val sizes = listOf(6f, 7f, 8f, 9f, 10f, 11f, 12f, 14f, 16f, 18f, 20f, 24f, 28f, 32f, 36f, 48f, 60f, 72f)
@@ -105,7 +106,7 @@ fun FormatBar(
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         Box {
-            val fontLabel = if (style.useOriginalFont && originalName != null) originalName else FontCatalog.byId(style.fontId)?.title ?: style.family.title
+            val fontLabel = if (style.useOriginalFont && originalName != null) originalName else FontCatalog.byId(style.fontId)?.title ?: style.fontId?.removePrefix("user:")?.substringBeforeLast('.') ?: style.family.title
             Row(
                 Modifier.clip(RoundedCornerShape(8.dp)).clickable { fontMenu = true }.padding(horizontal = 8.dp, vertical = 8.dp).widthIn(max = 120.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -113,7 +114,8 @@ fun FormatBar(
                 Text(fontLabel, style = MaterialTheme.typography.labelLarge, maxLines = 1, modifier = Modifier.weight(1f, fill = false))
                 Icon(Icons.Outlined.KeyboardArrowDown, null, Modifier.size(18.dp))
             }
-            DropdownMenu(fontMenu, { fontMenu = false }) {
+            val user = rememberUserFonts()
+            DropdownMenu(fontMenu, { fontMenu = false }, Modifier.heightIn(max = 420.dp)) {
                 if (originalName != null) DropdownMenuItem(
                     text = { Text("$originalName (Original)") },
                     onClick = { fontMenu = false; onStyle(style.copy(useOriginalFont = true)) },
@@ -128,6 +130,20 @@ fun FormatBar(
                         onClick = { fontMenu = false; onStyle(style.copy(fontId = c.id, family = c.family, useOriginalFont = false)) },
                     )
                 }
+                if (user.fonts.isNotEmpty()) {
+                    HorizontalDivider()
+                    user.fonts.forEach { u ->
+                        DropdownMenuItem(
+                            text = { Text(u.title, fontWeight = if (style.fontId == u.key) FontWeight.Bold else null) },
+                            onClick = { fontMenu = false; onStyle(style.copy(fontId = u.key, bold = u.bold, italic = u.italic, useOriginalFont = false)) },
+                        )
+                    }
+                }
+                HorizontalDivider()
+                DropdownMenuItem(
+                    text = { Text("Eigene Schrift hinzufügen …", color = FaColors.Accent) },
+                    onClick = { fontMenu = false; user.pick() },
+                )
             }
         }
         Box {

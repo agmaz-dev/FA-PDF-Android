@@ -20,8 +20,27 @@ import java.util.IdentityHashMap
 class FontLibrary(
     private val open: (String) -> java.io.InputStream,
     private val systemFontDirs: List<java.io.File> = emptyList(),
+    /** Vom Benutzer hinzugefügte Schriften (beliebige .ttf-Dateien). */
+    val userFontDir: java.io.File? = null,
 ) {
-    constructor(context: Context) : this({ path -> context.assets.open(path) }, listOf(java.io.File("/system/fonts")))
+    constructor(context: Context) : this(
+        { path -> context.assets.open(path) },
+        listOf(java.io.File("/system/fonts")),
+        java.io.File(context.filesDir, "userfonts").also { it.mkdirs() },
+    )
+
+    fun userFonts(): List<FontFile> = userFontDir?.let { FontIndex.scan(it) } ?: emptyList()
+
+    /** Installierte Systemschriften (ohne sehr große CJK-Dateien). */
+    fun installedFonts(): List<FontFile> = systemFontDirs.flatMap { FontIndex.scan(it) }
+
+    /** Lädt eine Schriftdatei als Subset; null bei Fehler oder wenn deutsche/türkische Sonderzeichen fehlen. */
+    fun loadFontFile(doc: PDDocument, ff: FontFile): PDType0Font? = runCatching {
+        val f = PDType0Font.load(doc, ByteArrayInputStream(ff.file.readBytes()), true)
+        f.encode("äöüßÄÖÜğşıİç")
+        PendingSubsets.register(doc, f)
+        f
+    }.getOrNull()
 
     private fun assetName(family: FontFamily, bold: Boolean, italic: Boolean): String {
         val base = when (family) {
@@ -99,6 +118,11 @@ class FontLibrary(
                 if ((variable && (bold || italic)) || runCatching { f.encode("äöüßğşıİç") }.isFailure) null else f
             }.getOrNull()
             if (ok != null) { PendingSubsets.register(doc, ok); return ok }
+        }
+        // Vom Benutzer hinzugefügte Schriften haben Vorrang, danach installierte Systemschriften mit gleichem Namen
+        originalName?.let { n ->
+            (FontIndex.match(userFonts(), n, bold, italic) ?: FontIndex.match(installedFonts(), n, bold, italic))
+                ?.let { ff -> loadFontFile(doc, ff)?.let { return it } }
         }
         originalName?.let { FontCatalog.matchByName(it) }?.let { c -> loadCatalog(doc, c, bold, italic)?.let { return it } }
         return load(doc, family, bold, italic)
@@ -182,6 +206,15 @@ class DocFontCache(private val doc: PDDocument, private val library: FontLibrary
 
     /** Vom Benutzer gewählte Bibliotheksschrift ([fontId]) oder die Familie; fehlen Zeichen, wird Liberation genommen. */
     fun forStyle(fontId: String?, family: FontFamily, bold: Boolean, italic: Boolean): PDType0Font {
+        if (fontId != null && fontId.startsWith("user:")) {
+            // Eigene Schrift: gleicher Familienname im gewünschten Schnitt, sonst die gewählte Datei
+            val chosen = library.userFonts().firstOrNull { it.key == fontId }
+            if (chosen != null) {
+                val ff = library.userFonts().firstOrNull { it.family == chosen.family && it.bold == bold && it.italic == italic } ?: chosen
+                return cache.getOrPut("u/${ff.file.name}") { library.loadFontFile(doc, ff) ?: library.load(doc, family, bold, italic) }
+            }
+            return get(family, bold, italic)
+        }
         val c = FontCatalog.byId(fontId) ?: return get(family, bold, italic)
         return cache.getOrPut("c/${c.id}/$bold/$italic") { library.loadCatalog(doc, c, bold, italic) ?: library.load(doc, c.family, bold, italic) }
     }

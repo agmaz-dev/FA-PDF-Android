@@ -79,6 +79,7 @@ import de.fapdf.ui.components.Biometric
 import de.fapdf.ui.components.FileActions
 import de.fapdf.ui.components.PrimaryButton
 import de.fapdf.ui.components.rememberCatalogFontFamily
+import de.fapdf.ui.components.rememberUserFonts
 import de.fapdf.ui.theme.FaColors
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -122,6 +123,7 @@ fun StyleEditor(style: TextStyle, allowOriginal: Boolean, detectedColor: Int?, o
                 selected = style.fontId != null, onClick = { catalogOpen = true },
                 label = { Text(FontCatalog.byId(style.fontId)?.title ?: "Weitere Schriften …") },
             )
+            val user = rememberUserFonts()
             DropdownMenu(catalogOpen, { catalogOpen = false }) {
                 FontCatalog.fonts.forEach { c ->
                     DropdownMenuItem(
@@ -129,6 +131,13 @@ fun StyleEditor(style: TextStyle, allowOriginal: Boolean, detectedColor: Int?, o
                         onClick = { catalogOpen = false; onChange(style.copy(fontId = c.id, family = c.family, useOriginalFont = false)) },
                     )
                 }
+                user.fonts.forEach { u ->
+                    DropdownMenuItem(
+                        text = { Text(u.title) },
+                        onClick = { catalogOpen = false; onChange(style.copy(fontId = u.key, bold = u.bold, italic = u.italic, useOriginalFont = false)) },
+                    )
+                }
+                DropdownMenuItem(text = { Text("Eigene Schrift hinzufügen …", color = FaColors.Accent) }, onClick = { catalogOpen = false; user.pick() })
             }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
