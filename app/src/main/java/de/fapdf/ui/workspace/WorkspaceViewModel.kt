@@ -116,6 +116,8 @@ class WorkspaceViewModel(app: Application, val docId: Long, initialMode: Workspa
     var selection by mutableStateOf<TextSelection?>(null)
     /** Text der gerade direkt auf der Seite bearbeiteten Zeile (null = noch nicht gesetzt). */
     var draftText by mutableStateOf<String?>(null)
+    /** Ganzen Absatz statt nur einer Zeile bearbeiten (Text wird im Absatz neu umbrochen). */
+    var editBlock by mutableStateOf(false)
     var addTextAt by mutableStateOf<Triple<Int, Float, Float>?>(null)
     var newTextStyle by mutableStateOf(TextStyle(useOriginalFont = false, size = 11f))
     var moveState by mutableStateOf<Pair<TextSelection, Pair<Float, Float>>?>(null)

@@ -211,13 +211,21 @@ fun InlineTextEditor(vm: WorkspaceViewModel, sel: TextSelection, onMore: () -> U
     var style by remember(sel) { mutableStateOf(sel.detected.toTextStyle().copy(useOriginalFont = sel.canUseOriginalFont)) }
     var align by remember(sel) { mutableStateOf(sel.detected.alignment) }
     val original = if (sel.canUseOriginalFont) sel.detected.fontName else null
-    LaunchedEffect(sel) { vm.draftText = sel.text }
+    LaunchedEffect(sel) { vm.editBlock = false; vm.draftText = sel.text }
     val text = vm.draftText ?: sel.text
+    val multi = sel.blockLineIds.size > 1
     Column {
         // Eine einzige schmale Zeile: erkannte Schrift, Größe, Farbe, fett, kursiv, Ausrichtung, Übernehmen.
         // Getippt wird direkt in der Seite. Bei Fett/Kursiv abweichend vom Original setzt die Engine die passende Ersatzschrift.
         FormatBar(style, align, original, sel.detected.colorArgb, onStyle = { style = it }, onAlign = { align = it }) {
-            IconButton(onClick = { vm.applyTextEdit(sel, text, style, align, false) }, enabled = text.isNotBlank()) {
+            if (multi) {
+                androidx.compose.material3.FilterChip(
+                    selected = vm.editBlock,
+                    onClick = { vm.editBlock = !vm.editBlock; vm.draftText = if (vm.editBlock) sel.blockText else sel.text },
+                    label = { Text("Absatz") },
+                )
+            }
+            IconButton(onClick = { vm.applyTextEdit(sel, text, style, align, vm.editBlock) }, enabled = text.isNotBlank()) {
                 Icon(Icons.Outlined.Check, "Übernehmen", tint = FaColors.Accent)
             }
             IconButton(onClick = onMore) { Icon(Icons.Outlined.MoreVert, "Weitere Optionen") }
@@ -239,7 +247,7 @@ fun InlineLineEditor(vm: WorkspaceViewModel, sel: TextSelection, s: Float) {
         kotlinx.coroutines.delay(350)
         bring.bringIntoView()
     }
-    val b = sel.viewBox
+    val b = if (vm.editBlock) sel.blockViewBox else sel.viewBox
     val text = vm.draftText ?: sel.text
     Box(
         Modifier.offset { IntOffset((b.left * s - 2f).roundToInt(), (b.top * s - 2f).roundToInt()) }
@@ -251,7 +259,7 @@ fun InlineLineEditor(vm: WorkspaceViewModel, sel: TextSelection, s: Float) {
             text, { vm.draftText = it },
             textStyle = androidx.compose.ui.text.TextStyle(color = Color(sel.detected.colorArgb), fontSize = with(density) { fontPx.toSp() }),
             cursorBrush = SolidColor(FaColors.Accent),
-            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None, imeAction = ImeAction.Done),
+            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None, imeAction = if (vm.editBlock) ImeAction.Default else ImeAction.Done),
             modifier = Modifier.padding(horizontal = 2.dp).focusRequester(focus),
         )
     }
