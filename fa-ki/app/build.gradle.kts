@@ -12,8 +12,8 @@ android {
         applicationId = "de.faki"
         minSdk = 29
         targetSdk = 35
-        versionCode = 3
-        versionName = "1.0.2"
+        versionCode = 4
+        versionName = "1.1"
         ndk { abiFilters += "arm64-v8a" }
         externalNativeBuild {
             cmake {
@@ -21,6 +21,10 @@ android {
                 arguments += listOf(
                     "-DLLAMA_DIR=${rootProject.file("llama.cpp").absolutePath}",
                     "-DCMAKE_BUILD_TYPE=Release",
+                    "-DANDROID_STL=c++_shared",
+                    // OpenCL-Kopfdateien und Lade-Bibliothek werden im Build-Workflow bereitgestellt
+                    "-DOpenCL_INCLUDE_DIR=${System.getenv("OPENCL_INCLUDE") ?: ""}",
+                    "-DOpenCL_LIBRARY=${System.getenv("OPENCL_LIB") ?: ""}",
                 )
                 cFlags += "-O3"
                 cppFlags += "-O3"
@@ -49,6 +53,8 @@ android {
     }
     kotlinOptions { jvmTarget = "17" }
     buildFeatures { compose = true }
+    // Bibliotheken entpacken, damit llama.cpp die Rechenwerke (libggml-cpu, libggml-opencl) per Pfad laden kann
+    packaging { jniLibs { useLegacyPackaging = true } }
 }
 
 dependencies {

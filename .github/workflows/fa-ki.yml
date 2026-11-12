@@ -37,6 +37,25 @@ jobs:
           git fetch --depth 1 origin 2a4daf0e08d6a9b6993ee0d4a9a3cfc35a6f405c
           git checkout FETCH_HEAD
 
+      - name: OpenCL für Android vorbereiten (Kopfdateien + Lade-Bibliothek zum Verlinken)
+        run: |
+          NDK=$ANDROID_SDK_ROOT/ndk/27.0.12077973
+          [ -d "$NDK" ] || NDK=$ANDROID_NDK_LATEST_HOME
+          echo "NDK: $NDK"
+          mkdir -p $HOME/ocl && cd $HOME/ocl
+          git clone --depth 1 https://github.com/KhronosGroup/OpenCL-Headers
+          git clone --depth 1 https://github.com/KhronosGroup/OpenCL-ICD-Loader
+          cd OpenCL-ICD-Loader && mkdir build && cd build
+          cmake .. -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_TOOLCHAIN_FILE=$NDK/build/cmake/android.toolchain.cmake \
+            -DOPENCL_ICD_LOADER_HEADERS_DIR=$HOME/ocl/OpenCL-Headers \
+            -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=29 -DANDROID_STL=c++_shared \
+            -DBUILD_TESTING=OFF
+          ninja
+          ls -la
+          echo "OPENCL_INCLUDE=$HOME/ocl/OpenCL-Headers" >> $GITHUB_ENV
+          echo "OPENCL_LIB=$(pwd)/libOpenCL.so" >> $GITHUB_ENV
+
       - name: APK bauen
         shell: bash
         run: chmod +x gradlew && set -o pipefail && ./gradlew --no-daemon assembleDebug 2>&1 | tee build.log

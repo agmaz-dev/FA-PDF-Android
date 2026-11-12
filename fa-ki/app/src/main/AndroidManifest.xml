@@ -15,6 +15,9 @@
         android:largeHeap="true"
         android:theme="@android:style/Theme.Material.NoActionBar">
 
+        <!-- OpenCL-Treiber der Adreno-Grafik (Systembibliothek des Herstellers) -->
+        <uses-native-library android:name="libOpenCL.so" android:required="false" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"

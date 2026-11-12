@@ -13,6 +13,7 @@
 #include "common.h"
 #include "sampling.h"
 #include "llama.h"
+#include "ggml-backend.h"
 
 static llama_model *g_model = nullptr;
 static llama_context *g_ctx = nullptr;
@@ -59,19 +60,37 @@ static jstring to_jstring(JNIEnv *env, const std::string &s) {
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_de_faki_Native_nativeInit(JNIEnv *, jclass) {
+Java_de_faki_Native_nativeInit(JNIEnv *env, jclass, jstring jlibdir) {
     llama_log_set(aichat_android_log_callback, nullptr);
+    std::string dir = jstr(env, jlibdir);
+    ggml_backend_load_all_from_path(dir.c_str());
     llama_backend_init();
 }
 
+/** Gefundene Rechenwerke, z. B. "CPU; GPUOpenCL (QUALCOMM Adreno(TM) 830)". */
+extern "C" JNIEXPORT jstring JNICALL
+Java_de_faki_Native_devices(JNIEnv *env, jclass) {
+    std::string out;
+    for (size_t i = 0; i < ggml_backend_dev_count(); i++) {
+        ggml_backend_dev_t d = ggml_backend_dev_get(i);
+        if (!out.empty()) out += "; ";
+        out += ggml_backend_dev_name(d);
+        const char *desc = ggml_backend_dev_description(d);
+        if (desc && *desc) { out += " ("; out += desc; out += ")"; }
+        if (ggml_backend_dev_type(d) == GGML_BACKEND_DEVICE_TYPE_GPU) out += " [GPU]";
+    }
+    return to_jstring(env, out);
+}
+
 extern "C" JNIEXPORT jint JNICALL
-Java_de_faki_Native_load(JNIEnv *env, jclass, jstring jpath, jint n_ctx) {
+Java_de_faki_Native_load(JNIEnv *env, jclass, jstring jpath, jint n_ctx, jint n_gpu_layers) {
     if (g_ctx) { llama_free(g_ctx); g_ctx = nullptr; }
     if (g_model) { llama_model_free(g_model); g_model = nullptr; }
     g_tmpls.reset();
 
     std::string path = jstr(env, jpath);
     llama_model_params mp = llama_model_default_params();
+    mp.n_gpu_layers = n_gpu_layers;
     g_model = llama_model_load_from_file(path.c_str(), mp);
     if (!g_model) return 1;
 

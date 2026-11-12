@@ -7,13 +7,19 @@ import java.util.TimerTask
 
 /** Zugang zur nativen KI (llama.cpp). */
 object Native {
-    init {
+    @Volatile private var ready = false
+
+    /** Lädt die Bibliotheken und sucht die Rechenwerke (Prozessor, Grafik) im App-Ordner. */
+    @Synchronized fun ensure(context: Context) {
+        if (ready) return
         System.loadLibrary("fa-ki")
-        nativeInit()
+        nativeInit(context.applicationInfo.nativeLibraryDir)
+        ready = true
     }
 
-    @JvmStatic external fun nativeInit()
-    @JvmStatic external fun load(path: String, nCtx: Int): Int
+    @JvmStatic external fun nativeInit(libDir: String)
+    @JvmStatic external fun devices(): String
+    @JvmStatic external fun load(path: String, nCtx: Int, nGpuLayers: Int): Int
     @JvmStatic external fun complete(roles: Array<String>, contents: Array<String>, maxTokens: Int, temp: Float): String
     @JvmStatic external fun abort()
     @JvmStatic external fun unload()
@@ -29,6 +35,7 @@ object Engine {
     private val lock = Any()
     @Volatile var loadedId: String? = null
         private set
+    private var loadedGpu = -1
     @Volatile var busy = false
         private set
     private var idleTimer: Timer? = null
@@ -42,15 +49,18 @@ object Engine {
         val m = Settings.active(context) ?: throw KiException("Kein Modell eingeschaltet. Bitte in FA KI ein Modell einschalten.")
         val f = modelFile(context, m)
         if (!f.exists() || f.length() < 100_000_000L) throw KiException("Das Modell „${m.title}“ ist noch nicht heruntergeladen.")
+        Native.ensure(context)
+        val gpu = gpuLayers(context, m)
         synchronized(lock) {
-            if (loadedId != m.id) {
+            if (loadedId != m.id || loadedGpu != gpu) {
                 if (loadedId != null) Native.unload()
                 loadedId = null
                 Crash.step(context, "Modell „${m.title}“ wird geladen")
-                val rc = Native.load(f.absolutePath, CONTEXT)
+                val rc = Native.load(f.absolutePath, CONTEXT, gpu)
                 Crash.done(context)
                 if (rc != 0) throw KiException("Das Modell „${m.title}“ konnte nicht geladen werden (Code $rc).")
                 loadedId = m.id
+                loadedGpu = gpu
             }
         }
         return m
@@ -80,6 +90,18 @@ object Engine {
             }
         }
     }
+
+    /** Anzahl der Schichten auf der Grafikeinheit laut Regler (0 = nur Prozessor). */
+    fun gpuLayers(context: Context, m: KiModel): Int = when (val p = Settings.gpuPercent(context)) {
+        0 -> 0
+        100 -> 999
+        else -> (m.layers * p / 100).coerceAtLeast(1)
+    }
+
+    /** Beschreibung der gefundenen Rechenwerke für die Anzeige. */
+    fun devices(context: Context): String = runCatching { Native.ensure(context); Native.devices() }.getOrElse { "Fehler: ${it.message}" }
+
+    fun hasGpu(context: Context): Boolean = devices(context).contains("[GPU]")
 
     fun unloadNow() {
         synchronized(lock) {

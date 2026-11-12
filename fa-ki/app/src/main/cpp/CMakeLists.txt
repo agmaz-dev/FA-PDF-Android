@@ -4,8 +4,9 @@ project("fa-ki" LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED true)
 
-# Alles statisch in eine einzige libfa-ki.so (kein dynamisches Nachladen von Backends)
-set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+# Rechenwerke (Prozessor, Adreno-Grafik) als eigene Bibliotheken, die zur Laufzeit geladen werden.
+# Fehlt OpenCL auf einem Gerät, läuft die KI trotzdem auf dem Prozessor.
+set(BUILD_SHARED_LIBS ON CACHE BOOL "" FORCE)
 set(LLAMA_BUILD_COMMON ON CACHE BOOL "" FORCE)
 set(LLAMA_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(LLAMA_BUILD_TOOLS OFF CACHE BOOL "" FORCE)
@@ -14,7 +15,10 @@ set(LLAMA_BUILD_SERVER OFF CACHE BOOL "" FORCE)
 set(LLAMA_BUILD_APP OFF CACHE BOOL "" FORCE)
 set(LLAMA_OPENSSL OFF CACHE BOOL "" FORCE)
 set(GGML_NATIVE OFF CACHE BOOL "" FORCE)
-set(GGML_BACKEND_DL OFF CACHE BOOL "" FORCE)
+set(GGML_BACKEND_DL ON CACHE BOOL "" FORCE)
+set(GGML_OPENCL ON CACHE BOOL "" FORCE)
+set(GGML_OPENCL_USE_ADRENO_KERNELS ON CACHE BOOL "" FORCE)
+set(GGML_OPENCL_EMBED_KERNELS ON CACHE BOOL "" FORCE)
 set(GGML_OPENMP OFF CACHE BOOL "" FORCE)
 set(GGML_LLAMAFILE OFF CACHE BOOL "" FORCE)
 # Snapdragon 8 Elite (Galaxy Z Fold 7): Punktprodukt- und Int8-Matrixbefehle nutzen

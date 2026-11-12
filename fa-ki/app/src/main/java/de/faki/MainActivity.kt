@@ -160,6 +160,8 @@ private fun Screen(crash: String?) {
         }
 
         Spacer(Modifier.height(12.dp))
+        ComputeCard()
+        Spacer(Modifier.height(12.dp))
         TestBox()
         Spacer(Modifier.height(30.dp))
     }
@@ -238,7 +240,7 @@ private fun TestBox() {
                         try {
                             val a = Engine.complete(ctx, listOf(Msg("user", q)), 400)
                             val s = (System.currentTimeMillis() - t0) / 1000.0
-                            "$a\n\n(${"%.1f".format(s)} s · ${Settings.active(ctx)?.title})"
+                            "$a\n\n(${"%.1f".format(s)} s · ${Settings.active(ctx)?.title} · Grafik ${Settings.gpuPercent(ctx)} %)"
                         } catch (e: Exception) {
                             "Fehler: ${e.message}"
                         }
@@ -250,5 +252,34 @@ private fun TestBox() {
             colors = ButtonDefaults.buttonColors(containerColor = Lime, contentColor = Bg),
         ) { Text(if (running) "Läuft …" else "Frage stellen", fontWeight = FontWeight.Bold) }
         if (answer.isNotBlank()) Text(answer, color = TextC, fontSize = 15.sp, modifier = Modifier.padding(top = 10.dp).widthIn(max = 900.dp))
+    }
+}
+
+@Composable
+private fun ComputeCard() {
+    val ctx = LocalContext.current
+    val devices = remember { Engine.devices(ctx) }
+    val gpu = devices.contains("[GPU]")
+    var pct by remember { mutableIntStateOf(Settings.gpuPercent(ctx)) }
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(Card).padding(16.dp)) {
+        Text("Rechenart", color = TextC, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+        Text(
+            if (gpu) "Grafikeinheit gefunden. Stelle ein, wie viel davon die Grafik rechnet – und vergleiche die Sekunden unten im Testfeld."
+            else "Keine nutzbare Grafikeinheit gefunden – die KI rechnet mit dem Prozessor.",
+            color = Grey, fontSize = 14.sp, modifier = Modifier.padding(top = 4.dp),
+        )
+        if (gpu) {
+            Text("Grafik-Anteil: $pct %" + when (pct) { 0 -> " (nur Prozessor)"; 100 -> " (nur Grafik)"; else -> " (geteilt)" },
+                color = Lime, fontSize = 15.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 10.dp))
+            androidx.compose.material3.Slider(
+                value = pct.toFloat(),
+                onValueChange = { pct = (it / 25f).let { v -> Math.round(v) * 25 } },
+                onValueChangeFinished = { Settings.setGpuPercent(ctx, pct) },
+                valueRange = 0f..100f, steps = 3,
+                colors = androidx.compose.material3.SliderDefaults.colors(thumbColor = Lime, activeTrackColor = Lime, inactiveTrackColor = Line),
+            )
+            Text("Tipp: Für die Grafik am besten „Qwen 3.5 – 4B (für Grafik)“ einschalten.", color = Grey, fontSize = 12.sp)
+        }
+        Text(devices, color = Grey, fontSize = 11.sp, modifier = Modifier.padding(top = 8.dp))
     }
 }
