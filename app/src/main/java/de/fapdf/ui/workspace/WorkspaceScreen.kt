@@ -310,7 +310,7 @@ fun WorkspaceScreen(
                         }
                     })
             }
-            if (vm.mode != WorkspaceMode.READ && doc != null) {
+            if (vm.mode != WorkspaceMode.READ && vm.mode != WorkspaceMode.EDIT && doc != null) {
                 DocCard(doc, subtitle = "Seite ${currentPage + 1} von ${source?.pageCount ?: doc.pageCount}" + if (vm.dirty) " · nicht gespeichert" else "")
             }
             if (!fullscreen) ModeBanners(vm, onSignatureField = { f ->
@@ -577,7 +577,9 @@ private fun ModeBanners(vm: WorkspaceViewModel, onSignatureField: (de.fapdf.pdf.
             vm.placement != null -> InfoBanner("Mit dem Finger verschieben, mit zwei Fingern drehen. Größe unten mit dem Regler, „−“/„+“ oder Klein/Mittel/Groß ändern, dann „Übernehmen“.")
             vm.moveState != null -> InfoBanner("Ziehen Sie den Text an die neue Position.")
             vm.editTool == EditTool.HIGHLIGHT -> InfoBanner("Ziehen Sie über den Text, den Sie markieren möchten.")
-            else -> InfoBanner("Tippen Sie auf einen Text, um ihn zu ändern, oder auf eine freie Stelle, um Text hinzuzufügen.")
+            // Während der Eingabe kein Hinweis: mehr Platz für die Seite
+            vm.selection == null && vm.inlineNewText == null -> InfoBanner("Tippen Sie auf einen Text, um ihn zu ändern, oder auf eine freie Stelle, um Text hinzuzufügen.")
+            else -> {}
         }
         WorkspaceMode.FORM -> {
             val fi = vm.formInfo

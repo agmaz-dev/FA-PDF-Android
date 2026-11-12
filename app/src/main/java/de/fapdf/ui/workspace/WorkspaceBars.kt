@@ -99,6 +99,7 @@ private fun fmtSize(s: Float) = if (s % 1f == 0f) s.toInt().toString() else ((s 
 fun FormatBar(
     style: TextStyle, align: TextAlignment, originalName: String?, extraColor: Int?,
     onStyle: (TextStyle) -> Unit, onAlign: (TextAlignment) -> Unit,
+    trailing: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit = {},
 ) {
     var fontMenu by remember { mutableStateOf(false) }
     var sizeMenu by remember { mutableStateOf(false) }
@@ -189,6 +190,7 @@ fun FormatBar(
         IconButton(onClick = {
             onAlign(when (align) { TextAlignment.LEFT -> TextAlignment.CENTER; TextAlignment.CENTER -> TextAlignment.RIGHT; TextAlignment.RIGHT -> TextAlignment.LEFT })
         }) { Icon(alignIcon, "Ausrichtung") }
+        trailing()
     }
 }
 
@@ -208,29 +210,18 @@ private fun FormatToggle(icon: androidx.compose.ui.graphics.vector.ImageVector, 
 fun InlineTextEditor(vm: WorkspaceViewModel, sel: TextSelection, onMore: () -> Unit) {
     var style by remember(sel) { mutableStateOf(sel.detected.toTextStyle().copy(useOriginalFont = sel.canUseOriginalFont)) }
     var align by remember(sel) { mutableStateOf(sel.detected.alignment) }
-    val wide = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp >= 600
-    // Schrift, Größe und Farbe sind automatisch aus dem PDF erkannt; auf dem Handy erscheint die Formatleiste nur auf Wunsch
-    var showFormat by remember(sel) { mutableStateOf(wide) }
     val original = if (sel.canUseOriginalFont) sel.detected.fontName else null
     LaunchedEffect(sel) { vm.draftText = sel.text }
     val text = vm.draftText ?: sel.text
     Column {
-        // Getippt wird direkt in der Seite; diese Leiste zeigt die erkannte Schrift und übernimmt die Änderung
-        Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text(original ?: style.family.title, style = MaterialTheme.typography.labelLarge, maxLines = 1)
-                Text("${fmtSize(sel.detected.size)} pt · automatisch erkannt", style = MaterialTheme.typography.bodySmall, color = FaColors.SecondaryLabel, maxLines = 1)
-            }
-            IconButton(onClick = { showFormat = !showFormat }) {
-                Icon(Icons.Outlined.TextFields, "Schrift und Format", tint = if (showFormat) FaColors.Accent else FaColors.Label)
-            }
+        // Eine einzige schmale Zeile: erkannte Schrift, Größe, Farbe, fett, kursiv, Ausrichtung, Übernehmen.
+        // Getippt wird direkt in der Seite. Bei Fett/Kursiv abweichend vom Original setzt die Engine die passende Ersatzschrift.
+        FormatBar(style, align, original, sel.detected.colorArgb, onStyle = { style = it }, onAlign = { align = it }) {
             IconButton(onClick = { vm.applyTextEdit(sel, text, style, align, false) }, enabled = text.isNotBlank()) {
                 Icon(Icons.Outlined.Check, "Übernehmen", tint = FaColors.Accent)
             }
             IconButton(onClick = onMore) { Icon(Icons.Outlined.MoreVert, "Weitere Optionen") }
         }
-        // Bei Fett/Kursiv abweichend vom Original setzt die Engine automatisch die passende Ersatzschrift
-        if (showFormat) FormatBar(style, align, original, sel.detected.colorArgb, onStyle = { style = it }, onAlign = { align = it })
         HorizontalDivider(color = FaColors.Separator)
     }
 }

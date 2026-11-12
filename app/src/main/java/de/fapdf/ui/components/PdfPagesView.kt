@@ -111,7 +111,9 @@ fun PdfPagesView(
         // Breites Fenster (aufgeklapptes Fold): bei Zoom 1 ist die ganze Seite sichtbar, nicht nur die Breite gefüllt
         val wide = viewportW >= with(density) { 600.dp.toPx() }
         val firstAspect = pageSizes.firstOrNull()?.let { it.first / it.second } ?: 0f
-        val baseW = ZoomMath.basePageWidth(viewportW, viewportH, padPx, gapPx, firstAspect, wide)
+        // Höhe für „ganze Seite sichtbar“ kommt vom Bildschirm, nicht vom Fenster: öffnet sich die Tastatur, bleibt die Seite gleich groß
+        val screenH = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp * density.density
+        val baseW = ZoomMath.basePageWidth(viewportW, maxOf(viewportH, screenH * 0.72f), padPx, gapPx, firstAspect, wide)
         val pageWidthPx = baseW * zoom
         val contentW = ZoomMath.contentWidth(pageWidthPx, viewportW, padPx)
         val maxScroll = (contentW - viewportW).coerceAtLeast(0f)
