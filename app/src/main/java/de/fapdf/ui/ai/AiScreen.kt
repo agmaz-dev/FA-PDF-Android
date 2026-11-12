@@ -187,7 +187,12 @@ fun AiScreen(tool: Tool, docId: Long?, appVm: AppViewModel, onBack: () -> Unit, 
         }
     }
 
-    fun withConsent(action: () -> Unit) { if (consentGiven) action() else consentFor = action }
+    // Einmal zugestimmt gilt dauerhaft für diesen Dienst; FA KI (auf dem Handy) braucht gar keine Zustimmung
+    val consentPrefs = remember { context.getSharedPreferences("ai_consent", android.content.Context.MODE_PRIVATE) }
+    fun withConsent(action: () -> Unit) {
+        val p = settings.aiProvider
+        if (consentGiven || p == de.fapdf.data.AiProvider.FAKI || consentPrefs.getBoolean(p.name, false)) action() else consentFor = action
+    }
 
     var translatedId by remember { mutableStateOf<Long?>(null) }
 
@@ -460,7 +465,7 @@ fun AiScreen(tool: Tool, docId: Long?, appVm: AppViewModel, onBack: () -> Unit, 
                     TextButton(onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(settings.aiProvider.pricingUrl))) }) { Text("Preise ansehen") }
                 }
             },
-            confirmButton = { TextButton(onClick = { consentGiven = true; consentFor = null; action() }) { Text("Zustimmen und senden") } },
+            confirmButton = { TextButton(onClick = { consentGiven = true; consentPrefs.edit().putBoolean(settings.aiProvider.name, true).apply(); consentFor = null; action() }) { Text("Zustimmen – nicht mehr fragen") } },
             dismissButton = { TextButton(onClick = { consentFor = null }) { Text("Abbrechen") } },
         )
     }
