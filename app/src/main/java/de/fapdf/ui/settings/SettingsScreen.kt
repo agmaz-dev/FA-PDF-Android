@@ -105,7 +105,7 @@ fun SettingsScreen(appVm: AppViewModel, onBack: (() -> Unit)?, onProfiles: () ->
             SectionTitle("KI-Funktionen (optional)")
             Text(
                 "Die KI-Funktionen „Mit PDFs chatten“, „Zusammenfassung“, „Fragen-Generator“ und die KI-Übersetzung senden Dokumenttext an den gewählten Anbieter – " +
-                    "immer erst nach Ihrer ausdrücklichen Zustimmung. Dafür ist ein eigener API-Schlüssel nötig. Kostenlos geht es mit „Eigene Adresse“ und einem Groq-Schlüssel (console.groq.com). " +
+                    "immer erst nach Ihrer ausdrücklichen Zustimmung. Kostenlos geht es mit „Groq“ (Schlüssel von console.groq.com) oder ganz privat mit „FA KI“ auf diesem Handy. Zwischen beiden einfach umschalten und speichern. " +
                     "Der Schlüssel wird verschlüsselt auf diesem Gerät gespeichert. Die Offline-Übersetzung und alle übrigen Werkzeuge funktionieren ohne KI.",
                 Modifier.padding(horizontal = 20.dp), color = FaColors.SecondaryLabel,
             )
@@ -119,23 +119,26 @@ fun SettingsScreen(appVm: AppViewModel, onBack: (() -> Unit)?, onProfiles: () ->
             Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
                 if (provider == AiProvider.CUSTOM) OutlinedTextField(
                     baseUrl, { baseUrl = it }, Modifier.fillMaxWidth(), singleLine = true, label = { Text("Adresse") },
-                    supportingText = { Text("Groq: ${de.fapdf.data.DEFAULT_AI_BASE_URL} · FA KI: http://127.0.0.1:8080/v1") },
+                    supportingText = { Text("Adresse eines OpenAI-kompatiblen Dienstes, endet meist auf /v1") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
                 )
-                if (provider == AiProvider.CUSTOM) TextButton(onClick = { baseUrl = "http://127.0.0.1:8080/v1"; model = "lokal" }) {
-                    Text("FA KI auf diesem Handy verwenden (privat, ohne Internet)")
-                }
-                OutlinedTextField(model, { model = it }, Modifier.fillMaxWidth(), singleLine = true, label = { Text("Modellname") },
-                    supportingText = { Text(when (provider) {
-                        AiProvider.OPENAI -> "Modellname laut OpenAI-Dokumentation eintragen"
-                        AiProvider.CUSTOM -> "Vorgabe für Groq: ${provider.defaultModel} (Liste: console.groq.com/docs/models)"
-                        else -> "Vorgabe: ${provider.defaultModel}"
-                    }) })
-                OutlinedTextField(key, { key = it }, Modifier.fillMaxWidth(), singleLine = true,
-                    label = { Text(if (s.hasAiKey) "API-Schlüssel (gespeichert – zum Ändern neu eingeben)" else "API-Schlüssel") },
-                    visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password))
-                TextButton(onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(provider.pricingUrl))) }) {
-                    Text(if (provider == AiProvider.CUSTOM) "Kostenlosen Groq-Schlüssel holen" else "Preise von ${provider.title} ansehen")
+                if (provider == AiProvider.FAKI) Text(
+                    "Antworten kommen von der App FA KI auf diesem Handy. Dort ein Modell herunterladen und einschalten – " +
+                        "kein Schlüssel und kein Internet nötig. Dokumente verlassen das Handy nicht.",
+                    color = FaColors.SecondaryLabel, modifier = Modifier.padding(vertical = 4.dp),
+                ) else {
+                    OutlinedTextField(model, { model = it }, Modifier.fillMaxWidth(), singleLine = true, label = { Text("Modellname") },
+                        supportingText = { Text(when (provider) {
+                            AiProvider.OPENAI -> "Modellname laut OpenAI-Dokumentation eintragen"
+                            AiProvider.CUSTOM -> "Modellname laut Anbieter"
+                            else -> "Vorgabe: ${provider.defaultModel}"
+                        }) })
+                    OutlinedTextField(key, { key = it }, Modifier.fillMaxWidth(), singleLine = true,
+                        label = { Text(if (s.hasAiKey) "API-Schlüssel (gespeichert – zum Ändern neu eingeben)" else "API-Schlüssel") },
+                        visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password))
+                    if (provider.pricingUrl.isNotBlank()) TextButton(onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(provider.pricingUrl))) }) {
+                        Text(if (provider == AiProvider.GROQ) "Kostenlosen Groq-Schlüssel holen" else "Preise von ${provider.title} ansehen")
+                    }
                 }
             }
             PrimaryButton("KI-Einstellungen speichern", Modifier.padding(horizontal = 16.dp)) {

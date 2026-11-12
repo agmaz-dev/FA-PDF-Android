@@ -36,6 +36,8 @@ class AiClient(private val provider: AiProvider, private val apiKey: String, pri
         when (provider) {
             AiProvider.ANTHROPIC -> anthropic(system, messages, maxTokens)
             AiProvider.OPENAI -> openai(system, messages, maxTokens)
+            AiProvider.GROQ -> openai(system, messages, maxTokens, "https://api.groq.com/openai/v1")
+            AiProvider.FAKI -> openai(system, messages, maxTokens, "http://127.0.0.1:8080/v1")
             AiProvider.CUSTOM -> openai(system, messages, maxTokens, baseUrl.trimEnd('/').ifBlank { throw AiException("Bitte in den Einstellungen die Adresse eintragen.") })
         }
     }
@@ -65,7 +67,7 @@ class AiClient(private val provider: AiProvider, private val apiKey: String, pri
         messages.forEach { msgs.put(JSONObject().put("role", it.role).put("content", it.content)) }
         val body = JSONObject().put("model", model).put("messages", msgs)
             // Eigene Adressen (Groq u. a.) verstehen das klassische max_tokens am zuverlässigsten
-            .put(if (provider == AiProvider.CUSTOM) "max_tokens" else "max_completion_tokens", maxTokens)
+            .put(if (provider == AiProvider.OPENAI) "max_completion_tokens" else "max_tokens", maxTokens)
         val json = post("$base/chat/completions", mapOf("Authorization" to "Bearer $apiKey"), body)
         val choices = json.optJSONArray("choices") ?: throw AiException("Unerwartete Antwort des Dienstes.")
         return choices.getJSONObject(0).getJSONObject("message").optString("content").trim()

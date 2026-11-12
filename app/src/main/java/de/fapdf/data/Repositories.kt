@@ -257,12 +257,20 @@ class SettingsRepository(private val context: Context, private val crypto: Crypt
     }
 
     val settings: Flow<AppSettings> = context.dataStore.data.map { p ->
-        val provider = p[Keys.PROVIDER]?.let { runCatching { AiProvider.valueOf(it) }.getOrNull() } ?: AiProvider.ANTHROPIC
+        val stored = p[Keys.PROVIDER]?.let { runCatching { AiProvider.valueOf(it) }.getOrNull() } ?: AiProvider.ANTHROPIC
+        // Frühere „Eigene Adresse“-Einträge für Groq bzw. FA KI den neuen festen Punkten zuordnen
+        val base = p[Keys.BASE_URL] ?: DEFAULT_AI_BASE_URL
+        val provider = when {
+            stored != AiProvider.CUSTOM -> stored
+            base.startsWith("http://127.0.0.1") || base.startsWith("http://localhost") -> AiProvider.FAKI
+            base.contains("api.groq.com") -> AiProvider.GROQ
+            else -> stored
+        }
         AppSettings(
             themeMode = p[Keys.THEME]?.let { runCatching { ThemeMode.valueOf(it) }.getOrNull() } ?: ThemeMode.DARK,
             biometricLock = p[Keys.BIOMETRIC] ?: false,
             aiProvider = provider,
-            aiModel = p[Keys.MODEL] ?: provider.defaultModel,
+            aiModel = (if (provider != stored) null else p[Keys.MODEL])?.takeIf { it.isNotBlank() } ?: provider.defaultModel,
             hasAiKey = !p[Keys.KEY].isNullOrBlank(),
             aiBaseUrl = p[Keys.BASE_URL] ?: DEFAULT_AI_BASE_URL,
         )
