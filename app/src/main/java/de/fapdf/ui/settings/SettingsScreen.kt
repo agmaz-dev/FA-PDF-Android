@@ -119,9 +119,12 @@ fun SettingsScreen(appVm: AppViewModel, onBack: (() -> Unit)?, onProfiles: () ->
             Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
                 if (provider == AiProvider.CUSTOM) OutlinedTextField(
                     baseUrl, { baseUrl = it }, Modifier.fillMaxWidth(), singleLine = true, label = { Text("Adresse") },
-                    supportingText = { Text("Für Groq: ${de.fapdf.data.DEFAULT_AI_BASE_URL}") },
+                    supportingText = { Text("Groq: ${de.fapdf.data.DEFAULT_AI_BASE_URL} · FA KI: http://127.0.0.1:8080/v1") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
                 )
+                if (provider == AiProvider.CUSTOM) TextButton(onClick = { baseUrl = "http://127.0.0.1:8080/v1"; model = "lokal" }) {
+                    Text("FA KI auf diesem Handy verwenden (privat, ohne Internet)")
+                }
                 OutlinedTextField(model, { model = it }, Modifier.fillMaxWidth(), singleLine = true, label = { Text("Modellname") },
                     supportingText = { Text(when (provider) {
                         AiProvider.OPENAI -> "Modellname laut OpenAI-Dokumentation eintragen"

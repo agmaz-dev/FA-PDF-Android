@@ -76,7 +76,8 @@ class AiClient(private val provider: AiProvider, private val apiKey: String, pri
         try {
             conn.requestMethod = "POST"
             conn.connectTimeout = 20_000
-            conn.readTimeout = 120_000
+            // Die KI auf dem Handy (FA KI) braucht für lange Dokumente mehrere Minuten
+            conn.readTimeout = if (url.startsWith("http://127.0.0.1") || url.startsWith("http://localhost")) 600_000 else 120_000
             conn.doOutput = true
             conn.setRequestProperty("content-type", "application/json")
             headers.forEach { (k, v) -> conn.setRequestProperty(k, v) }
@@ -95,7 +96,7 @@ class AiClient(private val provider: AiProvider, private val apiKey: String, pri
             }
             return JSONObject(text)
         } catch (e: java.io.IOException) {
-            throw AiException("Keine Verbindung zum KI-Dienst: ${e.message}")
+            throw AiException(if (url.startsWith("http://127.0.0.1")) "FA KI ist nicht erreichbar. Bitte die App FA KI öffnen und einschalten." else "Keine Verbindung zum KI-Dienst: ${e.message}")
         } finally {
             conn.disconnect()
         }
