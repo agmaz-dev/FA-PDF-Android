@@ -435,12 +435,13 @@ fun MoreSheet(vm: WorkspaceViewModel, currentPage: Int, onDismiss: () -> Unit, o
 @Composable
 fun EditMoreSheet(
     highlightActive: Boolean, onDismiss: () -> Unit, onOcr: () -> Unit, onFont: () -> Unit,
-    onHighlight: () -> Unit, onSign: () -> Unit, onMore: () -> Unit,
+    onHighlight: () -> Unit, onSign: () -> Unit, onMore: () -> Unit, onReplace: () -> Unit = {},
 ) {
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = FaColors.Surface) {
         Column(Modifier.padding(horizontal = 20.dp).navigationBarsPadding()) {
             Text("Weitere Bearbeitungswerkzeuge", style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(8.dp))
+            SheetItem("Suchen und ersetzen", "Einen Begriff im ganzen Dokument ändern, z. B. ein Datum oder einen Namen") { onReplace() }
             SheetItem("Texterkennung (OCR)", "Gescannte Seiten bearbeitbar machen – Deutsch, Englisch, Türkisch") { onOcr() }
             SheetItem("Schrift für neuen Text", "Schriftart, Größe, Farbe, Fett/Kursiv und Ausrichtung") { onFont() }
             SheetItem(if (highlightActive) "Text markieren beenden" else "Text markieren", "Über Text ziehen, um ihn farbig hervorzuheben") { onHighlight() }

@@ -431,7 +431,9 @@ fun WorkspaceScreen(
             onHighlight = { sheet = null; vm.editTool = if (vm.editTool == EditTool.HIGHLIGHT) EditTool.TEXT else EditTool.HIGHLIGHT },
             onSign = { sheet = "sign" },
             onMore = { sheet = "more" },
+            onReplace = { sheet = "replace" },
         )
+        "replace" -> ReplaceDialog(onDismiss = { sheet = null }) { a, b -> sheet = null; vm.replaceAll(a, b) }
         "font" -> StyleDialog(vm.newTextStyle, onDismiss = { sheet = null }) { vm.newTextStyle = it; sheet = null }
         "more" -> MoreSheet(vm, currentPage, onDismiss = { sheet = null }, onPrint = {
             vm.current?.let { FileActions.print(context, it, doc?.displayName ?: "Dokument.pdf") }
@@ -974,4 +976,22 @@ private fun BusyOverlay(text: String) {
             Text(text, color = FaColors.Background, style = MaterialTheme.typography.labelLarge)
         }
     }
+}
+
+@Composable
+private fun ReplaceDialog(onDismiss: () -> Unit, onReplace: (String, String) -> Unit) {
+    var term by remember { mutableStateOf("") }
+    var repl by remember { mutableStateOf("") }
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Suchen und ersetzen") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                androidx.compose.material3.OutlinedTextField(term, { term = it }, singleLine = true, label = { Text("Suchen") })
+                androidx.compose.material3.OutlinedTextField(repl, { repl = it }, singleLine = true, label = { Text("Ersetzen durch") })
+            }
+        },
+        confirmButton = { androidx.compose.material3.TextButton(onClick = { onReplace(term, repl) }, enabled = term.isNotBlank()) { Text("Alle ersetzen") } },
+        dismissButton = { androidx.compose.material3.TextButton(onClick = onDismiss) { Text("Abbrechen") } },
+    )
 }

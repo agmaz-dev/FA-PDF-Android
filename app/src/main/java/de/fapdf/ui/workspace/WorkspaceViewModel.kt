@@ -301,7 +301,8 @@ class WorkspaceViewModel(app: Application, val docId: Long, initialMode: Workspa
                 pushVersion(out)
                 savedOcr?.let { ocrPages.putAll(it) }
                 onSuccess()
-                if (note != null) message = "Hinweis" to note
+                // Hinweise kurz unten einblenden statt als Dialog, der weggeklickt werden muss
+                if (note != null) toast = note
             } catch (e: Exception) {
                 message = "Nicht möglich" to (e.message ?: e.javaClass.simpleName)
             } finally {
@@ -455,6 +456,35 @@ class WorkspaceViewModel(app: Application, val docId: Long, initialMode: Workspa
         runEdit("Text wird geändert …", op = { input, out ->
             PdfIo.transform(input, out) { d -> editEngine.replaceText(d, sel.page, ids, newText, style, alignment, asBlock).note }
         }, onSuccess = then)
+    }
+
+    /** Ersetzt einen Begriff im ganzen Dokument – in der jeweiligen Originalschrift und -größe. */
+    fun replaceAll(term: String, replacement: String) {
+        if (term.isBlank()) return
+        selection = null; draftText = null
+        runEdit("Ersetze „$term“ …", op = { input, out ->
+            var count = 0
+            PdfIo.transform(input, out) { d ->
+                for (page in 0 until d.numberOfPages) {
+                    var guard = 0
+                    val done = HashSet<Pair<Float, Float>>()
+                    while (guard++ < 300) {
+                        val pt = de.fapdf.pdf.PageAnalyzer.analyze(d, page)
+                        val line = pt.lines.firstOrNull { l ->
+                            l.text.contains(term) && l.directlyEditable && (l.startX to l.baseline) !in done
+                        } ?: break
+                        done += line.startX to line.baseline
+                        val det = editEngine.detectStyle(pt, listOf(line.id))
+                        runCatching {
+                            editEngine.replaceText(d, page, listOf(line.id), line.text.replace(term, replacement), det.toTextStyle(), det.alignment, false)
+                            count++
+                        }
+                    }
+                }
+                null
+            }
+            if (count == 0) "„$term“ wurde nicht gefunden." else "$count Stelle(n) ersetzt."
+        })
     }
 
     fun deleteSelection(sel: TextSelection, asBlock: Boolean) {
