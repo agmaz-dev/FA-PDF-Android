@@ -271,7 +271,8 @@ class SettingsRepository(private val context: Context, private val crypto: Crypt
             biometricLock = p[Keys.BIOMETRIC] ?: false,
             aiProvider = provider,
             aiModel = (if (provider != stored) null else p[Keys.MODEL])?.takeIf { it.isNotBlank() } ?: provider.defaultModel,
-            hasAiKey = !p[Keys.KEY].isNullOrBlank(),
+            savedKeys = AiProvider.entries.filter { !p[keyFor(it)].isNullOrBlank() }.toSet(),
+            hasAiKey = provider == AiProvider.FAKI || !p[keyFor(provider)].isNullOrBlank() || !p[Keys.KEY].isNullOrBlank(),
             aiBaseUrl = p[Keys.BASE_URL] ?: DEFAULT_AI_BASE_URL,
         )
     }
@@ -288,14 +289,37 @@ class SettingsRepository(private val context: Context, private val crypto: Crypt
         if (baseUrl != null) it[Keys.BASE_URL] = baseUrl.trim().trimEnd('/')
     }
 
+    /** Jeder KI-Dienst hat seinen eigenen Schlüssel – Umschalten löscht nichts. */
+    private fun keyFor(p: AiProvider) = stringPreferencesKey("ai_key_enc_${p.name}")
+
     /** Der API-Schlüssel wird nur verschlüsselt (Android Keystore) gespeichert – niemals in der APK. */
-    suspend fun setApiKey(key: String?) = context.dataStore.edit {
-        if (key.isNullOrBlank()) it.remove(Keys.KEY)
-        else it[Keys.KEY] = Base64.encodeToString(crypto.encryptString(key.trim()), Base64.NO_WRAP)
+    suspend fun setApiKey(provider: AiProvider, key: String?) = context.dataStore.edit {
+        if (key.isNullOrBlank()) it.remove(keyFor(provider))
+        else it[keyFor(provider)] = Base64.encodeToString(crypto.encryptString(key.trim()), Base64.NO_WRAP)
     }
 
-    suspend fun apiKey(): String? {
-        val enc = context.dataStore.data.first()[Keys.KEY] ?: return null
+    /** Früher gab es nur einen Schlüssel für alle Dienste: einmalig dem passenden Dienst zuordnen. */
+    suspend fun migrateLegacyKey() {
+        val enc = context.dataStore.data.first()[Keys.KEY] ?: return
+        val key = runCatching { crypto.decryptString(Base64.decode(enc, Base64.NO_WRAP)) }.getOrNull()
+        val target = when {
+            key == null -> null
+            key.startsWith("gsk_") -> AiProvider.GROQ
+            key.startsWith("sk-ant") -> AiProvider.ANTHROPIC
+            key.startsWith("sk-") -> AiProvider.OPENAI
+            else -> AiProvider.CUSTOM
+        }
+        context.dataStore.edit {
+            if (target != null && it[keyFor(target)].isNullOrBlank()) it[keyFor(target)] = enc
+            it.remove(Keys.KEY)
+        }
+    }
+
+    /** Schlüssel des gewählten (oder angegebenen) Dienstes. */
+    suspend fun apiKey(provider: AiProvider? = null): String? {
+        migrateLegacyKey()
+        val p = provider ?: current().aiProvider
+        val enc = context.dataStore.data.first()[keyFor(p)] ?: return null
         return runCatching { crypto.decryptString(Base64.decode(enc, Base64.NO_WRAP)) }.getOrNull()
     }
 }

@@ -41,7 +41,10 @@ data class AppSettings(
     val biometricLock: Boolean = false,
     val aiProvider: AiProvider = AiProvider.ANTHROPIC,
     val aiModel: String = AiProvider.ANTHROPIC.defaultModel,
+    /** Der gewählte KI-Dienst ist einsatzbereit (Schlüssel vorhanden bzw. FA KI braucht keinen). */
     val hasAiKey: Boolean = false,
+    /** Für welche Dienste ein Schlüssel gespeichert ist. */
+    val savedKeys: Set<AiProvider> = emptySet(),
     val aiBaseUrl: String = DEFAULT_AI_BASE_URL,
 )
 

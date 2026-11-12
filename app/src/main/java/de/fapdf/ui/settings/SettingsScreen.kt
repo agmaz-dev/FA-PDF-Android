@@ -58,6 +58,7 @@ fun SettingsScreen(appVm: AppViewModel, onBack: (() -> Unit)?, onProfiles: () ->
     var key by remember { mutableStateOf("") }
     var baseUrl by remember { mutableStateOf(de.fapdf.data.DEFAULT_AI_BASE_URL) }
     LaunchedEffect(Unit) {
+        repo.migrateLegacyKey()
         val cur = repo.current()
         provider = cur.aiProvider; model = cur.aiModel; baseUrl = cur.aiBaseUrl
     }
@@ -111,9 +112,13 @@ fun SettingsScreen(appVm: AppViewModel, onBack: (() -> Unit)?, onProfiles: () ->
             )
             GroupCard(Modifier.padding(top = 10.dp)) {
                 AiProvider.entries.forEach { p ->
-                    GroupRow(p.title, p.endpointHost, trailing = {
-                        androidx.compose.material3.RadioButton(selected = provider == p, onClick = { provider = p; model = p.defaultModel })
-                    }) { provider = p; model = p.defaultModel }
+                    GroupRow(p.title, p.endpointHost + if (p in s.savedKeys) " · Schlüssel gespeichert ✓" else "", trailing = {
+                        androidx.compose.material3.RadioButton(selected = provider == p, onClick = { provider = p; model = p.defaultModel; scope.launch { repo.setAi(p, p.defaultModel, null); FileActions.toast(context, "${p.title.substringBefore(" –")} ausgewählt") } })
+                    }) {
+                        // Antippen wählt den Dienst sofort aus; gespeicherte Schlüssel bleiben erhalten
+                        provider = p; model = p.defaultModel
+                        scope.launch { repo.setAi(p, p.defaultModel, null); FileActions.toast(context, "${p.title.substringBefore(" –")} ausgewählt") }
+                    }
                 }
             }
             Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
@@ -134,7 +139,7 @@ fun SettingsScreen(appVm: AppViewModel, onBack: (() -> Unit)?, onProfiles: () ->
                             else -> "Vorgabe: ${provider.defaultModel}"
                         }) })
                     OutlinedTextField(key, { key = it }, Modifier.fillMaxWidth(), singleLine = true,
-                        label = { Text(if (s.hasAiKey) "API-Schlüssel (gespeichert – zum Ändern neu eingeben)" else "API-Schlüssel") },
+                        label = { Text(if (provider in s.savedKeys) "Schlüssel für ${provider.title.substringBefore(" –")} gespeichert ✓ (zum Ändern neu eingeben)" else "API-Schlüssel für ${provider.title.substringBefore(" –")}") },
                         visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password))
                     if (provider.pricingUrl.isNotBlank()) TextButton(onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(provider.pricingUrl))) }) {
                         Text(if (provider == AiProvider.GROQ) "Kostenlosen Groq-Schlüssel holen" else "Preise von ${provider.title} ansehen")
@@ -144,13 +149,13 @@ fun SettingsScreen(appVm: AppViewModel, onBack: (() -> Unit)?, onProfiles: () ->
             PrimaryButton("KI-Einstellungen speichern", Modifier.padding(horizontal = 16.dp)) {
                 scope.launch {
                     repo.setAi(provider, model.ifBlank { provider.defaultModel }, if (provider == AiProvider.CUSTOM) baseUrl else null)
-                    if (key.isNotBlank()) repo.setApiKey(key)
+                    if (key.isNotBlank()) repo.setApiKey(provider, key)
                     key = ""
                     FileActions.toast(context, "Gespeichert")
                 }
             }
-            if (s.hasAiKey) TextButton(onClick = { scope.launch { repo.setApiKey(null) } }, modifier = Modifier.padding(horizontal = 8.dp)) {
-                Text("API-Schlüssel löschen", color = FaColors.Destructive)
+            if (provider in s.savedKeys) TextButton(onClick = { scope.launch { repo.setApiKey(provider, null) } }, modifier = Modifier.padding(horizontal = 8.dp)) {
+                Text("Schlüssel für ${provider.title.substringBefore(" –")} löschen", color = FaColors.Destructive)
             }
             SectionTitle("Über FA PDF")
             GroupCard {
