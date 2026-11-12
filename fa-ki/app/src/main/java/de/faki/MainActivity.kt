@@ -141,6 +141,14 @@ private fun Screen(crash: String?) {
             }
             Text("Schlüssel: beliebig (z. B. „lokal“) · Modellname: lokal", color = Grey, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
             KiService.lastError?.let { Text("Fehler: $it", color = Color(0xFFFF6B6B), fontSize = 12.sp) }
+            // Samsung beendet Apps im Hintergrund sonst nach einiger Zeit – dann ist die KI für andere Apps weg
+            val pm = ctx.getSystemService(android.os.PowerManager::class.java)
+            val unrestricted = remember(tick) { pm.isIgnoringBatteryOptimizations(ctx.packageName) }
+            if (!unrestricted) TextButton(onClick = {
+                runCatching {
+                    ctx.startActivity(android.content.Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, android.net.Uri.parse("package:" + ctx.packageName)))
+                }
+            }) { Text("Im Hintergrund dauerhaft erlauben (Akku: nicht eingeschränkt)", color = Lime) }
         }
 
         Spacer(Modifier.height(22.dp))

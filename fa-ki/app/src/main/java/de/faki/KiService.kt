@@ -23,14 +23,17 @@ class KiService : Service() {
             stopSelf()
             return START_NOT_STICKY
         }
-        startInForeground()
+        // Android erlaubt den Vordergrunddienst nicht, wenn das System den Dienst im Hintergrund neu startet –
+        // dann sauber beenden statt abzustürzen. Beim nächsten Öffnen von FA KI läuft er wieder.
+        val ok = runCatching { startInForeground() }.onFailure { lastError = null }.isSuccess
+        if (!ok) { stopSelf(); return START_NOT_STICKY }
         if (server == null) {
             server = KiServer(applicationContext).also {
                 runCatching { it.start(NanoHTTPD.SOCKET_READ_TIMEOUT, true) }.onFailure { e -> lastError = e.message }
             }
         }
         running = server?.isAlive == true
-        return START_STICKY
+        return START_NOT_STICKY
     }
 
     private fun startInForeground() {
