@@ -3,6 +3,11 @@ package de.fapdf.ui.settings
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.height
+import androidx.compose.ui.draw.clip
+import de.fapdf.ui.theme.FaColors
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Draw
 import androidx.compose.material.icons.outlined.People
@@ -40,7 +45,6 @@ import de.fapdf.ui.components.GroupRow
 import de.fapdf.ui.components.PrimaryButton
 import de.fapdf.ui.components.ScreenScaffold
 import de.fapdf.ui.components.SectionTitle
-import de.fapdf.ui.theme.FaColors
 import kotlinx.coroutines.launch
 
 @Composable
@@ -64,18 +68,26 @@ fun SettingsScreen(appVm: AppViewModel, onBack: (() -> Unit)?, onProfiles: () ->
                 GroupRow("Unterschriften", "Gespeicherte Unterschriften verwalten", Icons.Outlined.Draw, showDivider = false, onClick = onSignatures)
             }
             SectionTitle("Darstellung")
-            GroupCard {
-                de.fapdf.data.ThemeMode.entries.forEachIndexed { i, m ->
-                    GroupRow(
-                        m.title,
-                        when (m) {
-                            de.fapdf.data.ThemeMode.SYSTEM -> "Folgt der Einstellung des Geräts"
-                            de.fapdf.data.ThemeMode.LIGHT -> "Helles Design"
-                            de.fapdf.data.ThemeMode.DARK -> "Dunkles Design – schont die Augen bei wenig Licht"
-                        },
-                        showDivider = i < de.fapdf.data.ThemeMode.entries.size - 1,
-                        trailing = { androidx.compose.material3.RadioButton(selected = s.themeMode == m, onClick = { scope.launch { repo.setTheme(m) } }) },
-                    ) { scope.launch { repo.setTheme(m) } }
+            // Umschalter in einer Zeile: System · Hell · Dunkel
+            androidx.compose.foundation.layout.Row(
+                Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(20.dp)).background(FaColors.Card).padding(6.dp),
+                horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(4.dp),
+            ) {
+                de.fapdf.data.ThemeMode.entries.forEach { m ->
+                    val sel = s.themeMode == m
+                    androidx.compose.foundation.layout.Box(
+                        Modifier.weight(1f).height(44.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(15.dp))
+                            .background(if (sel) FaColors.Accent else androidx.compose.ui.graphics.Color.Transparent)
+                            .clickable { scope.launch { repo.setTheme(m) } },
+                        contentAlignment = androidx.compose.ui.Alignment.Center,
+                    ) {
+                        Text(
+                            if (m == de.fapdf.data.ThemeMode.SYSTEM) "System" else m.title,
+                            color = if (sel) FaColors.OnAccent else FaColors.SecondaryLabel,
+                            fontWeight = if (sel) androidx.compose.ui.text.font.FontWeight.Bold else null,
+                        )
+                    }
                 }
             }
             SectionTitle("Datenschutz")

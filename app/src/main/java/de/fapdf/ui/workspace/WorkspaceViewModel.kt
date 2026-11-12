@@ -367,6 +367,8 @@ class WorkspaceViewModel(app: Application, val docId: Long, initialMode: Workspa
     // ---------- Bearbeiten: Tippen ----------
     fun onEditTap(page: Int, u: Float, v: Float) {
         if (placement != null || moveState != null) return
+        // Getippter Text wird übernommen, sobald man woanders hintippt
+        if (commitPending()) return
         viewModelScope.launch {
             placedObjectAt(page, u, v)?.let { objectMenu = it; return@launch }
             val ocr = ocrPages[page]
@@ -416,7 +418,21 @@ class WorkspaceViewModel(app: Application, val docId: Long, initialMode: Workspa
         }
     }
 
-    fun applyTextEdit(sel: TextSelection, newText: String, style: TextStyle, alignment: Alignment, asBlock: Boolean) {
+    /**
+     * Übernimmt den gerade getippten Text automatisch (ohne ✓): beim Antippen einer anderen Stelle, bei „Fertig“
+     * auf der Tastatur, beim Zurückgehen und vor dem Speichern. Liefert true, wenn eine Änderung angestoßen wurde.
+     */
+    fun commitPending(then: () -> Unit = {}): Boolean {
+        val sel = selection ?: return false
+        val t = draftText ?: return false
+        val original = if (editBlock) sel.blockText else sel.text
+        if (t == original || t.isBlank()) return false
+        draftText = null
+        applyTextEdit(sel, t, sel.detected.toTextStyle().copy(useOriginalFont = sel.canUseOriginalFont), sel.detected.alignment, editBlock, then)
+        return true
+    }
+
+    fun applyTextEdit(sel: TextSelection, newText: String, style: TextStyle, alignment: Alignment, asBlock: Boolean, then: () -> Unit = {}) {
         selection = null
         if (sel.isScan) {
             val page = sel.page
@@ -432,13 +448,13 @@ class WorkspaceViewModel(app: Application, val docId: Long, initialMode: Workspa
                 }
                 bmp.recycle()
                 null
-            }, onSuccess = { updated?.let { ocrPages[page] = it } })
+            }, onSuccess = { updated?.let { ocrPages[page] = it }; then() })
             return
         }
         val ids = if (asBlock) sel.blockLineIds else sel.lineIds
         runEdit("Text wird geändert …", op = { input, out ->
             PdfIo.transform(input, out) { d -> editEngine.replaceText(d, sel.page, ids, newText, style, alignment, asBlock).note }
-        })
+        }, onSuccess = then)
     }
 
     fun deleteSelection(sel: TextSelection, asBlock: Boolean) {

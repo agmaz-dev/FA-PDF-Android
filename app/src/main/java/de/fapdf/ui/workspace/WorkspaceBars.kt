@@ -278,6 +278,7 @@ fun InlineLineEditor(vm: WorkspaceViewModel, sel: TextSelection, s: Float) {
             textStyle = androidx.compose.ui.text.TextStyle(color = Color(det.colorArgb), fontSize = with(density) { fontPx.toSp() }, fontFamily = previewFont),
             cursorBrush = SolidColor(Color(0xFF3B6EF5)),
             keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None, imeAction = if (vm.editBlock) ImeAction.Default else ImeAction.Done),
+            keyboardActions = KeyboardActions(onDone = { if (!vm.commitPending()) { vm.selection = null; vm.draftText = null } }),
             modifier = Modifier.padding(horizontal = 2.dp).focusRequester(focus),
         )
     }

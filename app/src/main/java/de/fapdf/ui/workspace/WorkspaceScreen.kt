@@ -202,7 +202,7 @@ fun WorkspaceScreen(
         }
     }
 
-    fun leave() { if (vm.dirty) showDiscard = true else onBack() }
+    fun leave() { if (vm.commitPending()) return; if (vm.dirty) showDiscard = true else onBack() }
     BackHandler { if (fullscreen) fullscreen = false else leave() }
 
     val doc = vm.doc
@@ -290,7 +290,7 @@ fun WorkspaceScreen(
                         imagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
                     }, onDraw = {
                         vm.switchMode(WorkspaceMode.ANNOTATE); vm.annotTool = AnnotTool.INK
-                    }, onSave = { vm.quickSave() }, onBack = { leave() })
+                    }, onSave = { if (!vm.commitPending { vm.quickSave() }) vm.quickSave() }, onBack = { leave() })
                 }
             }
         },

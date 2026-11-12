@@ -1,5 +1,8 @@
 package de.fapdf.ui.home
 
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.material.icons.outlined.Add
+import de.fapdf.data.DocumentRepository
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateColorAsState
@@ -154,9 +157,20 @@ fun HomeScreen(vm: AppViewModel, nav: HomeNav) {
     ) { padding ->
         HorizontalPager(state = pager, modifier = Modifier.padding(padding).fillMaxSize(), beyondViewportPageCount = 1) { page ->
             when (page) {
-                0 -> Column(Modifier.fillMaxSize().statusBarsPadding()) {
-                    Text("Dokumente", style = MaterialTheme.typography.headlineMedium, modifier = Modifier.padding(start = 20.dp, top = 16.dp, bottom = 8.dp))
-                    RecentDocuments(vm, docs)
+                0 -> Box(Modifier.fillMaxSize()) {
+                    Column(Modifier.fillMaxSize().statusBarsPadding()) {
+                        Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 10.dp), verticalAlignment = Alignment.Bottom) {
+                            Text("Dateien", fontSize = 36.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = (-1).sp, modifier = Modifier.weight(1f))
+                            Text("${docs.size}", style = MaterialTheme.typography.titleMedium, color = FaColors.SecondaryLabel, modifier = Modifier.padding(bottom = 6.dp))
+                        }
+                        RecentDocuments(vm, docs)
+                    }
+                    // Schwebender Plus-Knopf: PDF öffnen
+                    Box(
+                        Modifier.align(Alignment.BottomEnd).padding(20.dp).size(60.dp).clip(RoundedCornerShape(20.dp))
+                            .background(FaColors.Accent).clickable { opener.launch(arrayOf("application/pdf")) },
+                        contentAlignment = Alignment.Center,
+                    ) { Icon(Icons.Outlined.Add, "PDF öffnen", tint = FaColors.OnAccent, modifier = Modifier.size(30.dp)) }
                 }
                 1 -> ToolsHome(
                     onOpen = { opener.launch(arrayOf("application/pdf")) },
@@ -207,8 +221,7 @@ private fun ToolsHome(onOpen: () -> Unit, onScan: () -> Unit, onProfile: () -> U
                     contentAlignment = Alignment.Center,
                 ) { Icon(Icons.Filled.Person, "Profile", tint = FaColors.Accent, modifier = Modifier.size(26.dp)) }
             }
-            Text("Deine PDF-Werkzeuge", style = MaterialTheme.typography.headlineMedium, modifier = Modifier.padding(top = 18.dp))
-            Text("Alles für deine Dokumente", style = MaterialTheme.typography.bodyLarge, color = FaColors.SecondaryLabel)
+            Text("Werkzeuge", fontSize = 36.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = (-1).sp, modifier = Modifier.padding(top = 18.dp))
             OutlinedTextField(
                 query, { query = it }, Modifier.fillMaxWidth().padding(top = 14.dp), singleLine = true,
                 leadingIcon = { Icon(Icons.Outlined.Search, null) }, placeholder = { Text("Werkzeug suchen") },
@@ -269,12 +282,12 @@ private fun TileGrid(tools: List<Tool>, cols: Int, onTool: (Tool) -> Unit, horiz
 
 @Composable
 private fun ToolTile(tool: Tool, modifier: Modifier, horizontal: Boolean, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(12.dp)
-    val box = modifier.heightIn(min = if (horizontal) 64.dp else 98.dp).clip(shape).background(tool.tileColor).clickable(onClick = onClick)
+    val shape = RoundedCornerShape(18.dp)
+    val box = modifier.heightIn(min = if (horizontal) 64.dp else 104.dp).clip(shape).background(FaColors.Card).clickable(onClick = onClick)
     val icon: @Composable () -> Unit = {
         val t = tool.iconText
-        if (t != null) Text(t, color = tool.iconColor, fontWeight = FontWeight.Bold, fontSize = 22.sp)
-        else Icon(tool.icon, null, tint = tool.iconColor, modifier = Modifier.size(30.dp))
+        if (t != null) Text(t, color = FaColors.Accent, fontWeight = FontWeight.Bold, fontSize = 22.sp)
+        else Icon(tool.icon, null, tint = FaColors.Accent, modifier = Modifier.size(30.dp))
     }
     if (horizontal) {
         Row(box.padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -319,8 +332,12 @@ private fun RecentDocuments(vm: AppViewModel, docs: List<DocumentEntity>) {
         Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
             OutlinedTextField(
                 query, { query = it }, Modifier.weight(1f), singleLine = true,
-                leadingIcon = { Icon(Icons.Outlined.Search, null) }, placeholder = { Text("Dokumente suchen") },
-                shape = RoundedCornerShape(12.dp),
+                leadingIcon = { Icon(Icons.Outlined.Search, null) }, placeholder = { Text("Suchen") },
+                shape = RoundedCornerShape(14.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    unfocusedContainerColor = FaColors.Card, focusedContainerColor = FaColors.Card,
+                    unfocusedBorderColor = Color.Transparent, focusedBorderColor = FaColors.Accent,
+                ),
             )
             Box {
                 IconButton(onClick = { sortMenu = true }) { Icon(Icons.Outlined.Sort, "Sortieren") }
@@ -343,18 +360,24 @@ private fun RecentDocuments(vm: AppViewModel, docs: List<DocumentEntity>) {
                     color = FaColors.SecondaryLabel, style = MaterialTheme.typography.bodyMedium,
                 )
             }
-        } else LazyColumn(Modifier.fillMaxSize().navigationBarsPadding()) {
+        } else LazyColumn(
+            Modifier.fillMaxSize().navigationBarsPadding(),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 96.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
             items(list, key = { it.id }) { d ->
                 var menu by remember { mutableStateOf(false) }
+                // Dokumente als abgerundete Karten (Design „Dunkel“)
                 Row(
-                    Modifier.fillMaxWidth().combinedClickable(onClick = { vm.actionDocId = d.id }, onLongClick = { menu = true })
-                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(FaColors.Card)
+                        .combinedClickable(onClick = { vm.actionDocId = d.id }, onLongClick = { menu = true })
+                        .padding(horizontal = 14.dp, vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Thumbnail(d.thumbnailPath, key = d.modifiedAt)
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
-                        Text(d.displayName, maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyLarge)
+                        Text(DocumentRepository.baseName(d.displayName), maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                         Text(
                             "Bearbeitet ${Format.date(d.modifiedAt)} · Importiert ${Format.dateShort(d.importedAt)}",
                             style = MaterialTheme.typography.bodySmall, color = FaColors.SecondaryLabel,
@@ -377,7 +400,6 @@ private fun RecentDocuments(vm: AppViewModel, docs: List<DocumentEntity>) {
                         }
                     }
                 }
-                HorizontalDivider(Modifier.padding(start = 74.dp), color = FaColors.Separator)
             }
         }
     }
