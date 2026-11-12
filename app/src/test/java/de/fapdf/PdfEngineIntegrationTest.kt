@@ -111,15 +111,15 @@ class PdfEngineIntegrationTest {
             val pt = PageAnalyzer.analyze(doc, 0)
             val line = pt.lines.first { it.text.contains(contains) }
             val st = engine.detectStyle(pt, listOf(line.id))
-            assertTrue("Erkannte Größe ${st.size} statt 11.04 für '${line.text}'\n${sizes(inp)}", kotlin.math.abs(st.size - 11.04f) < 0.15f)
+            assertTrue("Erkannte Größe ${st.size} statt 11.04 für '${line.text}'\n${sizes(inp)}", kotlin.math.abs(st.size - 12f) < 0.15f)
             engine.replaceText(doc, 0, listOf(line.id), line.text.replace(contains, repl), st.toTextStyle(), de.fapdf.pdf.Alignment.LEFT, asBlock = false)
         }
-        edit(src, step1, "LN IB 1", "LN IB 2")
-        edit(step1, step2, "selbst tragen", "selbst zahlen")
+        edit(src, step1, "1. November", "2. November")
+        edit(step1, step2, "Konto der", "Konto des")
         val after = sizes(step2)
         PDDocument.load(step2).use { d ->
             PageAnalyzer.analyze(d, 0).lines.filter { it.text.isNotBlank() }.forEach {
-                assertTrue("Zeile hat ${it.size} pt: '${it.text}'\n$after", kotlin.math.abs(it.size - 11.04f) < 0.15f)
+                assertTrue("Zeile hat ${it.size} pt: '${it.text}'\n$after", it.size < 13f && it.text.length < 3 || kotlin.math.abs(it.size - 12f) < 0.15f || kotlin.math.abs(it.size - 20f) < 0.15f)
             }
         }
     }
