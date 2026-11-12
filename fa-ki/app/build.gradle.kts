@@ -54,7 +54,13 @@ android {
     kotlinOptions { jvmTarget = "17" }
     buildFeatures { compose = true }
     // Bibliotheken entpacken, damit llama.cpp die Rechenwerke (libggml-cpu, libggml-opencl) per Pfad laden kann
-    packaging { jniLibs { useLegacyPackaging = true } }
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+            // Nur zum Verlinken gebaut – zur Laufzeit muss der OpenCL-Treiber des Handys (Qualcomm) geladen werden
+            excludes += "**/libOpenCL.so"
+        }
+    }
 }
 
 dependencies {
