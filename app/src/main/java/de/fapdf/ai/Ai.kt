@@ -29,13 +29,14 @@ class AiException(message: String) : Exception(message)
  * seinen eigenen API-Schlüssel (verschlüsselt im Android Keystore). Jede Übertragung erfolgt
  * erst nach ausdrücklicher Zustimmung in der Oberfläche.
  */
-class AiClient(private val provider: AiProvider, private val apiKey: String, private val model: String) {
+class AiClient(private val provider: AiProvider, private val apiKey: String, private val model: String, private val baseUrl: String = "") {
 
     suspend fun complete(system: String, messages: List<ChatMessage>, maxTokens: Int = 2048): String = withContext(Dispatchers.IO) {
         if (model.isBlank()) throw AiException("Bitte in den Einstellungen einen Modellnamen eintragen.")
         when (provider) {
             AiProvider.ANTHROPIC -> anthropic(system, messages, maxTokens)
             AiProvider.OPENAI -> openai(system, messages, maxTokens)
+            AiProvider.CUSTOM -> openai(system, messages, maxTokens, baseUrl.trimEnd('/').ifBlank { throw AiException("Bitte in den Einstellungen die Adresse eintragen.") })
         }
     }
 
@@ -59,11 +60,13 @@ class AiClient(private val provider: AiProvider, private val apiKey: String, pri
         return sb.toString().trim()
     }
 
-    private fun openai(system: String, messages: List<ChatMessage>, maxTokens: Int): String {
+    private fun openai(system: String, messages: List<ChatMessage>, maxTokens: Int, base: String = "https://api.openai.com/v1"): String {
         val msgs = JSONArray().put(JSONObject().put("role", "system").put("content", system))
         messages.forEach { msgs.put(JSONObject().put("role", it.role).put("content", it.content)) }
-        val body = JSONObject().put("model", model).put("messages", msgs).put("max_completion_tokens", maxTokens)
-        val json = post("https://api.openai.com/v1/chat/completions", mapOf("Authorization" to "Bearer $apiKey"), body)
+        val body = JSONObject().put("model", model).put("messages", msgs)
+            // Eigene Adressen (Groq u. a.) verstehen das klassische max_tokens am zuverlässigsten
+            .put(if (provider == AiProvider.CUSTOM) "max_tokens" else "max_completion_tokens", maxTokens)
+        val json = post("$base/chat/completions", mapOf("Authorization" to "Bearer $apiKey"), body)
         val choices = json.optJSONArray("choices") ?: throw AiException("Unerwartete Antwort des Dienstes.")
         return choices.getJSONObject(0).getJSONObject("message").optString("content").trim()
     }

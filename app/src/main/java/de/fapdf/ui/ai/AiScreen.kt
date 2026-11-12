@@ -178,7 +178,7 @@ fun AiScreen(tool: Tool, docId: Long?, appVm: AppViewModel, onBack: () -> Unit, 
             try {
                 val key = appVm.container.settings.apiKey() ?: throw IllegalStateException("Kein API-Schlüssel hinterlegt.")
                 val s = appVm.container.settings.current()
-                onText(AiClient(s.aiProvider, key, s.aiModel).complete(system, messages, maxTokens = 3000))
+                onText(AiClient(s.aiProvider, key, s.aiModel, s.aiBaseUrl).complete(system, messages, maxTokens = 3000))
             } catch (e: Exception) {
                 error = e.message ?: "Fehler bei der KI-Anfrage"
             } finally {
@@ -208,7 +208,7 @@ fun AiScreen(tool: Tool, docId: Long?, appVm: AppViewModel, onBack: () -> Unit, 
             } else {
                 val key = appVm.container.settings.apiKey() ?: throw IllegalStateException("Kein API-Schlüssel hinterlegt.")
                 val s = appVm.container.settings.current()
-                AiBatchTranslator.translateAll(AiClient(s.aiProvider, key, s.aiModel), texts, to) { p, n -> busy = "KI-Übersetzung Teil $p von $n …" }
+                AiBatchTranslator.translateAll(AiClient(s.aiProvider, key, s.aiModel, s.aiBaseUrl), texts, to) { p, n -> busy = "KI-Übersetzung Teil $p von $n …" }
             }
             busy = "Übersetzte PDF wird erstellt …"
             val tmp = File(context.cacheDir, "ai").apply { mkdirs() }

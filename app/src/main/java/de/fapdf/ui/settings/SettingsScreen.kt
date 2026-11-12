@@ -56,9 +56,10 @@ fun SettingsScreen(appVm: AppViewModel, onBack: (() -> Unit)?, onProfiles: () ->
     var provider by remember { mutableStateOf(AiProvider.ANTHROPIC) }
     var model by remember { mutableStateOf("") }
     var key by remember { mutableStateOf("") }
+    var baseUrl by remember { mutableStateOf(de.fapdf.data.DEFAULT_AI_BASE_URL) }
     LaunchedEffect(Unit) {
         val cur = repo.current()
-        provider = cur.aiProvider; model = cur.aiModel
+        provider = cur.aiProvider; model = cur.aiModel; baseUrl = cur.aiBaseUrl
     }
     ScreenScaffold("Einstellungen", onBack) { mod ->
         Column(mod.fillMaxSize().verticalScroll(rememberScrollState())) {
@@ -104,7 +105,7 @@ fun SettingsScreen(appVm: AppViewModel, onBack: (() -> Unit)?, onProfiles: () ->
             SectionTitle("KI-Funktionen (optional)")
             Text(
                 "Die KI-Funktionen „Mit PDFs chatten“, „Zusammenfassung“, „Fragen-Generator“ und die KI-Übersetzung senden Dokumenttext an den gewählten Anbieter – " +
-                    "immer erst nach Ihrer ausdrücklichen Zustimmung. Dafür ist ein eigener, kostenpflichtiger API-Schlüssel des Anbieters nötig; die Abrechnung erfolgt direkt beim Anbieter. " +
+                    "immer erst nach Ihrer ausdrücklichen Zustimmung. Dafür ist ein eigener API-Schlüssel nötig. Kostenlos geht es mit „Eigene Adresse“ und einem Groq-Schlüssel (console.groq.com). " +
                     "Der Schlüssel wird verschlüsselt auf diesem Gerät gespeichert. Die Offline-Übersetzung und alle übrigen Werkzeuge funktionieren ohne KI.",
                 Modifier.padding(horizontal = 20.dp), color = FaColors.SecondaryLabel,
             )
@@ -116,16 +117,27 @@ fun SettingsScreen(appVm: AppViewModel, onBack: (() -> Unit)?, onProfiles: () ->
                 }
             }
             Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                if (provider == AiProvider.CUSTOM) OutlinedTextField(
+                    baseUrl, { baseUrl = it }, Modifier.fillMaxWidth(), singleLine = true, label = { Text("Adresse") },
+                    supportingText = { Text("Für Groq: ${de.fapdf.data.DEFAULT_AI_BASE_URL}") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+                )
                 OutlinedTextField(model, { model = it }, Modifier.fillMaxWidth(), singleLine = true, label = { Text("Modellname") },
-                    supportingText = { Text(if (provider == AiProvider.OPENAI) "Modellname laut OpenAI-Dokumentation eintragen" else "Vorgabe: ${provider.defaultModel}") })
+                    supportingText = { Text(when (provider) {
+                        AiProvider.OPENAI -> "Modellname laut OpenAI-Dokumentation eintragen"
+                        AiProvider.CUSTOM -> "Vorgabe für Groq: ${provider.defaultModel} (Liste: console.groq.com/docs/models)"
+                        else -> "Vorgabe: ${provider.defaultModel}"
+                    }) })
                 OutlinedTextField(key, { key = it }, Modifier.fillMaxWidth(), singleLine = true,
                     label = { Text(if (s.hasAiKey) "API-Schlüssel (gespeichert – zum Ändern neu eingeben)" else "API-Schlüssel") },
                     visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password))
-                TextButton(onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(provider.pricingUrl))) }) { Text("Preise von ${provider.title} ansehen") }
+                TextButton(onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(provider.pricingUrl))) }) {
+                    Text(if (provider == AiProvider.CUSTOM) "Kostenlosen Groq-Schlüssel holen" else "Preise von ${provider.title} ansehen")
+                }
             }
             PrimaryButton("KI-Einstellungen speichern", Modifier.padding(horizontal = 16.dp)) {
                 scope.launch {
-                    repo.setAi(provider, model)
+                    repo.setAi(provider, model.ifBlank { provider.defaultModel }, if (provider == AiProvider.CUSTOM) baseUrl else null)
                     if (key.isNotBlank()) repo.setApiKey(key)
                     key = ""
                     FileActions.toast(context, "Gespeichert")

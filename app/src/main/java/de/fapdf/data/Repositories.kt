@@ -253,6 +253,7 @@ class SettingsRepository(private val context: Context, private val crypto: Crypt
         val PROVIDER = stringPreferencesKey("ai_provider")
         val MODEL = stringPreferencesKey("ai_model")
         val KEY = stringPreferencesKey("ai_key_enc")
+        val BASE_URL = stringPreferencesKey("ai_base_url")
     }
 
     val settings: Flow<AppSettings> = context.dataStore.data.map { p ->
@@ -263,6 +264,7 @@ class SettingsRepository(private val context: Context, private val crypto: Crypt
             aiProvider = provider,
             aiModel = p[Keys.MODEL] ?: provider.defaultModel,
             hasAiKey = !p[Keys.KEY].isNullOrBlank(),
+            aiBaseUrl = p[Keys.BASE_URL] ?: DEFAULT_AI_BASE_URL,
         )
     }
 
@@ -272,9 +274,10 @@ class SettingsRepository(private val context: Context, private val crypto: Crypt
 
     suspend fun setTheme(mode: ThemeMode) = context.dataStore.edit { it[Keys.THEME] = mode.name }
 
-    suspend fun setAi(provider: AiProvider, model: String) = context.dataStore.edit {
+    suspend fun setAi(provider: AiProvider, model: String, baseUrl: String? = null) = context.dataStore.edit {
         it[Keys.PROVIDER] = provider.name
         it[Keys.MODEL] = model.trim()
+        if (baseUrl != null) it[Keys.BASE_URL] = baseUrl.trim().trimEnd('/')
     }
 
     /** Der API-Schlüssel wird nur verschlüsselt (Android Keystore) gespeichert – niemals in der APK. */

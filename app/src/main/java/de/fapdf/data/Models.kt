@@ -28,6 +28,8 @@ data class CustomValue(val key: String, val value: String)
 enum class AiProvider(val title: String, val endpointHost: String, val pricingUrl: String, val defaultModel: String) {
     ANTHROPIC("Anthropic (Claude)", "api.anthropic.com", "https://www.anthropic.com/pricing", "claude-haiku-5-5"),
     OPENAI("OpenAI", "api.openai.com", "https://openai.com/api/pricing/", ""),
+    /** Beliebiger OpenAI-kompatibler Dienst mit eigener Adresse, z. B. Groq (kostenloser Zugang). */
+    CUSTOM("Eigene Adresse (z. B. Groq – kostenlos)", "api.groq.com", "https://console.groq.com/keys", "openai/gpt-oss-120b"),
 }
 
 enum class ThemeMode(val title: String) { SYSTEM("Wie System"), LIGHT("Hell"), DARK("Dunkel") }
@@ -38,4 +40,7 @@ data class AppSettings(
     val aiProvider: AiProvider = AiProvider.ANTHROPIC,
     val aiModel: String = AiProvider.ANTHROPIC.defaultModel,
     val hasAiKey: Boolean = false,
+    val aiBaseUrl: String = DEFAULT_AI_BASE_URL,
 )
+
+const val DEFAULT_AI_BASE_URL = "https://api.groq.com/openai/v1"
