@@ -356,7 +356,13 @@ class WorkspaceViewModel(app: Application, val docId: Long, initialMode: Workspa
         return pt
     }
 
-    fun ensureAnalyzed(page: Int) { if (pageTexts[page] == null) viewModelScope.launch { pageText(page) } }
+    fun ensureAnalyzed(page: Int) {
+        viewModelScope.launch {
+            val pt = pageText(page) ?: return@launch
+            // Gescannte Seite: Texterkennung sofort automatisch starten, ohne Rückfrage
+            if (mode == WorkspaceMode.EDIT && pt.looksScanned && ocrPages[page] == null && busy == null) runOcr(page)
+        }
+    }
 
     // ---------- Bearbeiten: Tippen ----------
     fun onEditTap(page: Int, u: Float, v: Float) {
@@ -367,13 +373,14 @@ class WorkspaceViewModel(app: Application, val docId: Long, initialMode: Workspa
             if (ocr != null) {
                 val idx = ocr.lines.indexOfFirst { it.viewBox.inset(3f).contains(u, v) }
                 if (idx >= 0) { selectOcrLine(page, idx); return@launch }
-                addTextAt = Triple(page, u, v); return@launch
+                selection = null; draftText = null; return@launch
             }
             val pt = pageText(page) ?: return@launch
             val line = pt.lineAtView(u, v)
             if (line == null) {
-                if (pt.looksScanned) { scanPromptPage = page; return@launch }
-                addTextAt = Triple(page, u, v)
+                if (pt.looksScanned) { runOcr(page); return@launch }
+                // Tippen auf freie Fläche: nur Auswahl aufheben, kein leeres Textfeld öffnen
+                selection = null; draftText = null
                 return@launch
             }
             val block = pt.blockOfLine(line.id)
@@ -473,8 +480,7 @@ class WorkspaceViewModel(app: Application, val docId: Long, initialMode: Workspa
                 val res = ocrEngine.recognize(page, bmp, OcrEngine.OCR_SCALE)
                 bmp.recycle()
                 ocrPages[page] = res
-                message = if (res.lines.isEmpty()) "Texterkennung" to "Auf dieser Seite wurde kein Text erkannt."
-                else "Texterkennung" to "${res.lines.size} Zeilen erkannt. Tippen Sie auf eine Zeile, um sie zu bearbeiten."
+
             } catch (e: Exception) {
                 message = "Texterkennung fehlgeschlagen" to (e.message ?: "Unbekannter Fehler")
             } finally {

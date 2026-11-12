@@ -214,23 +214,32 @@ fun InlineTextEditor(vm: WorkspaceViewModel, sel: TextSelection, onMore: () -> U
     LaunchedEffect(sel) { vm.editBlock = false; vm.draftText = sel.text }
     val text = vm.draftText ?: sel.text
     val multi = sel.blockLineIds.size > 1
-    Column {
-        // Eine einzige schmale Zeile: erkannte Schrift, Größe, Farbe, fett, kursiv, Ausrichtung, Übernehmen.
-        // Getippt wird direkt in der Seite. Bei Fett/Kursiv abweichend vom Original setzt die Engine die passende Ersatzschrift.
-        FormatBar(style, align, original, sel.detected.colorArgb, onStyle = { style = it }, onAlign = { align = it }) {
-            if (multi) {
-                androidx.compose.material3.FilterChip(
-                    selected = vm.editBlock,
-                    onClick = { vm.editBlock = !vm.editBlock; vm.draftText = if (vm.editBlock) sel.blockText else sel.text },
-                    label = { Text("Absatz") },
-                )
-            }
-            IconButton(onClick = { vm.applyTextEdit(sel, text, style, align, vm.editBlock) }, enabled = text.isNotBlank()) {
-                Icon(Icons.Outlined.Check, "Übernehmen", tint = FaColors.Accent)
-            }
-            IconButton(onClick = onMore) { Icon(Icons.Outlined.MoreVert, "Weitere Optionen") }
+    // Schmale Zeile über der Tastatur: keine Formatleiste. Schrift, Größe und Farbe werden automatisch übernommen;
+    // Änderungen daran gibt es über ⋮.
+    Row(
+        Modifier.fillMaxWidth().height(40.dp).padding(horizontal = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            "${original ?: style.family.title} · ${style.size} pt",
+            style = MaterialTheme.typography.labelMedium, color = FaColors.SecondaryLabel,
+            maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        if (multi) {
+            Text(
+                if (vm.editBlock) "Absatz ✓" else "Absatz",
+                style = MaterialTheme.typography.labelMedium,
+                color = if (vm.editBlock) FaColors.Accent else FaColors.SecondaryLabel,
+                modifier = Modifier.clip(RoundedCornerShape(8.dp))
+                    .clickable { vm.editBlock = !vm.editBlock; vm.draftText = if (vm.editBlock) sel.blockText else sel.text }
+                    .padding(horizontal = 10.dp, vertical = 8.dp),
+            )
         }
-        HorizontalDivider(color = FaColors.Separator)
+        IconButton(onClick = { vm.applyTextEdit(sel, text, style, align, vm.editBlock) }, enabled = text.isNotBlank(), modifier = Modifier.size(40.dp)) {
+            Icon(Icons.Outlined.Check, "Übernehmen", tint = FaColors.Accent)
+        }
+        IconButton(onClick = onMore, modifier = Modifier.size(40.dp)) { Icon(Icons.Outlined.MoreVert, "Schrift und weitere Optionen") }
     }
 }
 
