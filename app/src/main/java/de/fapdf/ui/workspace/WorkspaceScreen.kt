@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -318,7 +319,10 @@ fun WorkspaceScreen(
                 scope.launch { listState.animateScrollToItem(w.pageIndex) }
                 sheet = "sign"
             })
-            Box(Modifier.weight(1f).fillMaxWidth().background(FaColors.PageArea)) {
+            val wide = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp >= 600
+            Row(Modifier.weight(1f).fillMaxWidth()) {
+            if (wide && !fullscreen && source != null && source.pageCount > 1) PageSidebar(source, currentPage) { p -> scope.launch { listState.animateScrollToItem(p) } }
+            Box(Modifier.weight(1f).fillMaxHeight().background(FaColors.PageArea)) {
                 if (source != null) {
                     val gestures = gesturesFor(vm)
                     PdfPagesView(
@@ -338,6 +342,7 @@ fun WorkspaceScreen(
                         modifier = Modifier.align(Alignment.TopEnd).padding(12.dp).clip(CircleShape).background(Color(0x99000000)),
                     ) { Icon(Icons.Outlined.FullscreenExit, "Vollbild beenden", tint = Color.White) }
                 }
+            }
             }
         }
     }
@@ -381,7 +386,7 @@ fun WorkspaceScreen(
         )
     }
     vm.selection?.let { sel -> if (fullEditor) EditTextSheet(vm, sel) { fullEditor = false } }
-    LaunchedEffect(vm.selection) { if (vm.selection == null) fullEditor = false }
+    LaunchedEffect(vm.selection) { if (vm.selection == null) { fullEditor = false; vm.draftText = null } }
     vm.objectMenu?.let { obj ->
         androidx.compose.material3.AlertDialog(
             onDismissRequest = { vm.objectMenu = null },
@@ -540,6 +545,10 @@ private fun PageOverlay(vm: WorkspaceViewModel, page: Int, s: Float) {
         if (f != null && w != null) InlineFieldEditor(vm, f, w, s)
     }
     vm.inlineNewText?.takeIf { it.first == page }?.let { (_, u, v) -> InlineNewTextEditor(vm, page, u, v, s) }
+    // Ausgewählte Zeile direkt auf der Seite bearbeiten
+    if (vm.mode == WorkspaceMode.EDIT && vm.placement == null && vm.moveState == null) {
+        sel?.takeIf { it.page == page }?.let { InlineLineEditor(vm, it, s) }
+    }
 }
 
 private fun DrawScope.drawStroke(pts: List<Pair<Float, Float>>, s: Float, color: Color) {

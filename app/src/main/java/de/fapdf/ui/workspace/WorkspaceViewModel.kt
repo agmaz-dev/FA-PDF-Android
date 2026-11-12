@@ -114,6 +114,8 @@ class WorkspaceViewModel(app: Application, val docId: Long, initialMode: Workspa
     // Bearbeiten
     var editTool by mutableStateOf(EditTool.TEXT)
     var selection by mutableStateOf<TextSelection?>(null)
+    /** Text der gerade direkt auf der Seite bearbeiteten Zeile (null = noch nicht gesetzt). */
+    var draftText by mutableStateOf<String?>(null)
     var addTextAt by mutableStateOf<Triple<Int, Float, Float>?>(null)
     var newTextStyle by mutableStateOf(TextStyle(useOriginalFont = false, size = 11f))
     var moveState by mutableStateOf<Pair<TextSelection, Pair<Float, Float>>?>(null)

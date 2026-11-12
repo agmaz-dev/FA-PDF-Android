@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -16,6 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.shape.CircleShape
@@ -204,18 +206,21 @@ private fun FormatToggle(icon: androidx.compose.ui.graphics.vector.ImageVector, 
  */
 @Composable
 fun InlineTextEditor(vm: WorkspaceViewModel, sel: TextSelection, onMore: () -> Unit) {
-    var text by remember(sel) { mutableStateOf(sel.text) }
     var style by remember(sel) { mutableStateOf(sel.detected.toTextStyle().copy(useOriginalFont = sel.canUseOriginalFont)) }
     var align by remember(sel) { mutableStateOf(sel.detected.alignment) }
-    // Schrift, Größe und Farbe sind automatisch aus dem PDF erkannt; die Formatleiste ist nur auf Wunsch sichtbar
-    var showFormat by remember(sel) { mutableStateOf(false) }
+    val wide = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp >= 600
+    // Schrift, Größe und Farbe sind automatisch aus dem PDF erkannt; auf dem Handy erscheint die Formatleiste nur auf Wunsch
+    var showFormat by remember(sel) { mutableStateOf(wide) }
     val original = if (sel.canUseOriginalFont) sel.detected.fontName else null
+    LaunchedEffect(sel) { vm.draftText = sel.text }
+    val text = vm.draftText ?: sel.text
     Column {
-        Row(Modifier.fillMaxWidth().padding(start = 12.dp, end = 4.dp, top = 6.dp, bottom = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-            OutlinedTextField(
-                text, { text = it }, Modifier.weight(1f), maxLines = 2, shape = RoundedCornerShape(10.dp),
-                textStyle = MaterialTheme.typography.bodyMedium,
-            )
+        // Getippt wird direkt in der Seite; diese Leiste zeigt die erkannte Schrift und übernimmt die Änderung
+        Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(original ?: style.family.title, style = MaterialTheme.typography.labelLarge, maxLines = 1)
+                Text("${fmtSize(sel.detected.size)} pt · automatisch erkannt", style = MaterialTheme.typography.bodySmall, color = FaColors.SecondaryLabel, maxLines = 1)
+            }
             IconButton(onClick = { showFormat = !showFormat }) {
                 Icon(Icons.Outlined.TextFields, "Schrift und Format", tint = if (showFormat) FaColors.Accent else FaColors.Label)
             }
@@ -227,6 +232,54 @@ fun InlineTextEditor(vm: WorkspaceViewModel, sel: TextSelection, onMore: () -> U
         // Bei Fett/Kursiv abweichend vom Original setzt die Engine automatisch die passende Ersatzschrift
         if (showFormat) FormatBar(style, align, original, sel.detected.colorArgb, onStyle = { style = it }, onAlign = { align = it })
         HorizontalDivider(color = FaColors.Separator)
+    }
+}
+
+/** Die ausgewählte Zeile wird direkt auf der Seite bearbeitet: Tippen ersetzt den Text an derselben Stelle. */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun InlineLineEditor(vm: WorkspaceViewModel, sel: TextSelection, s: Float) {
+    val density = LocalDensity.current
+    val focus = remember(sel) { FocusRequester() }
+    val bring = remember(sel) { BringIntoViewRequester() }
+    val fontPx = sel.detected.size * s
+    LaunchedEffect(sel) {
+        focus.requestFocus()
+        kotlinx.coroutines.delay(350)
+        bring.bringIntoView()
+    }
+    val b = sel.viewBox
+    val text = vm.draftText ?: sel.text
+    Box(
+        Modifier.offset { IntOffset((b.left * s - 2f).roundToInt(), (b.top * s - 2f).roundToInt()) }
+            .widthIn(min = with(density) { (b.width * s + 4f).toDp() })
+            .bringIntoViewRequester(bring)
+            .background(Color.White).border(2.dp, FaColors.Accent),
+    ) {
+        BasicTextField(
+            text, { vm.draftText = it },
+            textStyle = androidx.compose.ui.text.TextStyle(color = Color(sel.detected.colorArgb), fontSize = with(density) { fontPx.toSp() }),
+            cursorBrush = SolidColor(FaColors.Accent),
+            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None, imeAction = ImeAction.Done),
+            modifier = Modifier.padding(horizontal = 2.dp).focusRequester(focus),
+        )
+    }
+}
+
+/** Seitenleiste mit Miniaturen für breite Fenster (aufgeklapptes Fold). */
+@Composable
+fun PageSidebar(src: PdfPageSource, current: Int, onPick: (Int) -> Unit) {
+    val state = androidx.compose.foundation.lazy.rememberLazyListState()
+    LaunchedEffect(current) { state.animateScrollToItem(current.coerceIn(0, (src.pageCount - 1).coerceAtLeast(0))) }
+    androidx.compose.foundation.lazy.LazyColumn(
+        Modifier.width(104.dp).fillMaxHeight().background(FaColors.Surface), state = state,
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        items(src.pageCount) { p ->
+            PageThumb(src, p, Modifier.width(80.dp), selected = p == current, label = "${p + 1}", onClick = { onPick(p) })
+        }
     }
 }
 

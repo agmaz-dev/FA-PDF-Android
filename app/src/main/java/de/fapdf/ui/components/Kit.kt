@@ -330,7 +330,7 @@ fun LargePagePreview(
     Box(modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), contentAlignment = Alignment.Center) {
         Box(
             Modifier.heightIn(max = maxHeight).aspectRatio(aspect, matchHeightConstraintsFirst = aspect < 1f)
-                .shadow(3.dp, RoundedCornerShape(4.dp)).background(Color.White)
+                .shadow(3.dp, RoundedCornerShape(4.dp)).background(Color.White).pinchZoomable()
         ) {
             val i = img
             if (i != null) {

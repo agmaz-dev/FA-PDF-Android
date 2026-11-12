@@ -22,6 +22,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
+import de.fapdf.ui.components.pinchZoomable
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
@@ -54,7 +55,7 @@ fun CropSelector(src: PdfPageSource, page: Int, crop: FBox, onChange: (FBox) -> 
     val grip = remember { arrayOf(Grip.NONE) }
     Box(
         Modifier.padding(horizontal = 24.dp, vertical = 8.dp).fillMaxWidth().aspectRatio(wPt / hPt)
-            .shadow(3.dp).background(Color.White)
+            .shadow(3.dp).background(Color.White).pinchZoomable()
     ) {
         val i = img
         if (i != null) Image(i, "Seite ${page + 1}", Modifier.fillMaxSize(), contentScale = ContentScale.FillBounds)
