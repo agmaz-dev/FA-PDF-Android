@@ -18,7 +18,8 @@ set(GGML_BACKEND_DL OFF CACHE BOOL "" FORCE)
 set(GGML_OPENMP OFF CACHE BOOL "" FORCE)
 set(GGML_LLAMAFILE OFF CACHE BOOL "" FORCE)
 # Snapdragon 8 Elite (Galaxy Z Fold 7): Punktprodukt- und Int8-Matrixbefehle nutzen
-set(GGML_CPU_ARM_ARCH "armv8.2-a+dotprod+i8mm+fp16" CACHE STRING "" FORCE)
+# Nur Befehle, die jedes neuere Handy kennt; KleidiAI nutzt schnellere Befehle selbst, wenn vorhanden
+set(GGML_CPU_ARM_ARCH "armv8.2-a+dotprod+fp16" CACHE STRING "" FORCE)
 set(GGML_CPU_KLEIDIAI ON CACHE BOOL "" FORCE)
 
 add_subdirectory(${LLAMA_DIR} build-llama)

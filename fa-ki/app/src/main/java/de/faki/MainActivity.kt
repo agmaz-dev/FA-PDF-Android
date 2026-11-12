@@ -69,17 +69,18 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         if (Build.VERSION.SDK_INT >= 33) requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
-        if (Settings.serverOn(this)) KiService.start(this)
+        val crash = Crash.takeReport(this)
+        if (Settings.serverOn(this)) runCatching { KiService.start(this) }.onFailure { KiService.lastError = it.message }
         setContent {
             MaterialTheme(colorScheme = darkColorScheme(primary = Lime, background = Bg, surface = Card, onPrimary = Bg)) {
-                Screen()
+                Screen(crash)
             }
         }
     }
 }
 
 @Composable
-private fun Screen() {
+private fun Screen(crash: String?) {
     val ctx = LocalContext.current
     var tick by remember { mutableIntStateOf(0) }
     // Fortschritt der Downloads und Status regelmäßig auffrischen
@@ -93,6 +94,17 @@ private fun Screen() {
         Text("FA KI", color = TextC, fontSize = 38.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = (-1).sp)
         Text("Eigene KI auf diesem Handy – für alle FA-Apps", color = Grey, fontSize = 15.sp)
         Spacer(Modifier.height(18.dp))
+        if (crash != null) {
+            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(Color(0xFF3A1E21)).padding(16.dp)) {
+                Text("Letzter Absturz", color = Color(0xFFFF6B6B), fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                Text(crash.take(1500), color = TextC, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
+                TextButton(onClick = {
+                    ctx.getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("FA KI Absturz", crash))
+                    Toast.makeText(ctx, "Bericht kopiert – bitte an Claude schicken", Toast.LENGTH_LONG).show()
+                }) { Text("Bericht kopieren", color = Lime) }
+            }
+            Spacer(Modifier.height(14.dp))
+        }
 
         // Server-Status
         val on = remember(tick) { KiService.running }

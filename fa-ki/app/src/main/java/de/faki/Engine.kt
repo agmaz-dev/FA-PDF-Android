@@ -46,7 +46,9 @@ object Engine {
             if (loadedId != m.id) {
                 if (loadedId != null) Native.unload()
                 loadedId = null
+                Crash.step(context, "Modell „${m.title}“ wird geladen")
                 val rc = Native.load(f.absolutePath, CONTEXT)
+                Crash.done(context)
                 if (rc != 0) throw KiException("Das Modell „${m.title}“ konnte nicht geladen werden (Code $rc).")
                 loadedId = m.id
             }
@@ -63,11 +65,13 @@ object Engine {
                 // Grob vorkürzen (etwa 3 Zeichen pro Token), damit lange Dokumente in den Kontext passen
                 val maxChars = (CONTEXT - maxTokens) * 3
                 val trimmed = shorten(messages, maxChars)
+                Crash.step(context, "Antwort mit „${m.title}“")
                 val out = Native.complete(
                     trimmed.map { it.role }.toTypedArray(),
                     trimmed.map { it.content }.toTypedArray(),
                     maxTokens.coerceIn(16, 4096), temperature,
                 )
+                Crash.done(context)
                 if (out.startsWith("\u0001FEHLER:")) throw KiException(out.removePrefix("\u0001FEHLER:"))
                 return cleanup(out)
             } finally {
