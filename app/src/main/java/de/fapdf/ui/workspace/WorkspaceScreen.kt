@@ -499,9 +499,15 @@ private fun PageOverlay(vm: WorkspaceViewModel, page: Int, s: Float) {
             val sz = Size(b.width * s, b.height * s)
             if (fill) drawRect(color, tl, sz) else drawRect(color, tl, sz, style = Stroke(width))
         }
-        // OCR-Zeilen dezent anzeigen
-        if (vm.mode == WorkspaceMode.EDIT) ocr?.lines?.forEach { rect(it.viewBox, accent.copy(alpha = 0.35f), width = 1.dp.toPx()) }
-        if (sel != null && sel.page == page) { rect(sel.viewBox.inset(1.5f), accent.copy(alpha = 0.15f), fill = true); rect(sel.viewBox.inset(1.5f), accent) }
+        // Bearbeitbare Textblöcke: feiner grauer Strichrahmen – der Text bleibt gut lesbar
+        val dashed = Stroke(1.dp.toPx(), pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(5.dp.toPx(), 3.dp.toPx())))
+        fun frame(b: Box) = drawRect(Color(0xFF9AA0A6), Offset(b.left * s, b.top * s), Size(b.width * s, b.height * s), style = dashed)
+        if (vm.mode == WorkspaceMode.EDIT) {
+            val pt = vm.pageTexts[page]
+            if (ocr != null) ocr.lines.forEach { frame(it.viewBox.inset(2f)) }
+            else pt?.blocks?.forEach { frame(pt.geometry.userBoxToView(it.bbox).inset(2f)) }
+        }
+        if (sel != null && sel.page == page) rect(sel.viewBox.inset(2f), Color(0xFF3B6EF5), width = 1.5.dp.toPx())
         if (move != null && move.first.page == page) {
             val (du, dv) = move.second
             val b = move.first.viewBox
