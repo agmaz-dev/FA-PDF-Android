@@ -213,10 +213,11 @@ fun WorkspaceScreen(
         if (vm.mode == WorkspaceMode.EDIT || vm.mode == WorkspaceMode.ANNOTATE) vm.ensureAnalyzed(currentPage)
     }
 
+    val typingOnPage = vm.mode == WorkspaceMode.EDIT && vm.selection != null && vm.placement == null && vm.moveState == null
     Scaffold(
         containerColor = FaColors.Background,
         topBar = {
-            if (!fullscreen) TopAppBar(
+            if (!fullscreen && !typingOnPage) TopAppBar(
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = FaColors.Background),
                 navigationIcon = {
                     IconButton(onClick = { leave() }) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Zurück") }
