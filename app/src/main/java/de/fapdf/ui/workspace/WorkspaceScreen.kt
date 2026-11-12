@@ -217,7 +217,7 @@ fun WorkspaceScreen(
     Scaffold(
         containerColor = FaColors.Background,
         topBar = {
-            if (!fullscreen && !typingOnPage) TopAppBar(
+            if (!fullscreen && vm.mode != WorkspaceMode.EDIT) TopAppBar(
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = FaColors.Background),
                 navigationIcon = {
                     IconButton(onClick = { leave() }) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Zurück") }
@@ -282,7 +282,7 @@ fun WorkspaceScreen(
                     if (vm.mode == WorkspaceMode.EDIT && vm.placement == null && vm.moveState == null) {
                         val sel = vm.selection
                         if (sel != null) InlineTextEditor(vm, sel, onMore = { fullEditor = true })
-                        else FormatBar(vm.newTextStyle, newTextAlign, null, null, onStyle = { vm.newTextStyle = it.copy(useOriginalFont = false) }, onAlign = { newTextAlign = it })
+                        else if (vm.inlineNewText != null) FormatBar(vm.newTextStyle, newTextAlign, null, null, onStyle = { vm.newTextStyle = it.copy(useOriginalFont = false) }, onAlign = { newTextAlign = it })
                     }
                     // Beim Bearbeiten einer Zeile bleibt nur die schmale Eingabeleiste: mehr Platz für die Seite
                     val editingLine = vm.mode == WorkspaceMode.EDIT && vm.selection != null && vm.placement == null && vm.moveState == null
@@ -290,7 +290,7 @@ fun WorkspaceScreen(
                         imagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
                     }, onDraw = {
                         vm.switchMode(WorkspaceMode.ANNOTATE); vm.annotTool = AnnotTool.INK
-                    }, onSave = { vm.quickSave() })
+                    }, onSave = { vm.quickSave() }, onBack = { leave() })
                 }
             }
         },
@@ -578,8 +578,7 @@ private fun ModeBanners(vm: WorkspaceViewModel, onSignatureField: (de.fapdf.pdf.
             vm.placement != null -> InfoBanner("Mit dem Finger verschieben, mit zwei Fingern drehen. Größe unten mit dem Regler, „−“/„+“ oder Klein/Mittel/Groß ändern, dann „Übernehmen“.")
             vm.moveState != null -> InfoBanner("Ziehen Sie den Text an die neue Position.")
             vm.editTool == EditTool.HIGHLIGHT -> InfoBanner("Ziehen Sie über den Text, den Sie markieren möchten.")
-            // Während der Eingabe kein Hinweis: mehr Platz für die Seite
-            vm.selection == null && vm.inlineNewText == null -> InfoBanner("Tippen Sie auf einen Text, um ihn zu ändern, oder auf eine freie Stelle, um Text hinzuzufügen.")
+            // Kein Hinweisbalken: oben bleibt alles frei für die Seite
             else -> {}
         }
         WorkspaceMode.FORM -> {
@@ -638,7 +637,7 @@ private val annotColors = listOf(0xFFFFD60A.toInt(), 0xFF34C759.toInt(), 0xFF0A8
 @Composable
 private fun BottomTools(
     vm: WorkspaceViewModel, currentPage: Int, commentsOpen: Boolean, onToggleComments: () -> Unit,
-    onSheet: (String) -> Unit, onPickImage: () -> Unit, onDraw: () -> Unit, onSave: () -> Unit,
+    onSheet: (String) -> Unit, onPickImage: () -> Unit, onDraw: () -> Unit, onSave: () -> Unit, onBack: () -> Unit = {},
 ) {
     val p = vm.placement
     if (p != null) {
@@ -674,10 +673,13 @@ private fun BottomTools(
     if (vm.moveState != null) { ConfirmBar("Text hier ablegen?", onCancel = vm::cancelMove, onConfirm = vm::commitMove, confirmText = "Ablegen"); return }
     when (vm.mode) {
         WorkspaceMode.EDIT -> ToolRow {
-            ToolButton(Icons.Outlined.TextFields, "Text", selected = vm.editTool == EditTool.TEXT) { vm.editTool = EditTool.TEXT }
+            // Alles in einer Zeile unten – oben bleibt nichts
+            ToolButton(Icons.AutoMirrored.Outlined.ArrowBack, "Zurück", onClick = onBack)
+            ToolButton(Icons.AutoMirrored.Outlined.Undo, "Rückgängig", enabled = vm.canUndo, onClick = vm::undo)
             ToolButton(Icons.Outlined.Image, "Bild", onClick = onPickImage)
             ToolButton(Icons.Outlined.Gesture, "Zeichnen", onClick = onDraw)
             ToolButton(Icons.Outlined.MoreHoriz, "Mehr") { onSheet("editmore") }
+            ToolButton(Icons.Outlined.Save, "Speichern", tint = FaColors.Accent, onClick = onSave)
         }
         WorkspaceMode.ANNOTATE -> Column {
             if (vm.inkStrokes.isNotEmpty()) ConfirmBar("${vm.inkStrokes.size} Strich(e) gezeichnet", onCancel = { vm.inkStrokes.clear() }, onConfirm = vm::commitInk)

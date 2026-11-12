@@ -100,7 +100,7 @@ class PdfEngineIntegrationTest {
     @Test fun translateLibreOfficeLetter() = translate("lo_letter.pdf") { "Übersetzt: $it" }
     @Test fun translateReportLabForm() = translate("rl_form.pdf") { "Tercüme: $it" }
 
-    /** Brief mit Skalierung (q 0.24 cm + 4.16667 cm, Zeilen über T*/'): Größe muss 11.04 pt bleiben – auch nach zwei Änderungen. */
+    /** Brief mit Skalierung (q 0.24 cm + 4.16667 cm, Zeilen per T-Stern): Größe muss 11.04 pt bleiben – auch nach zwei Änderungen. */
     @Test fun scaledLetterKeepsSizeAcrossEdits() {
         val src = fixture("scaled_letter.pdf")
         val step1 = File(out, "scaled_letter_edit1.pdf")
