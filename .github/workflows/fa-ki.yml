@@ -1,0 +1,63 @@
+name: FA KI – APK bauen
+
+on:
+  push:
+    paths:
+      - 'fa-ki/**'
+      - '.github/workflows/fa-ki.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: fa-ki
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    defaults:
+      run:
+        working-directory: fa-ki
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: llama.cpp holen (fester Stand)
+        run: |
+          git init llama.cpp
+          cd llama.cpp
+          git remote add origin https://github.com/ggml-org/llama.cpp
+          git fetch --depth 1 origin 2a4daf0e08d6a9b6993ee0d4a9a3cfc35a6f405c
+          git checkout FETCH_HEAD
+
+      - name: APK bauen
+        shell: bash
+        run: chmod +x gradlew && set -o pipefail && ./gradlew --no-daemon assembleDebug 2>&1 | tee build.log
+
+      - name: Build-Protokoll bei Fehler veröffentlichen
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          grep -E "error:|error: |e: |FAILED|What went wrong|undefined reference|CMake Error|fatal" build.log | head -300 > fehler.txt || true
+          tail -400 build.log > ende.txt || true
+          gh release delete ki-build-log --yes --cleanup-tag || true
+          gh release create ki-build-log fehler.txt ende.txt build.log --title "FA KI – fehlgeschlagenes Build-Protokoll" --notes "Commit ${GITHUB_SHA::7}" --prerelease
+
+      - name: Als Release veröffentlichen
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp app/build/outputs/apk/debug/app-debug.apk FA-KI-Test.apk
+          gh release delete ki-apk --yes --cleanup-tag || true
+          sleep 5
+          gh release create ki-apk FA-KI-Test.apk --target "$GITHUB_SHA" --title "FA KI – Test-APK" --notes "Commit ${GITHUB_SHA::7}. Debug-signiert, nur zum Testen." --prerelease
+          gh release edit ki-apk --draft=false --prerelease

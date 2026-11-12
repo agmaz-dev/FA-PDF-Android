@@ -1,0 +1,6 @@
+/llama.cpp/
+.gradle/
+build/
+app/build/
+app/.cxx/
+local.properties

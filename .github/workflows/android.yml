@@ -2,6 +2,9 @@ name: Android-APK bauen
 
 on:
   push:
+    paths-ignore:
+      - 'fa-ki/**'
+      - '.github/workflows/fa-ki.yml'
   workflow_dispatch:
 
 jobs:
