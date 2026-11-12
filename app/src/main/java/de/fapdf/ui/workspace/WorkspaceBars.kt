@@ -258,16 +258,25 @@ fun InlineLineEditor(vm: WorkspaceViewModel, sel: TextSelection, s: Float) {
     }
     val b = if (vm.editBlock) sel.blockViewBox else sel.viewBox
     val text = vm.draftText ?: sel.text
+    // Vorschau in metrisch gleicher Schrift (Liberation = Arial/Times/Courier), damit Breite und Aussehen dem PDF entsprechen
+    val assets = androidx.compose.ui.platform.LocalContext.current.assets
+    val det = sel.detected
+    val previewFont = remember(det.family, det.bold, det.italic) {
+        val base = when (det.family) { de.fapdf.pdf.FontFamily.SERIF -> "LiberationSerif"; de.fapdf.pdf.FontFamily.MONO -> "LiberationMono"; else -> "LiberationSans" }
+        val suffix = when { det.bold && det.italic -> "BoldItalic"; det.bold -> "Bold"; det.italic -> "Italic"; else -> "Regular" }
+        runCatching { androidx.compose.ui.text.font.FontFamily(androidx.compose.ui.text.font.Font("fonts/$base-$suffix.ttf", assets)) }
+            .getOrDefault(androidx.compose.ui.text.font.FontFamily.SansSerif)
+    }
     Box(
         Modifier.offset { IntOffset((b.left * s - 2f).roundToInt(), (b.top * s - 2f).roundToInt()) }
             .widthIn(min = with(density) { (b.width * s + 4f).toDp() })
             .bringIntoViewRequester(bring)
-            .background(Color.White).border(2.dp, FaColors.Accent),
+            .background(Color.White),
     ) {
         BasicTextField(
             text, { vm.draftText = it },
-            textStyle = androidx.compose.ui.text.TextStyle(color = Color(sel.detected.colorArgb), fontSize = with(density) { fontPx.toSp() }),
-            cursorBrush = SolidColor(FaColors.Accent),
+            textStyle = androidx.compose.ui.text.TextStyle(color = Color(det.colorArgb), fontSize = with(density) { fontPx.toSp() }, fontFamily = previewFont),
+            cursorBrush = SolidColor(Color(0xFF3B6EF5)),
             keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None, imeAction = if (vm.editBlock) ImeAction.Default else ImeAction.Done),
             modifier = Modifier.padding(horizontal = 2.dp).focusRequester(focus),
         )
