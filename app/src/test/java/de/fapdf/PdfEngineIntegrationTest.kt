@@ -99,4 +99,28 @@ class PdfEngineIntegrationTest {
     @Test fun translateChromeTicket() = translate("chrome_boarding.pdf") { "Çeviri: $it ğüşİı" }
     @Test fun translateLibreOfficeLetter() = translate("lo_letter.pdf") { "Übersetzt: $it" }
     @Test fun translateReportLabForm() = translate("rl_form.pdf") { "Tercüme: $it" }
+
+    /** Brief mit Skalierung (q 0.24 cm + 4.16667 cm, Zeilen über T*/'): Größe muss 11.04 pt bleiben – auch nach zwei Änderungen. */
+    @Test fun scaledLetterKeepsSizeAcrossEdits() {
+        val src = fixture("scaled_letter.pdf")
+        val step1 = File(out, "scaled_letter_edit1.pdf")
+        val step2 = File(out, "scaled_letter_edit2.pdf")
+        val engine = TextEditEngine(fonts)
+        fun sizes(f: File): String = PDDocument.load(f).use { d -> PageAnalyzer.analyze(d, 0).lines.joinToString("\n") { "%.2f %s".format(it.size, it.text) } }
+        fun edit(inp: File, outp: File, contains: String, repl: String) = PdfIo.transform(inp, outp) { doc ->
+            val pt = PageAnalyzer.analyze(doc, 0)
+            val line = pt.lines.first { it.text.contains(contains) }
+            val st = engine.detectStyle(pt, listOf(line.id))
+            assertTrue("Erkannte Größe ${st.size} statt 11.04 für '${line.text}'\n${sizes(inp)}", kotlin.math.abs(st.size - 11.04f) < 0.15f)
+            engine.replaceText(doc, 0, listOf(line.id), line.text.replace(contains, repl), st.toTextStyle(), de.fapdf.pdf.Alignment.LEFT, asBlock = false)
+        }
+        edit(src, step1, "LN IB 1", "LN IB 2")
+        edit(step1, step2, "selbst tragen", "selbst zahlen")
+        val after = sizes(step2)
+        PDDocument.load(step2).use { d ->
+            PageAnalyzer.analyze(d, 0).lines.filter { it.text.isNotBlank() }.forEach {
+                assertTrue("Zeile hat ${it.size} pt: '${it.text}'\n$after", kotlin.math.abs(it.size - 11.04f) < 0.15f)
+            }
+        }
+    }
 }
