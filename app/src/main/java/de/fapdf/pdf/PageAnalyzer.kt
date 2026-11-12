@@ -104,14 +104,15 @@ private class GlyphCollector : PDFTextStripper() {
         super.processPage(page)
     }
 
-    override fun processOperator(operator: Operator, operands: MutableList<COSBase>) {
+    // operands kann null sein: PDFBox ruft für ' und " intern T* ohne Operanden auf
+    override fun processOperator(operator: Operator, operands: MutableList<COSBase>?) {
         val top = nesting == 0
         if (top) {
             currentOp = opCounter++
             currentTopName = operator.name
             runCatching {
                 when (operator.name) {
-                    "Do" -> captureXObject(operands)
+                    "Do" -> captureXObject(operands ?: mutableListOf())
                     "BI" -> captureUnitSquare(false)
                 }
             }
