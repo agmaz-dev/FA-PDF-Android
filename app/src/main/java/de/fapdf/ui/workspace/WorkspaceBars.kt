@@ -387,7 +387,7 @@ fun InlineNewTextEditor(vm: WorkspaceViewModel, page: Int, u: Float, v: Float, s
             modifier = Modifier.widthIn(min = 80.dp, max = 320.dp).padding(horizontal = 4.dp, vertical = 2.dp).focusRequester(focus),
         )
         Box(Modifier.size(32.dp).background(FaColors.Accent).clickable { commit() }, contentAlignment = Alignment.Center) {
-            Icon(Icons.Outlined.Check, "Übernehmen", tint = Color.White, modifier = Modifier.size(20.dp))
+            Icon(Icons.Outlined.Check, "Übernehmen", tint = FaColors.OnAccent, modifier = Modifier.size(20.dp))
         }
     }
 }

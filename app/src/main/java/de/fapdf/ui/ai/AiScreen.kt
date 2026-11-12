@@ -685,7 +685,7 @@ private fun ChatView(messages: List<ChatMessage>, modifier: Modifier, enabled: B
                 Modifier.size(48.dp).clip(CircleShape).background(if (enabled && input.isNotBlank()) FaColors.Accent else FaColors.Accent.copy(alpha = 0.35f))
                     .clickable(enabled = enabled && input.isNotBlank()) { val q = input.trim(); if (q.isNotEmpty()) { onSend(q); input = "" } },
                 contentAlignment = Alignment.Center,
-            ) { Icon(Icons.AutoMirrored.Outlined.Send, "Senden", tint = Color.White) }
+            ) { Icon(Icons.AutoMirrored.Outlined.Send, "Senden", tint = FaColors.OnAccent) }
         }
     }
 }

@@ -258,7 +258,7 @@ class SettingsRepository(private val context: Context, private val crypto: Crypt
     val settings: Flow<AppSettings> = context.dataStore.data.map { p ->
         val provider = p[Keys.PROVIDER]?.let { runCatching { AiProvider.valueOf(it) }.getOrNull() } ?: AiProvider.ANTHROPIC
         AppSettings(
-            themeMode = p[Keys.THEME]?.let { runCatching { ThemeMode.valueOf(it) }.getOrNull() } ?: ThemeMode.SYSTEM,
+            themeMode = p[Keys.THEME]?.let { runCatching { ThemeMode.valueOf(it) }.getOrNull() } ?: ThemeMode.DARK,
             biometricLock = p[Keys.BIOMETRIC] ?: false,
             aiProvider = provider,
             aiModel = p[Keys.MODEL] ?: provider.defaultModel,

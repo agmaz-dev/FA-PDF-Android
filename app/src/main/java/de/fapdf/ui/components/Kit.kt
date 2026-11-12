@@ -371,5 +371,5 @@ fun CheckMark(checked: Boolean, modifier: Modifier = Modifier) {
             .background(if (checked) FaColors.Accent else FaColors.Surface)
             .border(1.5.dp, if (checked) FaColors.Accent else Color(0xFFB0B5BF), CircleShape),
         contentAlignment = Alignment.Center,
-    ) { if (checked) Text("✓", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold) }
+    ) { if (checked) Text("✓", color = FaColors.OnAccent, fontSize = 12.sp, fontWeight = FontWeight.Bold) }
 }

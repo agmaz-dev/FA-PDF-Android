@@ -22,24 +22,26 @@ import androidx.compose.ui.unit.sp
 import de.fapdf.R
 
 /**
- * Farben nach der verbindlichen Designvorlage (hell) mit passender dunkler Variante.
+ * Neues Design „Dunkel“: schwarzer Grund, Lime-Akzent; helle Variante mit dunklem Grün.
  * [dark] ist ein Compose-Zustand: Ein Wechsel färbt alle Bildschirme sofort um.
  */
 object FaColors {
     var dark by mutableStateOf(false)
     private fun c(light: Long, dark: Long) = if (this.dark) Color(dark) else Color(light)
 
-    val Background get() = c(0xFFFFFFFF, 0xFF121317)
-    val Card get() = c(0xFFF5F6F8, 0xFF1D1F25)
-    val CardBorder get() = c(0xFFE6E8EC, 0xFF2E313A)
-    val Surface get() = c(0xFFFFFFFF, 0xFF17191E)
+    val Background get() = c(0xFFFFFFFF, 0xFF0B0B0F)
+    val Card get() = c(0xFFF5F6F8, 0xFF17171D)
+    val CardBorder get() = c(0xFFE6E8EC, 0xFF26262E)
+    val Surface get() = c(0xFFFFFFFF, 0xFF111116)
     /** Hintergrund hinter PDF-Seiten (Seiten selbst bleiben weiß wie Papier). */
-    val PageArea get() = c(0xFFF1F2F5, 0xFF0C0D10)
-    val Label get() = c(0xFF15171C, 0xFFECEEF2)
-    val SecondaryLabel get() = c(0xFF6B7280, 0xFF9AA1AD)
-    val Separator get() = c(0xFFE5E7EB, 0xFF2A2D35)
-    val Accent get() = c(0xFF1F5BE0, 0xFF5B8DF6)
-    val AccentLight get() = c(0xFFE3ECFD, 0xFF1D2B4B)
+    val PageArea get() = c(0xFFF1F2F5, 0xFF070709)
+    val Label get() = c(0xFF15171C, 0xFFF4F4F6)
+    val SecondaryLabel get() = c(0xFF6B7280, 0xFFA0A0AB)
+    val Separator get() = c(0xFFE5E7EB, 0xFF26262E)
+    val Accent get() = c(0xFF4F6B00, 0xFFC6F432)
+    /** Schrift/Symbole auf Akzentflächen (Lime im Dunkeln braucht dunkle Schrift). */
+    val OnAccent get() = c(0xFFFFFFFF, 0xFF0B0B0F)
+    val AccentLight get() = c(0xFFEEF5D6, 0xFF222A12)
     val Destructive get() = c(0xFFE5383B, 0xFFFF6B6B)
     val DestructiveLight get() = c(0xFFFDECEC, 0xFF3B1F21)
     val Success get() = c(0xFF22A06B, 0xFF3CCB8C)
@@ -55,7 +57,7 @@ object FaColors {
     val SignRequest get() = Sign
     val Encrypt get() = c(0xFFE5383B, 0xFFFF7070)
     val EncryptTile get() = c(0xFFFDE6EA, 0xFF3A1E26)
-    val Ai get() = c(0xFF1F5BE0, 0xFF5B8DF6)
+    val Ai get() = c(0xFF1F5BE0, 0xFF7FA6FF)
     val AiTile get() = c(0xFFE5EEFD, 0xFF1D2B4B)
     val Scan get() = Ai
     val ScanTile get() = AiTile
@@ -70,7 +72,7 @@ val Inter = FontFamily(
 
 private fun scheme(dark: Boolean) = (if (dark) darkColorScheme() else lightColorScheme()).copy(
     primary = FaColors.Accent,
-    onPrimary = Color.White,
+    onPrimary = FaColors.OnAccent,
     primaryContainer = FaColors.AccentLight,
     onPrimaryContainer = FaColors.Accent,
     secondary = FaColors.Edit,
@@ -89,7 +91,7 @@ private fun scheme(dark: Boolean) = (if (dark) darkColorScheme() else lightColor
     inverseSurface = FaColors.Label,
     inverseOnSurface = FaColors.Background,
     error = FaColors.Destructive,
-    outline = if (dark) Color(0xFF454A55) else Color(0xFFD1D5DB),
+    outline = if (dark) Color(0xFF3A3A44) else Color(0xFFD1D5DB),
     outlineVariant = FaColors.Separator,
 )
 
@@ -113,9 +115,9 @@ private val typography = Typography(
 
 private val shapes = Shapes(
     small = RoundedCornerShape(8.dp),
-    medium = RoundedCornerShape(12.dp),
-    large = RoundedCornerShape(16.dp),
-    extraLarge = RoundedCornerShape(24.dp),
+    medium = RoundedCornerShape(14.dp),
+    large = RoundedCornerShape(20.dp),
+    extraLarge = RoundedCornerShape(28.dp),
 )
 
 @Composable

@@ -33,7 +33,7 @@ enum class AiProvider(val title: String, val endpointHost: String, val pricingUr
 enum class ThemeMode(val title: String) { SYSTEM("Wie System"), LIGHT("Hell"), DARK("Dunkel") }
 
 data class AppSettings(
-    val themeMode: ThemeMode = ThemeMode.SYSTEM,
+    val themeMode: ThemeMode = ThemeMode.DARK,
     val biometricLock: Boolean = false,
     val aiProvider: AiProvider = AiProvider.ANTHROPIC,
     val aiModel: String = AiProvider.ANTHROPIC.defaultModel,
