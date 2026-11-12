@@ -57,7 +57,7 @@ object Engine {
     }
 
     fun complete(context: Context, messages: List<Msg>, maxTokens: Int = 1024, temperature: Float = 0.3f): String {
-        ensureLoaded(context)
+        val m = ensureLoaded(context)
         synchronized(lock) {
             busy = true
             try {
