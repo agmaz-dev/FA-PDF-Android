@@ -1,6 +1,9 @@
 package de.fapdf.ui.components
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.Font
@@ -32,7 +35,7 @@ class UserFontsState(val fonts: List<de.fapdf.pdf.FontFile>, val pick: () -> Uni
 fun rememberUserFonts(): UserFontsState {
     val context = LocalContext.current
     val library = remember { (context.applicationContext as de.fapdf.FaPdfApp).container.fonts }
-    var version by androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(0) }
+    var version by remember { mutableIntStateOf(0) }
     val launcher = androidx.activity.compose.rememberLauncherForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.OpenMultipleDocuments()
     ) { uris ->

@@ -33,7 +33,7 @@ object FontIndex {
             val n = ttf.naming
             val fam = (n.fontFamily ?: ttf.name ?: file.nameWithoutExtension).trim()
             val sub = (n.fontSubFamily ?: "").lowercase()
-            val wght = runCatching { ttf.os2Windows.weightClass }.getOrDefault(400)
+            val wght = runCatching { ttf.getOS2Windows().weightClass.toInt() }.getOrDefault(400)
             val bold = "bold" in sub || "black" in sub || "heavy" in sub || wght >= 600
             val italic = "italic" in sub || "oblique" in sub
             FontFile(file, fam, bold, italic, ttf.tableMap.containsKey("fvar"))
