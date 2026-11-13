@@ -1,5 +1,7 @@
 package de.fapdf.ui.settings
 
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.font.FontWeight
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.material.icons.outlined.CloudUpload
@@ -55,7 +57,7 @@ fun SettingsScreen(appVm: AppViewModel, onBack: (() -> Unit)?, onProfiles: () ->
     val scope = rememberCoroutineScope()
     val repo = appVm.container.settings
     val s by repo.settings.collectAsState(initial = AppSettings())
-    var provider by remember { mutableStateOf(AiProvider.ANTHROPIC) }
+    var provider by remember { mutableStateOf(AiProvider.NANO) }
     var model by remember { mutableStateOf("") }
     var key by remember { mutableStateOf("") }
     var baseUrl by remember { mutableStateOf(de.fapdf.data.DEFAULT_AI_BASE_URL) }
@@ -177,6 +179,14 @@ fun SettingsScreen(appVm: AppViewModel, onBack: (() -> Unit)?, onProfiles: () ->
                     var nanoState by remember { mutableStateOf<String?>(null) }
                     TextButton(onClick = { nanoState = "Wird geprüft …"; scope.launch { nanoState = de.fapdf.ai.GeminiNano.statusText() } }) { Text("Gemini Nano prüfen") }
                     nanoState?.let { Text(it, color = FaColors.SecondaryLabel) }
+                } else if (provider == AiProvider.GEMMA) {
+                    Text(
+                        "Gemma 4 E2B ist ein frei verfügbares Google-Modell, das komplett auf diesem Handy läuft – ohne Internet, " +
+                            "Dokumente verlassen das Handy nicht. Anders als Gemini Nano liest es auch lange Dokumente (10–20 Seiten) auf einmal. " +
+                            "Einmaliger Download: 2,6 GB (am besten im WLAN).",
+                        color = FaColors.SecondaryLabel, modifier = Modifier.padding(vertical = 4.dp),
+                    )
+                    GemmaModelCard()
                 } else if (provider == AiProvider.FAKI) Text(
                     "Antworten kommen von der App FA KI auf diesem Handy. Dort ein Modell herunterladen und einschalten – " +
                         "kein Schlüssel und kein Internet nötig. Dokumente verlassen das Handy nicht.",
@@ -196,6 +206,7 @@ fun SettingsScreen(appVm: AppViewModel, onBack: (() -> Unit)?, onProfiles: () ->
                     }
                 }
             }
+            if (provider != AiProvider.GEMMA) GemmaInstalledHint()
             PrimaryButton("KI-Einstellungen speichern", Modifier.padding(horizontal = 16.dp)) {
                 scope.launch {
                     repo.setAi(provider, model.ifBlank { provider.defaultModel }, if (provider == AiProvider.CUSTOM) baseUrl else null)
@@ -241,4 +252,51 @@ fun SettingsScreen(appVm: AppViewModel, onBack: (() -> Unit)?, onProfiles: () ->
             androidx.compose.foundation.layout.Spacer(Modifier.padding(30.dp))
         }
     }
+}
+
+
+/** Herunterladen / Fortschritt / Löschen des lokalen Gemma-Modells. */
+@Composable
+private fun GemmaModelCard() {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var tick by remember { mutableStateOf(0) }
+    var askDelete by remember { mutableStateOf(false) }
+    val installed = remember(tick) { de.fapdf.ai.GemmaLocal.installed(context) }
+    val st = remember(tick) { de.fapdf.ai.GemmaLocal.downloadState(context) }
+    LaunchedEffect(Unit) { while (true) { kotlinx.coroutines.delay(1000); tick++ } }
+    Column(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+        when {
+            installed -> {
+                Text("✓ Gemma 4 E2B ist geladen (2,6 GB)" + de.fapdf.ai.GemmaLocal.backendName.takeIf { it.isNotBlank() }?.let { " · läuft auf: $it" }.orEmpty(),
+                    color = FaColors.Success, fontWeight = FontWeight.SemiBold)
+                TextButton(onClick = { askDelete = true }) { Text("Modell löschen und 2,6 GB freigeben", color = FaColors.Destructive) }
+            }
+            st.fraction != null -> {
+                Text("Wird geladen … ${(st.fraction * 100).toInt()} % von 2,6 GB", color = FaColors.Label)
+                androidx.compose.material3.LinearProgressIndicator(progress = { st.fraction }, modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp), color = FaColors.Accent)
+                Text("Der Download läuft im Hintergrund weiter, auch wenn Sie die App verlassen.", color = FaColors.SecondaryLabel, fontSize = 12.sp)
+                TextButton(onClick = { de.fapdf.ai.GemmaLocal.cancelDownload(context); tick++ }) { Text("Download abbrechen", color = FaColors.Destructive) }
+            }
+            else -> {
+                st.error?.let { Text(it, color = FaColors.Destructive) }
+                PrimaryButton("Gemma 4 E2B herunterladen (2,6 GB)", Modifier) { de.fapdf.ai.GemmaLocal.startDownload(context); tick++ }
+            }
+        }
+    }
+    if (askDelete) androidx.compose.material3.AlertDialog(
+        onDismissRequest = { askDelete = false },
+        title = { Text("Gemma 4 löschen?") },
+        text = { Text("Das Modell wird vom Handy entfernt (2,6 GB frei). Sie können es jederzeit wieder herunterladen.") },
+        confirmButton = { TextButton(onClick = { askDelete = false; scope.launch { de.fapdf.ai.GemmaLocal.delete(context); tick++; FileActions.toast(context, "Gemma 4 gelöscht") } }) { Text("Löschen", color = FaColors.Destructive) } },
+        dismissButton = { TextButton(onClick = { askDelete = false }) { Text("Abbrechen") } },
+    )
+}
+
+/** Hinweis, wenn Gemma geladen ist, aber gerade ein anderer Dienst gewählt ist – mit Löschen. */
+@Composable
+private fun GemmaInstalledHint() {
+    val context = LocalContext.current
+    if (!remember { de.fapdf.ai.GemmaLocal.installed(context) }) return
+    Column(Modifier.padding(horizontal = 16.dp)) { GemmaModelCard() }
 }

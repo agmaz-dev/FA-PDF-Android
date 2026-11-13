@@ -85,6 +85,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var namingBusy by mutableStateOf<Long?>(null); private set
 
     init {
+        viewModelScope.launch { runCatching { container.settings.nanoDefaultOnce() } }
         viewModelScope.launch { documents.collect { if (it.isNotEmpty()) scheduleIndex() } }
     }
 

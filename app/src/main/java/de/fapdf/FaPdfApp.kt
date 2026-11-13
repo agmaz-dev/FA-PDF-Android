@@ -36,5 +36,6 @@ class FaPdfApp : Application() {
         // Pflicht für PdfBox-Android: lädt Glyphenlisten, CMaps und Standardschriften aus den Assets
         PDFBoxResourceLoader.init(applicationContext)
         container = AppContainer(this)
+        de.fapdf.ai.GemmaLocal.app = this
     }
 }

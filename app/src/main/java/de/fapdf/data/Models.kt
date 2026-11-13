@@ -31,12 +31,13 @@ enum class AiProvider(val title: String, val endpointHost: String, val pricingUr
     GROQ("Groq – Internet, kostenlos", "api.groq.com", "https://console.groq.com/keys", "openai/gpt-oss-120b"),
     PC("PC zu Hause – privat", "eigener Rechner mit Ollama · Adresse eintragen", "", "gpt-oss:20b"),
     NANO("Gemini Nano – auf diesem Handy, privat", "ohne Internet · in Android eingebaut", "", "gemini-nano"),
+    GEMMA("Gemma 4 E2B – auf diesem Handy, lange Dokumente", "ohne Internet · einmal 2,6 GB laden", "", "gemma-4-e2b"),
     FAKI("FA KI – auf diesem Handy, privat", "ohne Internet · App FA KI muss laufen", "", "lokal"),
     /** Beliebiger OpenAI-kompatibler Dienst mit eigener Adresse, z. B. Groq (kostenloser Zugang). */
     CUSTOM("Eigene Adresse", "andere OpenAI-kompatible Dienste", "https://console.groq.com/keys", "openai/gpt-oss-120b");
 
     /** Läuft auf dem Handy – kein Schlüssel, keine Zustimmung zur Übertragung nötig. */
-    val isLocal: Boolean get() = this == FAKI || this == NANO || this == PC
+    val isLocal: Boolean get() = this == FAKI || this == NANO || this == PC || this == GEMMA
 }
 
 enum class ThemeMode(val title: String) { SYSTEM("Wie System"), LIGHT("Hell"), DARK("Dunkel") }
@@ -44,8 +45,8 @@ enum class ThemeMode(val title: String) { SYSTEM("Wie System"), LIGHT("Hell"), D
 data class AppSettings(
     val themeMode: ThemeMode = ThemeMode.DARK,
     val biometricLock: Boolean = false,
-    val aiProvider: AiProvider = AiProvider.ANTHROPIC,
-    val aiModel: String = AiProvider.ANTHROPIC.defaultModel,
+    val aiProvider: AiProvider = AiProvider.NANO,
+    val aiModel: String = AiProvider.NANO.defaultModel,
     /** Der gewählte KI-Dienst ist einsatzbereit (Schlüssel vorhanden bzw. FA KI braucht keinen). */
     val hasAiKey: Boolean = false,
     /** Für welche Dienste ein Schlüssel gespeichert ist. */

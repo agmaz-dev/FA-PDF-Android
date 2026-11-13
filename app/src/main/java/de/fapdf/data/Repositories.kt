@@ -265,7 +265,7 @@ class SettingsRepository(private val context: Context, private val crypto: Crypt
     }
 
     val settings: Flow<AppSettings> = context.dataStore.data.map { p ->
-        val stored = p[Keys.PROVIDER]?.let { runCatching { AiProvider.valueOf(it) }.getOrNull() } ?: AiProvider.ANTHROPIC
+        val stored = p[Keys.PROVIDER]?.let { runCatching { AiProvider.valueOf(it) }.getOrNull() } ?: AiProvider.NANO
         // Frühere „Eigene Adresse“-Einträge für Groq bzw. FA KI den neuen festen Punkten zuordnen
         val base = p[Keys.BASE_URL] ?: DEFAULT_AI_BASE_URL
         val provider = when {
@@ -288,6 +288,14 @@ class SettingsRepository(private val context: Context, private val crypto: Crypt
     }
 
     suspend fun current(): AppSettings = settings.first()
+
+    /** Einmalig: Gemini Nano als Standard-KI einstellen (Wunsch: privat und kostenlos zuerst). */
+    suspend fun nanoDefaultOnce() {
+        val sp = context.getSharedPreferences("migrations", Context.MODE_PRIVATE)
+        if (sp.getBoolean("nano_default_v1", false)) return
+        setAi(AiProvider.NANO, AiProvider.NANO.defaultModel, null)
+        sp.edit().putBoolean("nano_default_v1", true).apply()
+    }
 
     suspend fun setBiometric(on: Boolean) = context.dataStore.edit { it[Keys.BIOMETRIC] = on }
 

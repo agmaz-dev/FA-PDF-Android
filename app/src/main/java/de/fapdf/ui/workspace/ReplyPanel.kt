@@ -374,7 +374,7 @@ class ReplyViewModel(app: Application, private val docId: Long) : AndroidViewMod
         // Name unter dem Gruß setzt die App selbst
         if (signerName.isNotBlank()) body = body.lines().dropLastWhile { it.isBlank() || it.trim() == signerName.trim() }.joinToString("\n")
         body = completeEnding(body)
-        if (raw.contains("(Hinweis: Gemini Nano")) note = "Gemini Nano hat nur den Anfang des Schreibens gelesen – bitte genau prüfen."
+        if (raw.contains("(Hinweis: Gemini Nano")) note = "Gemini Nano hat nur den Anfang des Schreibens gelesen – für lange Dokumente in den Einstellungen „Gemma 4 E2B“ wählen."
     }
 
     /** Bricht der Text mitten im Satz ab (KI-Limit), bis zum letzten vollständigen Satz kürzen und den Gruß ergänzen. */

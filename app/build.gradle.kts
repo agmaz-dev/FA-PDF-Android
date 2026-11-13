@@ -13,8 +13,8 @@ android {
         applicationId = "de.fapdf"
         minSdk = 26
         targetSdk = 35
-        versionCode = 48
-        versionName = "1.15.8"
+        versionCode = 49
+        versionName = "1.16.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // Nur 64-Bit-ARM (Galaxy Z Fold 7): spart rund 75 MB gegenüber allen Prozessortypen
         ndk { abiFilters += "arm64-v8a" }
@@ -103,6 +103,8 @@ dependencies {
 
     // Persistenz
     implementation("androidx.room:room-runtime:2.6.1")
+    // Gemma 4 auf dem Handy (LiteRT-LM, Grafikeinheit); 0.16.x ist noch mit Kotlin 2.1 kompatibel
+    implementation("com.google.ai.edge.litertlm:litertlm-android:0.16.1")
     implementation("androidx.room:room-ktx:2.6.1")
     ksp("androidx.room:room-compiler:2.6.1")
     implementation("androidx.datastore:datastore-preferences:1.1.1")

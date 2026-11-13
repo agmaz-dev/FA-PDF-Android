@@ -15,6 +15,7 @@ object AiRouter {
         val primary = s.aiProvider
         val order = LinkedHashSet<AiProvider>().apply {
             add(primary)
+            if (primary == AiProvider.GEMMA) add(AiProvider.NANO)
             if (s.pcUrl.isNotBlank()) add(AiProvider.PC)
             if (AiProvider.GROQ in s.savedKeys) add(AiProvider.GROQ)
             add(AiProvider.NANO)
@@ -24,6 +25,7 @@ object AiRouter {
             try {
                 val text = when (p) {
                     AiProvider.NANO -> GeminiNano.complete(system, messages, maxTokens)
+                    AiProvider.GEMMA -> GemmaLocal.complete(GemmaLocal.app, system, messages, maxTokens, onDelta)
                     AiProvider.PC -> AiClient(p, "ollama", s.pcModel, s.pcUrl).complete(system, messages, maxTokens, onDelta)
                     else -> {
                         val key = settings.apiKey(p) ?: if (p == AiProvider.CUSTOM || p.isLocal) "lokal" else null
