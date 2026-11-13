@@ -255,7 +255,7 @@ private fun ToolsHome(onOpen: () -> Unit, onScan: () -> Unit, onProfile: () -> U
             }
             val q = query.trim()
             if (q.isNotEmpty()) {
-                val hits = Tool.entries.filter { it.title.contains(q, ignoreCase = true) || it.category.title.contains(q, ignoreCase = true) }
+                val hits = Tool.entries.filter { it != Tool.REQUEST_SIGNATURES }.filter { it.title.contains(q, ignoreCase = true) || it.category.title.contains(q, ignoreCase = true) }
                 Spacer(Modifier.height(18.dp))
                 if (hits.isEmpty()) Text("Kein Werkzeug gefunden.", color = FaColors.SecondaryLabel)
                 TileGrid(hits, cols, onTool)
@@ -635,10 +635,9 @@ private val toolGroups = listOf(
         Tool.WATERMARK to "Text oder Bild über alle Seiten",
         Tool.CROP to "Ränder entfernen",
     )),
-    ToolGroup("Ausfüllen & Unterschreiben", "Formulare · Unterschrift · anfordern", Icons.Outlined.Gesture, listOf(
+    ToolGroup("Ausfüllen & Unterschreiben", "Formulare · Unterschrift", Icons.Outlined.Gesture, listOf(
         Tool.FORM to "Felder ausfüllen, Profil einsetzen",
         Tool.SIGN to "Gespeicherte Unterschrift einsetzen",
-        Tool.REQUEST_SIGNATURES to "Per E-Mail zum Unterschreiben senden",
     )),
     ToolGroup("Seiten", "Sortieren · Drehen · Aufteilen · Löschen", Icons.Outlined.GridView, listOf(
         Tool.ORGANIZE to "Große Vorschau, sortieren, drehen, löschen",
