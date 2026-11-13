@@ -27,9 +27,9 @@ object GemmaLocal {
     private const val FILE_NAME = "gemma-4-E2B-it.litertlm"
     private const val URL = "https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm/resolve/main/$FILE_NAME"
     const val SIZE_BYTES = 2_588_147_712L
-    /** Kontextfenster: Eingabe + Antwort. 24k Bausteine ≈ 15–20 dichte Seiten. */
-    private const val MAX_TOKENS = 24_576
-    private const val MAX_INPUT_CHARS = 60_000
+    /** Kontextfenster: Eingabe + Antwort. 16k Bausteine ≈ 10–12 dichte Seiten. */
+    private const val MAX_TOKENS = 16_384
+    private const val MAX_INPUT_CHARS = 42_000
 
     private fun dir(ctx: Context) = File(ctx.getExternalFilesDir(null) ?: ctx.filesDir, "models").apply { mkdirs() }
     fun file(ctx: Context) = File(dir(ctx), FILE_NAME)
@@ -86,6 +86,7 @@ object GemmaLocal {
     /** Modell löschen und Speicher freigeben. */
     suspend fun delete(ctx: Context) = lock.withLock {
         release()
+        prefs(ctx).edit().remove("gpu_bad").remove("gpu_starting").apply()
         cancelDownload(ctx)
         file(ctx).delete()
     }
@@ -105,11 +106,19 @@ object GemmaLocal {
     private fun engine(ctx: Context): Engine {
         engine?.let { return it }
         val path = file(ctx).absolutePath
-        // Zuerst Grafikeinheit (schnell), sonst Prozessor
+        // Zuerst Grafikeinheit (schnell), sonst Prozessor. Ist die App beim letzten GPU-Start abgestürzt
+        // (Merker noch gesetzt), gleich den Prozessor nehmen.
+        val p = prefs(ctx)
+        val gpuCrashed = p.getBoolean("gpu_starting", false) || p.getBoolean("gpu_bad", false)
+        if (p.getBoolean("gpu_starting", false)) p.edit().putBoolean("gpu_bad", true).putBoolean("gpu_starting", false).commit()
         val e = try {
+            if (gpuCrashed) throw IllegalStateException("GPU übersprungen")
+            p.edit().putBoolean("gpu_starting", true).commit()
             Engine(EngineConfig(modelPath = path, backend = Backend.GPU(), maxNumTokens = MAX_TOKENS, cacheDir = ctx.cacheDir.path))
                 .also { it.initialize(); backendName = "Grafikeinheit" }
+                .also { p.edit().putBoolean("gpu_starting", false).commit() }
         } catch (t: Throwable) {
+            p.edit().putBoolean("gpu_starting", false).commit()
             Engine(EngineConfig(modelPath = path, backend = Backend.CPU(), maxNumTokens = MAX_TOKENS, cacheDir = ctx.cacheDir.path))
                 .also { it.initialize(); backendName = "Prozessor" }
         }
@@ -136,6 +145,8 @@ object GemmaLocal {
                 thinkingConfig = ThinkingConfig(enableThinking = false),
             )
             val sb = StringBuilder()
+            val onGpu = backendName == "Grafikeinheit"
+            if (onGpu) prefs(ctx).edit().putBoolean("gpu_starting", true).commit()
             try {
                 e.createConversation(config).use { conv ->
                     conv.sendMessageAsync(last).collect { m ->
@@ -144,8 +155,10 @@ object GemmaLocal {
                     }
                 }
             } catch (t: Throwable) {
+                if (onGpu) prefs(ctx).edit().putBoolean("gpu_starting", false).commit()
                 if (sb.isEmpty()) throw AiException("$TITLE: ${t.message ?: "Fehler"}")
             }
+            if (onGpu) prefs(ctx).edit().putBoolean("gpu_starting", false).commit()
             AiText.clean(sb.toString()).ifEmpty { throw AiException("$TITLE hat keine Antwort geliefert.") }
         }
     }

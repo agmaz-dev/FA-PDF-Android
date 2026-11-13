@@ -33,6 +33,7 @@ class FaPdfApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        CrashLog.install(this)
         // Pflicht für PdfBox-Android: lädt Glyphenlisten, CMaps und Standardschriften aus den Assets
         PDFBoxResourceLoader.init(applicationContext)
         container = AppContainer(this)
