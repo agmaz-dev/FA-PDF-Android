@@ -45,6 +45,8 @@ android {
     }
     kotlinOptions {
         jvmTarget = "17"
+        // LiteRT-LM ist mit neuerem Kotlin gebaut – Metadaten-Prüfung überspringen
+        freeCompilerArgs += listOf("-Xskip-metadata-version-check")
     }
     buildFeatures {
         compose = true
@@ -126,4 +128,8 @@ dependencies {
 
     testImplementation("junit:junit:4.13.2")
     pdfboxAssets("com.tom-roush:pdfbox-android:2.0.27.0@aar")
+}
+
+tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
+    compilerOptions.freeCompilerArgs.add("-Xskip-metadata-version-check")
 }
