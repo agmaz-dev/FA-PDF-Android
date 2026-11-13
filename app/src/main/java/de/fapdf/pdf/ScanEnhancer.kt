@@ -20,16 +20,24 @@ import kotlin.math.roundToInt
 object ScanEnhancer {
     private const val MAX_SIDE = 2400
 
-    fun decode(input: InputStream): Bitmap? {
+    fun decode(input: InputStream, maxSide: Int = MAX_SIDE): Bitmap? {
         val bytes = input.readBytes()
         val o = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeByteArray(bytes, 0, bytes.size, o)
         var sample = 1
-        while (max(o.outWidth, o.outHeight) / sample > MAX_SIDE * 1.5) sample *= 2
+        while (max(o.outWidth, o.outHeight) / sample > maxSide * 1.5) sample *= 2
         return BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply { inSampleSize = sample; inPreferredConfig = Bitmap.Config.ARGB_8888 })
     }
 
-    fun enhance(src: Bitmap): Bitmap {
+    /** 0 Original, 1 Verbessert, 2 Kräftig (blasse Vorlagen), 3 Schwarzweiß. */
+    fun process(src: Bitmap, mode: Int): Bitmap = when (mode) {
+        0 -> src
+        2 -> enhance(src, 0.86f, 2.4f, false)
+        3 -> enhance(src, 0.85f, 2.6f, true)
+        else -> enhance(src, 0.93f, 1.8f, false)
+    }
+
+    fun enhance(src: Bitmap, white: Float = 0.93f, gamma: Float = 1.8f, gray: Boolean = false): Bitmap {
         val scale = min(1f, MAX_SIDE.toFloat() / max(src.width, src.height))
         val bmp = if (scale < 1f) Bitmap.createScaledBitmap(src, (src.width * scale).roundToInt(), (src.height * scale).roundToInt(), true) else src
         val w = bmp.width; val h = bmp.height
@@ -61,7 +69,7 @@ object ScanEnhancer {
             }
             bg
         }
-        val lut = IntArray(1025) { i -> curve(i / 1024f) }
+        val lut = IntArray(1025) { i -> curve(i / 1024f, white, gamma) }
         for (y in 0 until h) {
             val fy = (y.toFloat() / h * sh - 0.5f).coerceIn(0f, sh - 1f)
             val y0 = fy.toInt(); val y1 = min(y0 + 1, sh - 1); val ty = fy - y0
@@ -77,6 +85,10 @@ object ScanEnhancer {
                     val n = (((c shr shift) and 255) / b).coerceIn(0f, 1f)
                     o = o or (lut[(n * 1024).toInt()] shl shift)
                 }
+                if (gray) {
+                    val l = (((o shr 16) and 255) * 299 + ((o shr 8) and 255) * 587 + (o and 255) * 114) / 1000
+                    o = (0xFF shl 24) or (l shl 16) or (l shl 8) or l
+                }
                 px[y * w + x] = o
             }
         }
@@ -87,9 +99,9 @@ object ScanEnhancer {
     }
 
     /** Papier rein weiß, Schrift und feine Linien kräftiger (n = Wert relativ zum Papier, 0..1). */
-    private fun curve(n: Float): Int {
-        val t = (n / 0.93f).coerceIn(0f, 1f)
-        return (Math.pow(t.toDouble(), 1.8) * 255).roundToInt().coerceIn(0, 255)
+    private fun curve(n: Float, white: Float, gamma: Float): Int {
+        val t = (n / white).coerceIn(0f, 1f)
+        return (Math.pow(t.toDouble(), gamma.toDouble()) * 255).roundToInt().coerceIn(0, 255)
     }
 
     /** Baut aus den verbesserten Seiten eine PDF (A4-Breite, Seitenverhältnis wie Scan). */

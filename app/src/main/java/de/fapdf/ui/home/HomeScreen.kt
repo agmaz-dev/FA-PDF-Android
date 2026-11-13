@@ -2,6 +2,7 @@ package de.fapdf.ui.home
 
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.AutoFixHigh
 import de.fapdf.data.DocumentRepository
 import androidx.compose.foundation.border
 import androidx.compose.ui.graphics.asImageBitmap
@@ -510,6 +511,8 @@ private fun RecentDocuments(vm: AppViewModel, docs: List<DocumentEntity>, nav: H
 private fun ActionSheet(vm: AppViewModel, d: DocumentEntity, nav: HomeNav, onDismiss: () -> Unit) {
     val context = LocalContext.current
     var confirmDelete by remember { mutableStateOf(false) }
+    var scanEdit by remember { mutableStateOf(false) }
+    if (scanEdit) de.fapdf.ui.tools.ScanEditDialog(d.id) { scanEdit = false }
     var expanded by remember { mutableStateOf<String?>(null) }
     var askConsent by remember { mutableStateOf(false) }
     val scope = androidx.compose.runtime.rememberCoroutineScope()
@@ -550,6 +553,10 @@ private fun ActionSheet(vm: AppViewModel, d: DocumentEntity, nav: HomeNav, onDis
                 if (expanded == "edit") SubChips(listOf("Text" to { go(WorkspaceMode.EDIT) }, "Kommentieren" to { go(WorkspaceMode.ANNOTATE) }, "Ausfüllen" to { go(WorkspaceMode.FORM) }))
                 HorizontalDivider(color = FaColors.Separator)
                 MenuRow(Icons.Outlined.GridView, "Seiten", "Sortieren · Drehen · Herauslösen · Löschen", false) { tool(Tool.ORGANIZE) }
+                if (remember(d.id) { de.fapdf.ui.tools.ScanStore.has(context, d.id) }) {
+                    HorizontalDivider(color = FaColors.Separator)
+                    MenuRow(Icons.Outlined.AutoFixHigh, "Scan nachbearbeiten", "Original · Verbessert · Kräftig · Schwarzweiß", false) { scanEdit = true }
+                }
                 HorizontalDivider(color = FaColors.Separator)
                 MenuRow(Icons.Outlined.Share, "Teilen & Export", "Weitergeben · Drucken · Verschlüsseln", expanded == "share") { expanded = if (expanded == "share") null else "share" }
                 if (expanded == "share") SubChips(listOf(

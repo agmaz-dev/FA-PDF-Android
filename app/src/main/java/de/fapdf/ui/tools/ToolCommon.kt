@@ -233,11 +233,11 @@ private fun ResultCard(runner: ToolRunner, onOpenDoc: (Long) -> Unit, replaceTar
                     Text("${d.pageCount} Seiten", style = MaterialTheme.typography.bodySmall, color = FaColors.SecondaryLabel)
                 }
             }
-            Row(Modifier.padding(start = 56.dp, bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                TextButton(onClick = { onOpenDoc(d.id) }) { Text("Öffnen") }
-                TextButton(onClick = { FileActions.share(context, d.file(), d.displayName) }) { Text("Teilen") }
-                TextButton(onClick = { exporter(d.file(), d.displayName) }) { Text("Exportieren") }
-                TextButton(onClick = { FileActions.print(context, d.file(), d.displayName) }) { Text("Drucken") }
+            Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                SlimButton("Öffnen", Modifier.weight(1f), primary = true) { onOpenDoc(d.id) }
+                SlimButton("Teilen", Modifier.weight(1f)) { FileActions.share(context, d.file(), d.displayName) }
+                SlimButton("Export", Modifier.weight(1f)) { exporter(d.file(), d.displayName) }
+                SlimButton("Drucken", Modifier.weight(1f)) { FileActions.print(context, d.file(), d.displayName) }
             }
         }
         if (replaceTarget != null && docs.size == 1) {

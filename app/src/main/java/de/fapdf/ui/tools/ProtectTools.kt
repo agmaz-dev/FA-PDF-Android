@@ -179,7 +179,17 @@ fun ScannerToolV2(appVm: AppViewModel, runner: ToolRunner) {
     var gallery by remember { mutableStateOf(true) }
     var enhance by remember { mutableStateOf(true) }
     var lastId by remember { mutableStateOf<Long?>(null) }
-    androidx.compose.runtime.LaunchedEffect(runner.results) { runner.results.firstOrNull()?.let { lastId = it } }
+    var pendingMode by remember { mutableStateOf<Int?>(null) }
+    var editId by remember { mutableStateOf<Long?>(null) }
+    var stamp by remember { mutableStateOf(0L) }
+    androidx.compose.runtime.LaunchedEffect(runner.results) {
+        runner.results.firstOrNull()?.let { id ->
+            lastId = id
+            pendingMode?.let { m -> kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { ScanStore.claimPending(context, id, m) }; pendingMode = null }
+            stamp = System.currentTimeMillis()
+        }
+    }
+    editId?.let { ScanEditDialog(it) { editId = null; stamp = System.currentTimeMillis() } }
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { res ->
         if (res.resultCode == Activity.RESULT_OK) {
             val result = GmsDocumentScanningResult.fromActivityResultIntent(res.data)
@@ -195,19 +205,19 @@ fun ScannerToolV2(appVm: AppViewModel, runner: ToolRunner) {
                     tmpIn.delete()
                     listOf(out to "Ausweis-Scan.pdf")
                 }
-            } else if (enhance && !result.pages.isNullOrEmpty()) {
-                // Schatten entfernen, Papier weiß, Schrift kräftiger
+            } else if (!result.pages.isNullOrEmpty()) {
+                // Original-Fotos aufbewahren (für späteres Nachbearbeiten), dann aufbereiten
                 val pageUris = result.pages!!.map { it.imageUri }
-                runner.run("Scan wird verbessert …") {
-                    val bitmaps = pageUris.mapNotNull { u ->
-                        context.contentResolver.openInputStream(u)?.use { de.fapdf.pdf.ScanEnhancer.decode(it) }?.let { raw ->
-                            de.fapdf.pdf.ScanEnhancer.enhance(raw).also { if (it !== raw) raw.recycle() }
-                        }
+                val m = if (enhance) 1 else 0
+                runner.run(if (enhance) "Scan wird verbessert …" else "Scan wird gespeichert …") {
+                    val pend = ScanStore.pending(context)
+                    pend.deleteRecursively(); pend.mkdirs()
+                    pageUris.forEachIndexed { i, u ->
+                        context.contentResolver.openInputStream(u)?.use { inp -> java.io.File(pend, "p%03d.jpg".format(i)).outputStream().use { inp.copyTo(it) } }
                     }
-                    if (bitmaps.isEmpty()) throw PdfUserException("Der Scan konnte nicht gelesen werden.")
                     val out = runner.tmp("scan")
-                    de.fapdf.pdf.ScanEnhancer.buildPdf(bitmaps, out)
-                    bitmaps.forEach { it.recycle() }
+                    try { ScanStore.build(pend, m, List(pageUris.size) { 0 }, out) } catch (e: IllegalArgumentException) { throw PdfUserException("Der Scan konnte nicht gelesen werden.") }
+                    pendingMode = m
                     val stamp = java.text.SimpleDateFormat("yyyy-MM-dd HH.mm", java.util.Locale.GERMANY).format(java.util.Date())
                     listOf(out to "Scan $stamp.pdf")
                 }
@@ -216,16 +226,18 @@ fun ScannerToolV2(appVm: AppViewModel, runner: ToolRunner) {
             }
         }
     }
-    Box(
-        Modifier.padding(16.dp).fillMaxWidth().height(180.dp).clip(RoundedCornerShape(16.dp)).background(FaColors.Card),
-        contentAlignment = Alignment.Center,
-    ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            androidx.compose.material3.Icon(Icons.Outlined.CameraAlt, null, tint = FaColors.Accent, modifier = Modifier.padding(8.dp))
-            Text(
-                "Die Kamera erkennt die Ränder, schneidet automatisch zu und korrigiert die Perspektive.",
-                Modifier.padding(horizontal = 24.dp), textAlign = TextAlign.Center, style = MaterialTheme.typography.bodySmall, color = FaColors.SecondaryLabel,
-            )
+    // Nach dem Scan: große Vorschau und Nachbearbeiten
+    lastId?.let { id ->
+        var d by remember(id) { mutableStateOf<de.fapdf.data.DocumentEntity?>(null) }
+        androidx.compose.runtime.LaunchedEffect(id, stamp) { d = runner.repo.get(id) }
+        d?.let { doc ->
+            PdfFirstPage(doc.file(), stamp + doc.modifiedAt,
+                Modifier.padding(horizontal = 16.dp).fillMaxWidth().height(380.dp).clip(RoundedCornerShape(16.dp)).background(FaColors.Card).padding(10.dp))
+            if (ScanStore.has(context, id)) {
+                androidx.compose.foundation.layout.Row(Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
+                    SlimButton("Scan nachbearbeiten (Filter, Drehen)", Modifier.fillMaxWidth(), primary = false) { editId = id }
+                }
+            }
         }
     }
     SectionLabel("Modus")
