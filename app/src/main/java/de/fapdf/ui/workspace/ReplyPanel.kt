@@ -266,6 +266,9 @@ class ReplyViewModel(app: Application, private val docId: Long) : AndroidViewMod
 
     fun bezugText() = bezug
 
+    /** Kurzes Zeichen für den Infoblock: die Nummer aus dem Bezug (z. B. 95852881), sonst der Bezug. */
+    fun referenceShort(): String = Regex("[A-Z0-9][A-Z0-9./-]*\\d{4,}[A-Z0-9./-]*").find(bezug)?.value ?: bezug.take(30)
+
     /** Namen der Anlagen für den Brief („Anlage: …“). */
     fun attachmentNames(): List<String> =
         (if (includeOriginal && originalFile != null) listOf("Ihr Schreiben vom ${letterDate.ifBlank { "…" }} (Kopie)") else emptyList()) +
@@ -391,7 +394,7 @@ class ReplyViewModel(app: Application, private val docId: Long) : AndroidViewMod
                 val out = File(getApplication<Application>().cacheDir, "antwort_${System.nanoTime()}.pdf")
                 withContext(Dispatchers.IO) {
                     LetterPdfWriter.write(
-                        LetterPdfWriter.Letter(sender, recipient, placeDate, subject, body, signerName, attachmentNames()),
+                        LetterPdfWriter.Letter(sender, recipient, placeDate, subject, body, signerName, attachmentNames(), letterDate, referenceShort()),
                         sig, c.fonts, out,
                     )
                 }
@@ -638,14 +641,32 @@ private fun LetterPaper(vm: ReplyViewModel, onEdit: () -> Unit) {
     Column(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(Color.White).clickable(onClick = onEdit).padding(horizontal = 16.dp, vertical = 18.dp),
     ) {
-        val senderLines = vm.sender.lines().filter { it.isNotBlank() }
-        Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End) {
-            senderLines.forEachIndexed { i, l -> Text(l.trim(), color = ink, fontSize = 10.sp, lineHeight = 13.sp, fontWeight = if (i == 0) FontWeight.Bold else FontWeight.Normal) }
+        // Wie im PDF: links Anschriftfeld, rechts daneben der Infoblock
+        val (name, postal, contact) = LetterPdfWriter.splitSender(vm.sender.replace(Regex("[ \\t]+"), " "))
+        Row(Modifier.fillMaxWidth().padding(top = 26.dp)) {
+            Column(Modifier.weight(1.15f)) {
+                Text((listOf(name) + postal).filter { it.isNotBlank() }.joinToString(" · "), color = Color(0xFF777777), fontSize = 6.sp, maxLines = 1)
+                Spacer(Modifier.height(6.dp))
+                LetterPdfWriter.splitAddress(vm.recipient.replace(Regex("[ \\t]+"), " ")).forEach { Text(it, color = ink, fontSize = 10.sp, lineHeight = 13.sp) }
+            }
+            Spacer(Modifier.width(8.dp))
+            Column(Modifier.weight(1f)) {
+                if (name.isNotBlank()) Text(name, color = ink, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                postal.forEach { Text(it, color = ink, fontSize = 8.sp, lineHeight = 11.sp) }
+                Spacer(Modifier.height(5.dp))
+                val infos = contact + listOfNotNull(
+                    vm.letterDate.takeIf { it.isNotBlank() }?.let { LetterPdfWriter.Info("Ihr Schreiben", it) },
+                    vm.referenceShort().takeIf { it.isNotBlank() }?.let { LetterPdfWriter.Info("Ihr Zeichen", it) },
+                    LetterPdfWriter.Info("Datum", LetterPdfWriter.dateOnly(vm.placeDate)),
+                )
+                infos.forEach { inf ->
+                    Row {
+                        Text(inf.label, color = Color(0xFF666666), fontSize = 7.sp, modifier = Modifier.width(52.dp))
+                        Text(inf.value, color = ink, fontSize = 8.sp, maxLines = 1)
+                    }
+                }
+            }
         }
-        Text(senderLines.take(1).plus(senderLines.drop(1).takeLast(2)).joinToString(" · "), color = Color(0xFF777777), fontSize = 7.sp,
-            modifier = Modifier.padding(top = 10.dp))
-        Column(Modifier.padding(top = 4.dp)) { vm.recipient.lines().filter { it.isNotBlank() }.forEach { Text(it.trim(), color = ink, fontSize = 11.sp, lineHeight = 14.sp) } }
-        Text(vm.placeDate, color = ink, fontSize = 11.sp, modifier = Modifier.fillMaxWidth().padding(top = 14.dp), textAlign = androidx.compose.ui.text.style.TextAlign.End)
         Text(vm.subject, color = ink, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 10.dp))
         Text(vm.body, color = ink, fontSize = 11.sp, lineHeight = 15.sp, modifier = Modifier.padding(top = 10.dp))
         vm.signatureBitmap?.let { b ->
