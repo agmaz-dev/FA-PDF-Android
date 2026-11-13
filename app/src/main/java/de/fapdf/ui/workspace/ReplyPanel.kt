@@ -338,12 +338,14 @@ class ReplyViewModel(app: Application, private val docId: Long) : AndroidViewMod
                     (if (bezug.isNotBlank()) "Bezug (Nummern): $bezug. " else "") +
                     (if (contact.isNotBlank()) "Ansprechpartner: $contact. " else "") +
                     "Schreibe sachlich, höflich und klar im deutschen Geschäftsbriefstil (DIN 5008). Gib GENAU dieses Format aus:\n" +
-                    "Betreff: <kurzer Betreff mit Bezug, z. B. Nummern>\n\n<Anrede>,\n\n<Text in kurzen Absätzen>\n\nMit freundlichen Grüßen\n" +
+                    "Betreff: <kurzer Betreff mit Bezug, z. B. Nummern>\n\n<Anrede>,\n\n<Text in 3 bis 5 Absätzen>\n\nMit freundlichen Grüßen\n" +
+                    "Der Text soll vollständig und konkret sein: zuerst Bezug auf das Schreiben (Datum, Nummern), dann auf die einzelnen Punkte " +
+                    "des Schreibens eingehen, das Anliegen begründen und am Ende klar sagen, was erbeten oder erwartet wird (mit Frist, falls passend). " +
                     "Keine Adressen, kein Datum, keinen Namen unter dem Gruß, keine Erklärungen. Verwende nur Fakten aus dem Schreiben und " +
                     "den Angaben. Setze alle bekannten Angaben (Datum, Nummern, Beträge) direkt ein. Keine Platzhalter, keine eckigen Klammern – " +
                     "was unbekannt ist, lässt du einfach weg. Handschriftliche Notizen im Schreiben sind Angaben von $name."
                 partial = null
-                val ans = AiRouter.complete(c.settings, system, listOf(ChatMessage("user", Prompts.withDocument("Schreibe jetzt den Antwortbrief.", text))), 1500) { partial = it }
+                val ans = AiRouter.complete(c.settings, system, listOf(ChatMessage("user", Prompts.withDocument("Schreibe jetzt den Antwortbrief.", text))), 2000) { partial = it }
                 partial = null
                 if (ans.fallback) note = "Antwort von " + AiRouter.shortName(ans.provider) + " (gewählter Dienst nicht erreichbar)" + if (ans.provider == de.fapdf.data.AiProvider.NANO) " – bitte genau prüfen" else ""
                 applyLetter(ans.text)
@@ -392,14 +394,17 @@ class ReplyViewModel(app: Application, private val docId: Long) : AndroidViewMod
             busy = "Ton und Länge anpassen"
             try {
                 val instr = when (kind) {
-                    "höflich" -> "freundlicher und höflicher formulieren"
+                    "ausführlich" -> "ausführlicher und detaillierter schreiben: auf jeden Punkt des ursprünglichen Schreibens (siehe <dokument>) " +
+                        "einzeln eingehen, Begründungen und Fakten ergänzen, klar sagen, was erbeten oder erwartet wird – etwa doppelt so lang, " +
+                        "aber ohne Wiederholungen und ohne erfundene Angaben"
                     "bestimmt" -> "bestimmter und nachdrücklicher formulieren, aber sachlich bleiben"
                     else -> "deutlich kürzer fassen, nur das Wesentliche"
                 }
                 val system = "Überarbeite den folgenden Brieftext: $instr. Behalte alle Fakten, Nummern und Daten sowie das Format " +
                     "(Anrede … Mit freundlichen Grüßen) bei. Gib nur den überarbeiteten Brieftext aus, ohne Betreff und ohne Erklärungen."
                 partial = null
-                val ans = AiRouter.complete(c.settings, system, listOf(ChatMessage("user", current)), 1500) { partial = it }
+                val input = if (kind == "ausführlich" && docText != null) Prompts.withDocument("Brieftext:\n$current", docText!!) else current
+                val ans = AiRouter.complete(c.settings, system, listOf(ChatMessage("user", input)), if (kind == "ausführlich") 2500 else 1500) { partial = it }
                 partial = null
                 if (ans.fallback) note = "Antwort von " + AiRouter.shortName(ans.provider) + " (gewählter Dienst nicht erreichbar)" + if (ans.provider == de.fapdf.data.AiProvider.NANO) " – bitte genau prüfen" else ""
                 body = fixPlaceholders(de.fapdf.ai.AiText.clean(ans.text))
@@ -725,7 +730,7 @@ private fun LetterEditor(
         if (uri != null) vm.addAttachment(uri)
     }
     Row(Modifier.fillMaxWidth().padding(bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        listOf("höflich" to "Höflicher", "bestimmt" to "Bestimmter", "kurz" to "Kürzer").forEach { (k, t) ->
+        listOf("ausführlich" to "Ausführlicher", "bestimmt" to "Bestimmter", "kurz" to "Kürzer").forEach { (k, t) ->
             EqualButton(t, Modifier.weight(1f), enabled = vm.busy == null) { onRestyle(k) }
         }
     }

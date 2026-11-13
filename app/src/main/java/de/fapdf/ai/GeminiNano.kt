@@ -58,7 +58,7 @@ object GeminiNano {
             cut = true
         }
         // Gemini Nano schreibt höchstens 256 Tokens pro Aufruf – längere Antworten in Stücken fortsetzen
-        val rounds = if (maxTokens > 256) 4 else 1
+        val rounds = (maxTokens / 256).coerceIn(1, 8)
         val sb = StringBuilder()
         for (r in 0 until rounds) {
             val input = if (r == 0) prompt else
