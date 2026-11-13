@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.navigationBars
@@ -373,18 +374,20 @@ fun WorkspaceScreen(
 
     // Zugeklappt: KI-Assistent als Fenster von unten
     if (replyOpen && vm.mode == WorkspaceMode.READ && androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp < 600) {
-        androidx.compose.material3.ModalBottomSheet(
-            onDismissRequest = { replyOpen = false },
-            // Nicht durch Wischen schließen – nur über das X (sonst ginge der Entwurf beim Scrollen verloren)
-            sheetState = androidx.compose.material3.rememberModalBottomSheetState(
-                skipPartiallyExpanded = true,
-                confirmValueChange = { it != androidx.compose.material3.SheetValue.Hidden },
+        // Festes Fenster (kein Wischen): schließt nur über das X bzw. die Zurück-Taste mit Rückfrage
+        var askClose by remember { mutableStateOf(false) }
+        androidx.compose.ui.window.Dialog(
+            onDismissRequest = { askClose = true },
+            properties = androidx.compose.ui.window.DialogProperties(
+                usePlatformDefaultWidth = false, decorFitsSystemWindows = false, dismissOnClickOutside = false,
             ),
-            dragHandle = null,
-            containerColor = FaColors.Surface,
         ) {
-            ReplyPanel(docId, vm.current, Modifier.fillMaxWidth().fillMaxHeight(0.92f),
-                onClose = { replyOpen = false }, onOpenDocument = onOpenDocument, onManageProfiles = onManageProfiles)
+            Box(Modifier.fillMaxSize().imePadding(), contentAlignment = Alignment.BottomCenter) {
+                ReplyPanel(docId, vm.current,
+                    Modifier.fillMaxWidth().fillMaxHeight(0.92f).clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)).navigationBarsPadding(),
+                    onClose = { replyOpen = false }, onOpenDocument = onOpenDocument, onManageProfiles = onManageProfiles,
+                    closeRequest = askClose, onCloseRequestHandled = { askClose = false })
+            }
         }
     }
 

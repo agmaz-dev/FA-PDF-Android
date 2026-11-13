@@ -337,7 +337,8 @@ class ReplyViewModel(app: Application, private val docId: Long) : AndroidViewMod
                     (if (letterDate.isNotBlank()) "Datum des erhaltenen Schreibens: $letterDate. " else "") +
                     (if (bezug.isNotBlank()) "Bezug (Nummern): $bezug. " else "") +
                     (if (contact.isNotBlank()) "Ansprechpartner: $contact. " else "") +
-                    "Schreibe sachlich, höflich und klar im deutschen Geschäftsbriefstil (DIN 5008). Gib GENAU dieses Format aus:\n" +
+                    "Schreibe sachlich und klar im deutschen Geschäftsbriefstil (DIN 5008). Verwende das Wort \"höflich\" nicht, wiederhole keine Sätze " +
+                    "und keine Gedanken, kein Markdown (keine Sternchen, keine Überschriften). Gib GENAU dieses Format aus:\n" +
                     "Betreff: <kurzer Betreff mit Bezug, z. B. Nummern>\n\n<Anrede>,\n\n<Text in 3 bis 5 Absätzen>\n\nMit freundlichen Grüßen\n" +
                     "Der Text soll vollständig und konkret sein: zuerst Bezug auf das Schreiben (Datum, Nummern), dann auf die einzelnen Punkte " +
                     "des Schreibens eingehen, das Anliegen begründen und am Ende klar sagen, was erbeten oder erwartet wird (mit Frist, falls passend). " +
@@ -360,7 +361,7 @@ class ReplyViewModel(app: Application, private val docId: Long) : AndroidViewMod
     }
 
     private fun applyLetter(raw: String) {
-        val lines = de.fapdf.ai.AiText.clean(raw).lines()
+        val lines = de.fapdf.ai.AiText.letter(raw).lines()
         val subjIdx = lines.indexOfFirst { it.trim().startsWith("Betreff", true) }
         if (subjIdx >= 0) {
             subject = lines[subjIdx].substringAfter(":").trim().trim('*')
@@ -401,13 +402,13 @@ class ReplyViewModel(app: Application, private val docId: Long) : AndroidViewMod
                     else -> "deutlich kürzer fassen, nur das Wesentliche"
                 }
                 val system = "Überarbeite den folgenden Brieftext: $instr. Behalte alle Fakten, Nummern und Daten sowie das Format " +
-                    "(Anrede … Mit freundlichen Grüßen) bei. Gib nur den überarbeiteten Brieftext aus, ohne Betreff und ohne Erklärungen."
+                    "(Anrede … Mit freundlichen Grüßen) bei. Kein Wort \"höflich\", keine Wiederholungen, kein Markdown. Gib nur den überarbeiteten Brieftext aus, ohne Betreff und ohne Erklärungen."
                 partial = null
                 val input = if (kind == "ausführlich" && docText != null) Prompts.withDocument("Brieftext:\n$current", docText!!) else current
                 val ans = AiRouter.complete(c.settings, system, listOf(ChatMessage("user", input)), if (kind == "ausführlich") 2500 else 1500) { partial = it }
                 partial = null
                 if (ans.fallback) note = "Antwort von " + AiRouter.shortName(ans.provider) + " (gewählter Dienst nicht erreichbar)" + if (ans.provider == de.fapdf.data.AiProvider.NANO) " – bitte genau prüfen" else ""
-                body = fixPlaceholders(de.fapdf.ai.AiText.clean(ans.text))
+                body = fixPlaceholders(de.fapdf.ai.AiText.letter(ans.text))
                 createdDocId = null
             } catch (e: Exception) {
                 error = e.message ?: "Fehler beim Überarbeiten"
@@ -481,6 +482,8 @@ fun ReplyPanel(
     onClose: () -> Unit,
     onOpenDocument: (Long) -> Unit,
     onManageProfiles: () -> Unit,
+    closeRequest: Boolean = false,
+    onCloseRequestHandled: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val app = context.applicationContext as Application
@@ -502,6 +505,17 @@ fun ReplyPanel(
 
     LaunchedEffect(file) { if (file != null) { vm.originalFile = file; withConsent { vm.start(file) } } }
     LaunchedEffect(Unit) { container.signatures.observeAll().collect { vm.loadSignatures(it) } }
+    // Schließen mit Rückfrage, wenn schon ein Brief geschrieben ist (er bleibt aber für dieses Dokument erhalten)
+    var confirmClose by remember { mutableStateOf(false) }
+    val requestClose = { if (vm.body.isNotBlank() && vm.createdDocId == null) confirmClose = true else onClose() }
+    LaunchedEffect(closeRequest) { if (closeRequest) { onCloseRequestHandled(); requestClose() } }
+    if (confirmClose) AlertDialog(
+        onDismissRequest = { confirmClose = false },
+        title = { Text("Antwort schließen?") },
+        text = { Text("Der Brief bleibt erhalten, solange dieses Dokument geöffnet ist. Als PDF gespeichert ist er noch nicht.") },
+        confirmButton = { TextButton(onClick = { confirmClose = false; onClose() }) { Text("Schließen") } },
+        dismissButton = { TextButton(onClick = { confirmClose = false }) { Text("Weiter bearbeiten") } },
+    )
 
     Column(modifier.background(FaColors.Surface)) {
         Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp, top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -510,7 +524,7 @@ fun ReplyPanel(
             Text(if (vm.stage == 0) "KI-Assistent" else "Antwortschreiben", style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
             if (vm.stage == 1) TextButton(onClick = { vm.stage = 0 }) { Text("Zurück") }
-            IconButton(onClick = onClose) { Icon(Icons.Outlined.Close, "Schließen") }
+            IconButton(onClick = requestClose) { Icon(Icons.Outlined.Close, "Schließen") }
         }
         Column(Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp)) {
             vm.note?.let { Text(it, color = FaColors.SecondaryLabel, fontSize = 12.sp, modifier = Modifier.padding(bottom = 6.dp)) }
