@@ -49,6 +49,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.draw.clipToBounds
+import de.fapdf.ui.components.pinchZoom
 import androidx.compose.ui.window.DialogProperties
 import de.fapdf.FaPdfApp
 import de.fapdf.pdf.ScanEnhancer
@@ -123,32 +125,33 @@ fun ScanEditDialog(docId: Long, onDismiss: () -> Unit) {
         }
     }
 
-    Dialog(onDismissRequest = { if (!saving) onDismiss() }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        Column(Modifier.fillMaxSize().background(FaColors.Background).statusBarsPadding().navigationBarsPadding().padding(16.dp)) {
+    Dialog(onDismissRequest = { if (!saving) onDismiss() }, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+        Column(Modifier.fillMaxSize().background(FaColors.Background).statusBarsPadding().navigationBarsPadding().padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Scan nachbearbeiten", fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                Text("Scan nachbearbeiten", fontSize = 17.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                 if (files.size > 1) {
                     IconButton(onClick = { if (page > 0) page-- }, enabled = page > 0) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Vorherige Seite") }
                     Text("${page + 1} / ${files.size}", fontSize = 14.sp, color = FaColors.SecondaryLabel)
                     IconButton(onClick = { if (page < files.size - 1) page++ }, enabled = page < files.size - 1) { Icon(Icons.AutoMirrored.Outlined.ArrowForward, "Nächste Seite") }
                 }
             }
-            Box(Modifier.weight(1f).fillMaxWidth().padding(vertical = 10.dp).background(Color(0xFF1C1C1E), RoundedCornerShape(14.dp)), contentAlignment = Alignment.Center) {
+            val zoom = remember(page) { de.fapdf.ui.components.ZoomState() }
+            Box(Modifier.weight(1f).fillMaxWidth().padding(vertical = 6.dp).clipToBounds(), contentAlignment = Alignment.Center) {
                 val b = preview
                 if (b == null) CircularProgressIndicator(color = FaColors.Accent)
-                else Image(b.asImageBitmap(), null, Modifier.fillMaxSize().padding(8.dp), contentScale = ContentScale.Fit)
+                else Image(b.asImageBitmap(), null, Modifier.fillMaxSize().pinchZoom(zoom), contentScale = ContentScale.Fit)
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 ScanStore.MODES.forEachIndexed { i, t ->
                     val sel = mode == i
                     Box(
-                        Modifier.weight(1f).height(42.dp).background(if (sel) FaColors.Accent else FaColors.Card, RoundedCornerShape(12.dp)).clickable { mode = i },
+                        Modifier.weight(1f).height(38.dp).background(if (sel) FaColors.Accent else FaColors.Card, RoundedCornerShape(12.dp)).clickable { mode = i },
                         contentAlignment = Alignment.Center,
                     ) { Text(t, fontSize = 13.sp, maxLines = 1, color = if (sel) FaColors.OnAccent else FaColors.Label, fontWeight = if (sel) FontWeight.SemiBold else FontWeight.Normal) }
                 }
             }
-            Row(Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                SlimButton("Seite drehen", Modifier.weight(1f), icon = true) { rot[page] = (rot[page] + 90) % 360 }
+            Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                SlimButton("Drehen", Modifier.weight(1f), icon = true) { rot[page] = (rot[page] + 90) % 360 }
                 SlimButton("Abbrechen", Modifier.weight(1f)) { if (!saving) onDismiss() }
                 SlimButton(if (saving) "Speichert …" else "Übernehmen", Modifier.weight(1f), primary = true) {
                     if (saving) return@SlimButton
