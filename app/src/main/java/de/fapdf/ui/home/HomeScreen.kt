@@ -480,7 +480,7 @@ private fun ActionSheet(vm: AppViewModel, d: DocumentEntity, nav: HomeNav, onDis
     var askConsent by remember { mutableStateOf(false) }
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     fun nameIt() {
-        vm.nameNow(d.id) { t -> FileActions.toast(context, if (t != null) "Neuer Name: $t" else "Kein passender Name gefunden") }
+        vm.nameNow(d.id) { msg -> FileActions.toast(context, msg) }
     }
     fun go(mode: WorkspaceMode) { onDismiss(); nav.workspace(d.id, mode) }
     fun tool(t: Tool) { onDismiss(); nav.tool(t, d.id) }

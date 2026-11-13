@@ -129,40 +129,49 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         getApplication<Application>().getSharedPreferences("ai_consent", android.content.Context.MODE_PRIVATE).edit().putBoolean(p.name, true).apply()
     }
 
-    private suspend fun nameWithAi(d: DocumentEntity, text: String): String? {
+    /** Fragt die KI nach Name und Kategorie. Gibt den neuen Namen zurück oder wirft eine verständliche Meldung. */
+    private suspend fun nameWithAi(d: DocumentEntity, text: String): String {
         val ans = de.fapdf.ai.AiRouter.complete(
             container.settings,
-            "Gib diesem Schreiben einen kurzen, eindeutigen Dateinamen und eine Kategorie. Antworte genau in zwei Zeilen, ohne weitere Wörter:\n" +
-                "TITEL: <Absender kurz> – <Art des Schreibens> – <Datum TT.MM.JJJJ>\n" +
-                "KATEGORIE: eine aus: " + de.fapdf.data.DocIndex.CATEGORIES.joinToString(", "),
-            listOf(de.fapdf.ai.ChatMessage("user", de.fapdf.ai.Prompts.withDocument("Benenne dieses Schreiben.", text.take(6000)))),
+            "Du gibst Briefen kurze Dateinamen. Antworte NUR mit zwei Zeilen, ohne Sternchen und ohne Erklärung:\n" +
+                "TITEL: Absender – Art des Schreibens – Datum\n" +
+                "KATEGORIE: eine aus: " + de.fapdf.data.DocIndex.CATEGORIES.joinToString(", ") + "\n" +
+                "Beispiel:\nTITEL: HEK – Kontoauszug – 19.10.2026\nKATEGORIE: Krankenkasse",
+            listOf(de.fapdf.ai.ChatMessage("user", "Brief:\n" + text.take(4000))),
             120,
         )
-        val clean = de.fapdf.ai.AiText.clean(ans.text)
-        val title = Regex("(?im)^\\s*TITEL\\s*:\\s*(.+)$").find(clean)?.groupValues?.get(1)
-            ?.replace(Regex("[\\\\/:*?\"<>|]"), "-")?.replace(Regex("\\s+"), " ")?.trim()?.trim('-', ' ', '"')?.take(80)
-        val cat = Regex("(?im)^\\s*KATEGORIE\\s*:\\s*(.+)$").find(clean)?.groupValues?.get(1)?.trim()
-            ?.let { c -> de.fapdf.data.DocIndex.CATEGORIES.firstOrNull { c.contains(it, ignoreCase = true) } }
+        val clean = de.fapdf.ai.AiText.clean(ans.text).replace("*", "").replace("#", "").replace("`", "")
+        val lines = clean.lines().map { it.trim() }.filter { it.isNotEmpty() }
+        val titleLine = lines.firstOrNull { it.contains(Regex("(?i)^\\W*(titel|dateiname|name)\\s*:")) }?.substringAfter(":")
+            ?: lines.firstOrNull { !it.contains(Regex("(?i)kategorie")) }
+        val title = titleLine
+            ?.replace(Regex("[\\\\/:*?\"<>|]"), "-")?.replace(Regex("\\s+"), " ")?.trim()?.trim('-', ' ', '"', '„', '“', '.')?.take(80)
+        val cat = de.fapdf.data.DocIndex.CATEGORIES.firstOrNull { c -> lines.any { it.contains(Regex("(?i)kategorie")) && it.contains(c, ignoreCase = true) } }
+            ?: de.fapdf.data.DocIndex.guessCategory(text)
         if (cat != null) container.index.setCategory(d.id, cat)
-        if (title.isNullOrBlank() || title.length < 5) return null
+        if (title.isNullOrBlank() || title.length < 5) throw IllegalStateException("Die KI (" + de.fapdf.ai.AiRouter.shortName(ans.provider) + ") hat keinen brauchbaren Namen geliefert.")
         container.documents.rename(d.id, title)
         container.index.markNamed(d.id)
         return title
     }
 
-    /** „Mit KI benennen“ aus dem Dokument-Menü. */
-    fun nameNow(id: Long, onDone: (String?) -> Unit) = viewModelScope.launch {
+    /** „Mit KI benennen“ aus dem Dokument-Menü. Meldet immer ein Ergebnis zurück. */
+    fun nameNow(id: Long, onDone: (String) -> Unit) = viewModelScope.launch {
         val d = documents.value.firstOrNull { it.id == id } ?: return@launch
         namingBusy = id
         try {
             val tmp = java.io.File(getApplication<Application>().cacheDir, "index").apply { mkdirs() }
-            val text = container.index.text(id)?.takeIf { it.isNotBlank() } ?: kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
-                de.fapdf.ai.DocumentText.extract(java.io.File(d.filePath), tmp, maxChars = 60_000, maxOcrPages = 3).text
-            }.also { container.index.setText(id, it.ifBlank { " " }) }
-            onDone(if (text.isBlank()) null else nameWithAi(d, text))
+            var text = container.index.text(id)?.takeIf { it.isNotBlank() }
+            if (text == null) {
+                text = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                    de.fapdf.ai.DocumentText.extract(java.io.File(d.filePath), tmp, maxChars = 60_000, maxOcrPages = 3).text
+                }
+                container.index.setText(id, text.ifBlank { " " })
+            }
+            if (text.replace(Regex("\\[Seite \\d+]"), "").isBlank()) onDone("Im Dokument wurde kein Text gefunden.")
+            else onDone("Neuer Name: " + nameWithAi(d, text))
         } catch (e: Exception) {
-            error = e.message ?: "Benennen fehlgeschlagen"
-            onDone(null)
+            onDone(e.message ?: "Benennen fehlgeschlagen")
         } finally {
             namingBusy = null
         }
