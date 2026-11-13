@@ -20,6 +20,22 @@ static llama_context *g_ctx = nullptr;
 static common_chat_templates_ptr g_tmpls;
 static int g_n_ctx = 8192;
 static std::atomic<bool> g_abort{false};
+// Fortschritt für die Anzeige: Phase 0 = frei, 1 = liest Eingabe, 2 = schreibt Antwort
+static std::atomic<int> g_phase{0}, g_in_done{0}, g_in_total{0}, g_out{0};
+static std::atomic<long long> g_t_start{0}, g_t_gen{0}, g_t_end{0};
+static long long now_ms() { return ggml_time_us() / 1000; }
+
+/** "phase;gelesen;gesamt;geschrieben;ms_lesen;ms_schreiben" */
+extern "C" JNIEXPORT jstring JNICALL
+Java_de_faki_Native_progress(JNIEnv *env, jclass) {
+    const long long t = now_ms();
+    const int ph = g_phase;
+    const long long read_ms = (ph == 1 ? t : g_t_gen.load()) - g_t_start;
+    const long long gen_ms = ph == 2 ? t - g_t_gen : (ph == 0 && g_t_end > g_t_gen ? g_t_end - g_t_gen : 0);
+    std::string s = std::to_string(ph) + ";" + std::to_string(g_in_done.load()) + ";" + std::to_string(g_in_total.load()) + ";" +
+                    std::to_string(g_out.load()) + ";" + std::to_string(read_ms) + ";" + std::to_string(gen_ms);
+    return env->NewStringUTF(s.c_str());
+}
 
 static constexpr int BATCH = 512;
 
@@ -178,6 +194,8 @@ Java_de_faki_Native_complete(JNIEnv *env, jclass, jobjectArray roles, jobjectArr
         LOGw("Eingabe gekürzt auf %d Tokens", (int) toks.size());
     }
 
+    g_in_total = (int) toks.size(); g_in_done = 0; g_out = 0;
+    g_t_start = now_ms(); g_t_gen = g_t_start; g_phase = 1;
     common_batch batch(g_ctx);
     for (int i = 0; i < (int) toks.size(); i += BATCH) {
         const int m = std::min(BATCH, (int) toks.size() - i);
@@ -187,9 +205,11 @@ Java_de_faki_Native_complete(JNIEnv *env, jclass, jobjectArray roles, jobjectArr
             batch.add(toks[i + j], i + j, 0, last);
         }
         if (llama_process(g_ctx, LLAMA_PROCESS_TYPE_DECODE, batch.get()) != 0)
-            return env->NewStringUTF("\x01" "FEHLER:Verarbeitung der Eingabe fehlgeschlagen.");
-        if (g_abort) return env->NewStringUTF("\x01" "FEHLER:Abgebrochen.");
+            { g_phase = 0; return env->NewStringUTF("\x01" "FEHLER:Verarbeitung der Eingabe fehlgeschlagen."); }
+        g_in_done = i + m;
+        if (g_abort) { g_phase = 0; return env->NewStringUTF("\x01" "FEHLER:Abgebrochen."); }
     }
+    g_t_gen = now_ms(); g_phase = 2;
 
     common_params_sampling sp;
     sp.temp = temp;
@@ -203,6 +223,7 @@ Java_de_faki_Native_complete(JNIEnv *env, jclass, jobjectArray roles, jobjectArr
         const llama_token id = common_sampler_sample(smpl, g_ctx, -1);
         common_sampler_accept(smpl, id, true);
         if (llama_vocab_is_eog(vocab, id)) break;
+        g_out++;
         out += common_token_to_piece(g_ctx, id, false);
         bool stop = false;
         for (const auto &s : stops) {
@@ -218,5 +239,6 @@ Java_de_faki_Native_complete(JNIEnv *env, jclass, jobjectArray roles, jobjectArr
         if (llama_process(g_ctx, LLAMA_PROCESS_TYPE_DECODE, batch.get()) != 0) break;
     }
     common_sampler_free(smpl);
+    g_t_end = now_ms(); g_phase = 0;
     return to_jstring(env, out);
 }

@@ -19,6 +19,7 @@ object Native {
 
     @JvmStatic external fun nativeInit(libDir: String)
     @JvmStatic external fun devices(): String
+    @JvmStatic external fun progress(): String
     @JvmStatic external fun load(path: String, nCtx: Int, nGpuLayers: Int): Int
     @JvmStatic external fun complete(roles: Array<String>, contents: Array<String>, maxTokens: Int, temp: Float): String
     @JvmStatic external fun abort()
@@ -96,6 +97,20 @@ object Engine {
         0 -> 0
         100 -> 999
         else -> (m.layers * p / 100).coerceAtLeast(1)
+    }
+
+    /** Fortschritt der laufenden bzw. letzten Anfrage als lesbarer Text. */
+    fun progressText(): String? {
+        if (loadedId == null && !busy) return null
+        val p = runCatching { Native.progress().split(";").map { it.toLong() } }.getOrNull() ?: return null
+        fun v(i: Int) = p.getOrElse(i) { 0L }
+        val ph = v(0); val done = v(1); val total = v(2); val out = v(3); val readMs = v(4); val genMs = v(5)
+        val speed = if (genMs > 0) "%.1f".format(out * 1000.0 / genMs) else "–"
+        return when (ph) {
+            1L -> "Liest Eingabe: $done von $total Wörterteilen (${readMs / 1000} s)"
+            2L -> "Schreibt Antwort: $out Wörterteile · $speed pro Sekunde (Lesen dauerte ${readMs / 1000} s)"
+            else -> if (total > 0) "Letzte Anfrage: $total gelesen in ${"%.1f".format(readMs / 1000.0)} s · $out geschrieben in ${"%.1f".format(genMs / 1000.0)} s ($speed pro Sekunde)" else null
+        }
     }
 
     /** Beschreibung der gefundenen Rechenwerke für die Anzeige. */

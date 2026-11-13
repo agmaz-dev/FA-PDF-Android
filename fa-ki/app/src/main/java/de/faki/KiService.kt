@@ -33,28 +33,59 @@ class KiService : Service() {
             }
         }
         running = server?.isAlive == true
+        startProgressUpdates()
         return START_NOT_STICKY
+    }
+
+    private fun build(progress: String?): Notification {
+        val open = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
+        val stop = PendingIntent.getService(this, 1, Intent(this, KiService::class.java).setAction(ACTION_STOP), PendingIntent.FLAG_IMMUTABLE)
+        val model = Settings.active(this)?.title ?: "kein Modell eingeschaltet"
+        return Notification.Builder(this, CHANNEL)
+            .setSmallIcon(android.R.drawable.ic_menu_manage)
+            .setContentTitle(if (progress != null) "FA KI rechnet …" else "FA KI läuft")
+            .setContentText(progress ?: "$model · ${KiServer.BASE_URL}")
+            .setStyle(Notification.BigTextStyle().bigText(progress ?: "$model · ${KiServer.BASE_URL}"))
+            .setContentIntent(open)
+            .addAction(Notification.Action.Builder(null, "Beenden", stop).build())
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .build()
     }
 
     private fun startInForeground() {
         val nm = getSystemService(NotificationManager::class.java)
         nm.createNotificationChannel(NotificationChannel(CHANNEL, "FA KI", NotificationManager.IMPORTANCE_LOW))
-        val open = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
-        val stop = PendingIntent.getService(this, 1, Intent(this, KiService::class.java).setAction(ACTION_STOP), PendingIntent.FLAG_IMMUTABLE)
-        val model = Settings.active(this)?.title ?: "kein Modell eingeschaltet"
-        val n: Notification = Notification.Builder(this, CHANNEL)
-            .setSmallIcon(android.R.drawable.ic_menu_manage)
-            .setContentTitle("FA KI läuft")
-            .setContentText("$model · ${KiServer.BASE_URL}")
-            .setContentIntent(open)
-            .addAction(Notification.Action.Builder(null, "Beenden", stop).build())
-            .setOngoing(true)
-            .build()
+        val n = build(null)
         if (Build.VERSION.SDK_INT >= 34) startForeground(NOTIF_ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
         else startForeground(NOTIF_ID, n)
     }
 
+    private var ticker: java.util.Timer? = null
+    private var lastText: String? = null
+
+    /** Zeigt in der Benachrichtigung live, was die KI gerade tut (auch wenn FA KI im Hintergrund ist). */
+    private fun startProgressUpdates() {
+        if (ticker != null) return
+        ticker = java.util.Timer("ki-progress", true).apply {
+            scheduleAtFixedRate(object : java.util.TimerTask() {
+                override fun run() {
+                    val t = if (Engine.busy) Engine.progressText() else null
+                    if (t == lastText) return
+                    lastText = t
+                    runCatching { notify(t) }
+                }
+            }, 1000, 1000)
+        }
+    }
+
+    private fun notify(progress: String?) {
+        val nm = getSystemService(NotificationManager::class.java)
+        nm.notify(NOTIF_ID, build(progress))
+    }
+
     override fun onDestroy() {
+        ticker?.cancel(); ticker = null
         server?.stop()
         server = null
         running = false

@@ -141,6 +141,8 @@ private fun Screen(crash: String?) {
             }
             Text("Schlüssel: beliebig (z. B. „lokal“) · Modellname: lokal", color = Grey, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
             KiService.lastError?.let { Text("Fehler: $it", color = Color(0xFFFF6B6B), fontSize = 12.sp) }
+            val prog = remember(tick) { Engine.progressText() }
+            if (prog != null) Text(prog, color = if (Engine.busy) Lime else Grey, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp))
             // Samsung beendet Apps im Hintergrund sonst nach einiger Zeit – dann ist die KI für andere Apps weg
             val pm = ctx.getSystemService(android.os.PowerManager::class.java)
             val unrestricted = remember(tick) { pm.isIgnoringBatteryOptimizations(ctx.packageName) }
