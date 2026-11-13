@@ -129,6 +129,7 @@ fun AiScreen(tool: Tool, docId: Long?, appVm: AppViewModel, onBack: () -> Unit, 
     var choose by remember { mutableStateOf(doc == null) }
     var mode by remember { mutableStateOf(tool) }
     var busy by remember { mutableStateOf<String?>(null) }
+    var partial by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var extracted by remember { mutableStateOf<DocumentText.Result?>(null) }
     var result by remember { mutableStateOf<String?>(null) }
@@ -177,7 +178,8 @@ fun AiScreen(tool: Tool, docId: Long?, appVm: AppViewModel, onBack: () -> Unit, 
             busy = "Anfrage an ${settings.aiProvider.title} …"
             try {
                 // Ersatz-Kette: gewählter Dienst, sonst Gemini Nano auf dem Handy
-                val ans = de.fapdf.ai.AiRouter.complete(appVm.container.settings, system, messages, maxTokens = 3000)
+                partial = null
+                val ans = de.fapdf.ai.AiRouter.complete(appVm.container.settings, system, messages, maxTokens = 3000) { partial = it }
                 if (ans.fallback) FileActions.toast(context, "${settings.aiProvider.title.substringBefore(" –")} nicht erreichbar – Antwort von ${de.fapdf.ai.AiRouter.shortName(ans.provider)}")
                 onText(de.fapdf.ai.AiText.clean(ans.text))
             } catch (e: Exception) {
@@ -449,7 +451,7 @@ fun AiScreen(tool: Tool, docId: Long?, appVm: AppViewModel, onBack: () -> Unit, 
         text = { PageChips(doc.pageCount, chatPages) { chatPages = it } },
         confirmButton = { TextButton(onClick = { pagePicker = false }) { Text("Fertig") } },
     )
-    busy?.let { de.fapdf.ui.components.AiWorkingDialog(it) }
+    busy?.let { de.fapdf.ui.components.AiWorkingDialog(it, partial) }
     error?.let { MessageDialog("Hinweis", it) { error = null } }
     consentFor?.let { action ->
         val chars = extracted?.text?.length ?: 0

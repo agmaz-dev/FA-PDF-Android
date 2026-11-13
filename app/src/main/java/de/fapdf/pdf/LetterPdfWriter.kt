@@ -17,6 +17,7 @@ object LetterPdfWriter {
         val subject: String,
         val body: String,        // Anrede … Grußformel
         val signerName: String,
+        val attachments: List<String> = emptyList(),
     )
 
     private const val MM = 2.8346457f
@@ -115,6 +116,13 @@ object LetterPdfWriter {
             if (letter.signerName.isNotBlank()) {
                 if (y - leading < 20 * MM) y = newPage()
                 put(regular, size, left, y, letter.signerName.trim())
+            }
+            if (letter.attachments.isNotEmpty()) {
+                y -= leading * 2.2f
+                if (y - leading * (letter.attachments.size + 1) < 20 * MM) y = newPage()
+                put(bold, size, left, y, if (letter.attachments.size == 1) "Anlage" else "Anlagen")
+                y -= leading
+                letter.attachments.forEach { a -> put(regular, size, left, y, a); y -= leading }
             }
             PdfIo.appendToPage(doc, page, cb.tokens)
             PdfIo.save(doc, out)

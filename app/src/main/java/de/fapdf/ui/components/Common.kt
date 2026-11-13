@@ -336,6 +336,20 @@ object FileActions {
         context.startActivity(Intent.createChooser(intent, "PDFs weitergeben"))
     }
 
+    /** E-Mail mit mehreren Anhängen (Brief + Anlagen). */
+    fun emailMany(context: Context, files: List<Pair<File, String>>, to: List<String>, subject: String, body: String) {
+        val uris = ArrayList(files.map { (f, n) -> shareCopy(context, f, n) })
+        val intent = Intent(if (uris.size > 1) Intent.ACTION_SEND_MULTIPLE else Intent.ACTION_SEND).apply {
+            type = "message/rfc822"
+            putExtra(Intent.EXTRA_EMAIL, to.toTypedArray())
+            putExtra(Intent.EXTRA_SUBJECT, subject)
+            putExtra(Intent.EXTRA_TEXT, body)
+            if (uris.size > 1) putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris) else putExtra(Intent.EXTRA_STREAM, uris.first())
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        context.startActivity(Intent.createChooser(intent, "E-Mail-App wählen"))
+    }
+
     fun email(context: Context, file: File, displayName: String, to: List<String>, subject: String, body: String) {
         val uri = shareCopy(context, file, displayName)
         val intent = Intent(Intent.ACTION_SEND).apply {

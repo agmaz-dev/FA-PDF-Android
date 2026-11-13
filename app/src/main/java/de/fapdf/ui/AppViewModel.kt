@@ -102,6 +102,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 }.getOrDefault("")
                 idx.setText(d.id, text.ifBlank { " " })
                 if (idx.category(d.id) == null) de.fapdf.data.DocIndex.guessCategory(text)?.let { idx.setCategory(d.id, it) }
+                if (idx.deadline(d.id) == null) de.fapdf.data.DocIndex.findDeadline(text)?.let { (t, txt) -> idx.setDeadline(d.id, t, txt, "") }
                 // Frisch geöffnete Dokumente mit unverständlichem Namen automatisch benennen
                 val fresh = System.currentTimeMillis() - d.importedAt < 2 * 24 * 3600_000L
                 if (fresh && text.isNotBlank() && de.fapdf.data.DocIndex.isGenericName(d.displayName) && !idx.isNamed(d.id) && aiAllowed()) {

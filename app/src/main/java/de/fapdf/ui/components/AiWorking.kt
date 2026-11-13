@@ -85,13 +85,18 @@ fun AiProgressBar(fraction: Float?, modifier: Modifier = Modifier) {
  * [fraction] null → Balken läuft von selbst.
  */
 @Composable
-fun AiWorkingPanel(title: String, detail: String?, fraction: Float?, modifier: Modifier = Modifier) {
+fun AiWorkingPanel(title: String, detail: String?, fraction: Float?, modifier: Modifier = Modifier, partial: String? = null) {
     Box(modifier) {
         AiAurora(Modifier.fillMaxSize())
         Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp)) {
             Text(title, fontSize = 21.sp, fontWeight = FontWeight.Bold, color = FaColors.Label, lineHeight = 27.sp)
             if (!detail.isNullOrBlank()) Text(detail, fontSize = 14.sp, color = FaColors.SecondaryLabel, modifier = Modifier.padding(top = 6.dp))
             AiProgressBar(fraction, Modifier.padding(top = 18.dp))
+            // Wort für Wort: die letzten Zeilen des entstehenden Textes
+            if (!partial.isNullOrBlank()) Text(
+                de.fapdf.ai.AiText.clean(partial).takeLast(420), fontSize = 14.sp, lineHeight = 19.sp, color = FaColors.Label,
+                maxLines = 7, overflow = androidx.compose.ui.text.style.TextOverflow.Clip, modifier = Modifier.padding(top = 14.dp),
+            )
         }
     }
 }
@@ -106,10 +111,10 @@ fun progressFromText(text: String): Float? {
 
 /** Ersatz für den Lade-Dialog bei KI-Aufgaben. */
 @Composable
-fun AiWorkingDialog(text: String) {
+fun AiWorkingDialog(text: String, partial: String? = null) {
     Dialog(onDismissRequest = {}, properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false, usePlatformDefaultWidth = false)) {
-        Box(Modifier.fillMaxWidth(0.9f).height(260.dp).clip(RoundedCornerShape(26.dp)).background(FaColors.Surface), contentAlignment = Alignment.TopStart) {
-            AiWorkingPanel("KI arbeitet …", text, progressFromText(text), Modifier.fillMaxSize())
+        Box(Modifier.fillMaxWidth(0.9f).height(if (partial.isNullOrBlank()) 260.dp else 380.dp).clip(RoundedCornerShape(26.dp)).background(FaColors.Surface), contentAlignment = Alignment.TopStart) {
+            AiWorkingPanel(if (partial.isNullOrBlank()) "KI arbeitet …" else "KI schreibt …", text, progressFromText(text), Modifier.fillMaxSize(), partial)
         }
     }
 }

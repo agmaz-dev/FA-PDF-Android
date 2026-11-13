@@ -31,7 +31,9 @@ class AiException(message: String) : Exception(message)
  */
 class AiClient(private val provider: AiProvider, private val apiKey: String, private val model: String, private val baseUrl: String = "") {
 
-    suspend fun complete(system: String, messages: List<ChatMessage>, maxTokens: Int = 2048): String = withContext(Dispatchers.IO) {
+    /** [onDelta] erhält beim Schreiben den bisherigen Text (Wort für Wort), sofern der Dienst das kann. */
+    suspend fun complete(system: String, messages: List<ChatMessage>, maxTokens: Int = 2048, onDelta: ((String) -> Unit)? = null): String = withContext(Dispatchers.IO) {
+        delta = onDelta
         if (model.isBlank()) throw AiException("Bitte in den Einstellungen einen Modellnamen eintragen.")
         when (provider) {
             AiProvider.ANTHROPIC -> anthropic(system, messages, maxTokens)
@@ -64,15 +66,65 @@ class AiClient(private val provider: AiProvider, private val apiKey: String, pri
         return sb.toString().trim()
     }
 
+    private var delta: ((String) -> Unit)? = null
+
     private fun openai(system: String, messages: List<ChatMessage>, maxTokens: Int, base: String = "https://api.openai.com/v1"): String {
         val msgs = JSONArray().put(JSONObject().put("role", "system").put("content", system))
         messages.forEach { msgs.put(JSONObject().put("role", it.role).put("content", it.content)) }
         val body = JSONObject().put("model", model).put("messages", msgs)
             // Eigene Adressen (Groq u. a.) verstehen das klassische max_tokens am zuverlässigsten
             .put(if (provider == AiProvider.OPENAI) "max_completion_tokens" else "max_tokens", maxTokens)
+        val d = delta
+        if (d != null && provider != AiProvider.FAKI) {
+            body.put("stream", true)
+            return postStream("$base/chat/completions", mapOf("Authorization" to "Bearer $apiKey"), body, d)
+        }
         val json = post("$base/chat/completions", mapOf("Authorization" to "Bearer $apiKey"), body)
         val choices = json.optJSONArray("choices") ?: throw AiException("Unerwartete Antwort des Dienstes.")
         return choices.getJSONObject(0).getJSONObject("message").optString("content").trim()
+    }
+
+    /** Antwort als Datenstrom (SSE): jedes Stück sofort weitergeben. */
+    private fun postStream(url: String, headers: Map<String, String>, body: JSONObject, onDelta: (String) -> Unit): String {
+        val conn = URL(url).openConnection() as HttpURLConnection
+        val sb = StringBuilder()
+        try {
+            conn.requestMethod = "POST"
+            conn.connectTimeout = if (url.startsWith("http://")) 5_000 else 20_000
+            conn.readTimeout = 120_000
+            conn.doOutput = true
+            conn.setRequestProperty("content-type", "application/json")
+            conn.setRequestProperty("accept", "text/event-stream")
+            headers.forEach { (k, v) -> conn.setRequestProperty(k, v) }
+            conn.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
+            val code = conn.responseCode
+            if (code !in 200..299) {
+                val text = conn.errorStream?.bufferedReader()?.use { it.readText() } ?: ""
+                val msg = runCatching { JSONObject(text).optJSONObject("error")?.optString("message") }.getOrNull()
+                throw AiException(when (code) {
+                    401, 403 -> "Der API-Schlüssel wurde abgelehnt (HTTP $code). Bitte in den Einstellungen prüfen."
+                    429 -> "Zu viele Anfragen oder Limit erreicht (HTTP 429). ${msg ?: ""}"
+                    else -> "Fehler des KI-Dienstes (HTTP $code): ${msg ?: text.take(200)}"
+                })
+            }
+            conn.inputStream.bufferedReader(Charsets.UTF_8).useLines { lines ->
+                for (line in lines) {
+                    if (!line.startsWith("data:")) continue
+                    val data = line.removePrefix("data:").trim()
+                    if (data == "[DONE]") break
+                    val o = runCatching { JSONObject(data) }.getOrNull() ?: continue
+                    val c = o.optJSONArray("choices")?.optJSONObject(0) ?: continue
+                    val piece = c.optJSONObject("delta")?.optString("content").orEmpty().ifEmpty { c.optJSONObject("message")?.optString("content").orEmpty() }
+                    if (piece.isNotEmpty()) { sb.append(piece); onDelta(sb.toString()) }
+                }
+            }
+            return sb.toString().trim()
+        } catch (e: java.io.IOException) {
+            if (sb.isNotEmpty()) return sb.toString().trim()
+            throw AiException(if (url.startsWith("http://")) "Der PC ist nicht erreichbar (aus, schläft oder nicht im selben Netz)." else "Keine Verbindung zum KI-Dienst: ${e.message}")
+        } finally {
+            conn.disconnect()
+        }
     }
 
     private fun post(url: String, headers: Map<String, String>, body: JSONObject): JSONObject {

@@ -2,6 +2,8 @@ package de.fapdf.ui.settings
 
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.material.icons.outlined.CloudUpload
+import androidx.compose.material.icons.outlined.CloudDownload
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -62,12 +64,35 @@ fun SettingsScreen(appVm: AppViewModel, onBack: (() -> Unit)?, onProfiles: () ->
         val cur = repo.current()
         provider = cur.aiProvider; model = cur.aiModel; baseUrl = cur.aiBaseUrl
     }
+    // Sicherung: Passwort abfragen, dann Datei wählen
+    var backupBusy by remember { mutableStateOf<String?>(null) }
+    var pendingPw by remember { mutableStateOf<String?>(null) }
+    var askPw by remember { mutableStateOf<String?>(null) } // "create" | "restore"
+    var restoreUri by remember { mutableStateOf<Uri?>(null) }
+    val createLauncher = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.CreateDocument("application/octet-stream")) { uri ->
+        val pw = pendingPw; pendingPw = null
+        if (uri != null && pw != null) scope.launch {
+            backupBusy = "Sicherung wird erstellt …"
+            try {
+                val r = context.contentResolver.openOutputStream(uri)!!.use { de.fapdf.data.Backup.create(appVm.container, pw, it) }
+                FileActions.toast(context, "Sicherung erstellt: ${r.documents} Dokumente, ${r.profiles} Profile, ${r.signatures} Unterschriften")
+            } catch (e: Exception) { FileActions.toast(context, "Sicherung fehlgeschlagen: ${e.message}") } finally { backupBusy = null }
+        }
+    }
+    val openLauncher = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) { restoreUri = uri; askPw = "restore" }
+    }
     ScreenScaffold("Einstellungen", onBack) { mod ->
         Column(mod.fillMaxSize().verticalScroll(rememberScrollState())) {
             SectionTitle("Persönliche Daten")
             GroupCard {
                 GroupRow("Familienprofile", "Daten für das automatische Ausfüllen von Formularen", Icons.Outlined.People, onClick = onProfiles)
                 GroupRow("Unterschriften", "Gespeicherte Unterschriften verwalten", Icons.Outlined.Draw, showDivider = false, onClick = onSignatures)
+            }
+            SectionTitle("Sicherung")
+            GroupCard {
+                GroupRow("Sicherung erstellen", "Alle Dokumente, Profile und Unterschriften in einer Datei – mit Passwort, z. B. auf Google Drive speichern", Icons.Outlined.CloudUpload, onClick = { askPw = "create" })
+                GroupRow("Sicherung wiederherstellen", "Auf neuem Handy oder nach Neuinstallation", Icons.Outlined.CloudDownload, showDivider = false, onClick = { openLauncher.launch(arrayOf("*/*")) })
             }
             SectionTitle("Darstellung")
             // Umschalter in einer Zeile: System · Hell · Dunkel
@@ -182,6 +207,30 @@ fun SettingsScreen(appVm: AppViewModel, onBack: (() -> Unit)?, onProfiles: () ->
             if (provider in s.savedKeys) TextButton(onClick = { scope.launch { repo.setApiKey(provider, null) } }, modifier = Modifier.padding(horizontal = 8.dp)) {
                 Text("Schlüssel für ${provider.title.substringBefore(" –")} löschen", color = FaColors.Destructive)
             }
+            askPw?.let { mode ->
+                de.fapdf.ui.components.PasswordDialog(
+                    if (mode == "create") "Passwort für die Sicherung" else "Passwort der Sicherung",
+                    if (mode == "create") "Ohne dieses Passwort lässt sich die Sicherung nicht öffnen. Bitte gut merken." else "Bitte das Passwort eingeben, mit dem die Sicherung erstellt wurde.",
+                    onConfirm = { pw ->
+                        askPw = null
+                        if (mode == "create") {
+                            pendingPw = pw
+                            val stamp = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.GERMANY).format(java.util.Date())
+                            createLauncher.launch("FA-PDF-Sicherung-$stamp.fapdf")
+                        } else restoreUri?.let { uri ->
+                            scope.launch {
+                                backupBusy = "Sicherung wird wiederhergestellt …"
+                                try {
+                                    val r = context.contentResolver.openInputStream(uri)!!.use { de.fapdf.data.Backup.restore(appVm.container, pw, it, context.cacheDir) }
+                                    FileActions.toast(context, "Wiederhergestellt: ${r.documents} Dokumente, ${r.profiles} Profile, ${r.signatures} Unterschriften")
+                                } catch (e: Exception) { FileActions.toast(context, e.message ?: "Wiederherstellen fehlgeschlagen") } finally { backupBusy = null }
+                            }
+                        }
+                    },
+                    onDismiss = { askPw = null },
+                )
+            }
+            backupBusy?.let { de.fapdf.ui.components.BusyDialog(it) }
             SectionTitle("Über FA PDF")
             GroupCard {
                 GroupRow("Version", BuildConfig.VERSION_NAME)

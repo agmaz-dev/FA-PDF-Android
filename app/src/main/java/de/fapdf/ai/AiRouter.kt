@@ -10,7 +10,7 @@ import de.fapdf.data.SettingsRepository
 object AiRouter {
     data class Answer(val text: String, val provider: AiProvider, val fallback: Boolean)
 
-    suspend fun complete(settings: SettingsRepository, system: String, messages: List<ChatMessage>, maxTokens: Int): Answer {
+    suspend fun complete(settings: SettingsRepository, system: String, messages: List<ChatMessage>, maxTokens: Int, onDelta: ((String) -> Unit)? = null): Answer {
         val s = settings.current()
         val primary = s.aiProvider
         val order = LinkedHashSet<AiProvider>().apply {
@@ -24,12 +24,12 @@ object AiRouter {
             try {
                 val text = when (p) {
                     AiProvider.NANO -> GeminiNano.complete(system, messages, maxTokens)
-                    AiProvider.PC -> AiClient(p, "ollama", s.pcModel, s.pcUrl).complete(system, messages, maxTokens)
+                    AiProvider.PC -> AiClient(p, "ollama", s.pcModel, s.pcUrl).complete(system, messages, maxTokens, onDelta)
                     else -> {
                         val key = settings.apiKey(p) ?: if (p == AiProvider.CUSTOM || p.isLocal) "lokal" else null
                             ?: throw AiException("Für ${shortName(p)} ist kein Schlüssel hinterlegt.")
                         val model = if (p == primary) s.aiModel else p.defaultModel
-                        AiClient(p, key, model, s.aiBaseUrl).complete(system, messages, maxTokens)
+                        AiClient(p, key, model, s.aiBaseUrl).complete(system, messages, maxTokens, onDelta)
                     }
                 }
                 return Answer(text, p, p != primary)

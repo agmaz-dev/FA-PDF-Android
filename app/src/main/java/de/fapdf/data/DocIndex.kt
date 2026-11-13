@@ -27,11 +27,22 @@ class DocIndex(context: Context) {
     }
     fun forget(id: Long) {
         File(dir, "$id.txt").delete(); texts.remove(id)
-        prefs.edit().remove("cat_$id").remove("named_$id").apply(); version++
+        prefs.edit().remove("cat_$id").remove("named_$id").remove("dl_$id").remove("dlt_$id").remove("amt_$id").apply(); version++
     }
 
     fun category(id: Long): String? = prefs.getString("cat_$id", null)
     fun setCategory(id: Long, c: String?) { prefs.edit().putString("cat_$id", c).apply(); version++ }
+    /** Frist eines Dokuments: Datum (ms, optional), Text und Betrag. */
+    data class Deadline(val id: Long, val date: Long?, val text: String, val amount: String)
+    fun setDeadline(id: Long, date: Long?, text: String, amount: String) {
+        prefs.edit().putLong("dl_$id", date ?: -1L).putString("dlt_$id", text).putString("amt_$id", amount).apply(); version++
+    }
+    fun deadline(id: Long): Deadline? {
+        if (!prefs.contains("dl_$id")) return null
+        return Deadline(id, prefs.getLong("dl_$id", -1L).takeIf { it > 0 }, prefs.getString("dlt_$id", "").orEmpty(), prefs.getString("amt_$id", "").orEmpty())
+    }
+    fun clearDeadline(id: Long) { prefs.edit().remove("dl_$id").remove("dlt_$id").remove("amt_$id").apply(); version++ }
+
     fun isNamed(id: Long) = prefs.getBoolean("named_$id", false)
     fun markNamed(id: Long) { prefs.edit().putBoolean("named_$id", true).apply() }
 
@@ -74,6 +85,15 @@ class DocIndex(context: Context) {
                 any("amt", "bezirksamt", "landesamt", "bescheid", "aktenzeichen", "investitionsbank") -> "Behörde"
                 else -> null
             }
+        }
+
+        /** Frist ohne KI: „bis zum 30.11.2026“, „spätestens …“, „zahlbar bis …“, „Frist … “. */
+        fun findDeadline(text: String): Pair<Long, String>? {
+            val m = Regex("(?i)(bis\\s+(?:zum|spätestens)?|spätestens(?:\\s+(?:am|bis))?|zahlbar\\s+bis|fällig\\s+(?:am|bis)|frist[^\\n]{0,30}?)\\s*(\\d{1,2})\\.(\\d{1,2})\\.(\\d{2,4})").find(text) ?: return null
+            val d = m.groupValues[2].toInt(); val mo = m.groupValues[3].toInt(); val y = m.groupValues[4].toInt().let { if (it < 100) 2000 + it else it }
+            if (mo !in 1..12 || d !in 1..31) return null
+            val cal = java.util.Calendar.getInstance().apply { clear(); set(y, mo - 1, d, 9, 0) }
+            return cal.timeInMillis to m.value.trim()
         }
 
         /** Unverständliche Namen wie „19693631572137“, „DOC-2026…“, „Scan_…“, „IMG…“. */

@@ -55,6 +55,10 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import de.fapdf.FaPdfApp
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.Color
+import androidx.compose.material.icons.outlined.Mic
+import androidx.compose.material.icons.outlined.Edit
 import de.fapdf.ai.AiRouter
 import de.fapdf.ai.ChatMessage
 import de.fapdf.ai.DocumentText
@@ -96,6 +100,15 @@ class ReplyViewModel(app: Application, private val docId: Long) : AndroidViewMod
     var suggestions by mutableStateOf<List<String>>(emptyList())
     var email by mutableStateOf("")
     var deadlineDate by mutableStateOf<Long?>(null)
+    /** Erkannte handschriftliche Notiz, z. B. „Bezahlt 21.10.26“. */
+    var handNote by mutableStateOf("")
+    /** Entstehender Text (Wort für Wort). */
+    var partial by mutableStateOf<String?>(null)
+    // Anlagen: Original und weitere Dateien
+    var includeOriginal by mutableStateOf(true)
+    val extraAttachments = androidx.compose.runtime.mutableStateListOf<Pair<File, String>>()
+    var originalFile: File? = null
+    var signatureBitmap by mutableStateOf<Bitmap?>(null)
     var profileId: Long? = null
     private val senderPrefs = app.getSharedPreferences("reply_sender", android.content.Context.MODE_PRIVATE)
     private fun recipientKey(r: String) = r.lines().firstOrNull { it.isNotBlank() }?.lowercase()?.replace(Regex("[^a-zäöüß0-9]"), "")?.take(40)
@@ -148,6 +161,7 @@ class ReplyViewModel(app: Application, private val docId: Long) : AndroidViewMod
     private var contact = ""
 
     fun start(file: File) {
+        originalFile = file
         if (summary != null || busy != null) return
         viewModelScope.launch {
             error = null
@@ -182,7 +196,7 @@ class ReplyViewModel(app: Application, private val docId: Long) : AndroidViewMod
         val vors = ArrayList<String>()
         // 1) Zeilenformat
         raw.lines().forEach { line ->
-            val m = Regex("^\\s*[-*•]?\\s*(KURZ|BRIEFDATUM|FRISTDATUM|FRIST(?:EN)?|BETR(?:AG|ÄGE|AEGE)|ABSENDER|EMAIL|E-MAIL|BEZUG|ANSPRECHPARTNER|VORSCHLAG)\\s*\\d*\\s*:\\s*(.*)$", RegexOption.IGNORE_CASE).find(line)
+            val m = Regex("^\\s*[-*•]?\\s*(KURZ|NOTIZ|BRIEFDATUM|FRISTDATUM|FRIST(?:EN)?|BETR(?:AG|ÄGE|AEGE)|ABSENDER|EMAIL|E-MAIL|BEZUG|ANSPRECHPARTNER|VORSCHLAG)\\s*\\d*\\s*:\\s*(.*)$", RegexOption.IGNORE_CASE).find(line)
             if (m != null) {
                 val key = m.groupValues[1].uppercase().let { k -> when {
                     k == "FRISTDATUM" -> "FRISTDATUM"; k == "BRIEFDATUM" -> "BRIEFDATUM"; k.startsWith("FRIST") -> "FRIST"; k.startsWith("BETR") -> "BETRAG"; k.contains("MAIL") -> "EMAIL"; else -> k } }
@@ -210,6 +224,7 @@ class ReplyViewModel(app: Application, private val docId: Long) : AndroidViewMod
             raw.lines().filterNot { it.trim().startsWith("{") || it.trim().startsWith("}") || it.contains("\":") }.joinToString(" ").trim().take(600).ifBlank { "–" }
         }
         Regex("\\d{1,2}\\.\\d{1,2}\\.\\d{2,4}").find(fields["BRIEFDATUM"].orEmpty())?.value?.let { letterDate = it }
+        handNote = clean(fields["NOTIZ"])
         deadlines = clean(fields["FRIST"])
         deadlineDate = parseDate(fields["FRISTDATUM"]) ?: parseDate(deadlines)
         amounts = clean(fields["BETRAG"])
@@ -223,6 +238,7 @@ class ReplyViewModel(app: Application, private val docId: Long) : AndroidViewMod
             profiles.firstOrNull { it.id == pid }?.let { useProfile(it) }
             if (sid != null) signatureId = sid.takeIf { it >= 0 }
         }
+        if (deadlineDate != null || deadlines.isNotBlank()) c.index.setDeadline(docId, deadlineDate, deadlines, amounts)
         suggestions = vors.map { it.trim().trim('"', ',') }.filter { it.isNotEmpty() }.distinct().take(5).ifEmpty { DEFAULT_SUGGESTIONS }
     }
 
@@ -238,6 +254,40 @@ class ReplyViewModel(app: Application, private val docId: Long) : AndroidViewMod
     fun loadSignatures(list: List<SignatureEntity>) {
         signatures = list
         if (signatureId == null) signatureId = list.firstOrNull()?.id
+        refreshSignature()
+    }
+
+    fun selectSignature(id: Long?) { signatureId = id; createdDocId = null; refreshSignature() }
+
+    private fun refreshSignature() {
+        val e = signatures.firstOrNull { it.id == signatureId }
+        viewModelScope.launch { signatureBitmap = e?.let { runCatching { c.signatures.loadBitmap(it) }.getOrNull() } }
+    }
+
+    fun bezugText() = bezug
+
+    /** Namen der Anlagen für den Brief („Anlage: …“). */
+    fun attachmentNames(): List<String> =
+        (if (includeOriginal && originalFile != null) listOf("Ihr Schreiben vom ${letterDate.ifBlank { "…" }} (Kopie)") else emptyList()) +
+            extraAttachments.map { it.second.removeSuffix(".pdf") }
+
+    /** Dateien, die beim Versand mitgehen. */
+    fun attachmentFiles(): List<Pair<File, String>> =
+        (if (includeOriginal) originalFile?.let { listOf(it to "Anlage – ${docName.ifBlank { "Schreiben" }}.pdf") } ?: emptyList() else emptyList()) + extraAttachments
+
+    fun addAttachment(uri: android.net.Uri) {
+        viewModelScope.launch {
+            runCatching {
+                val ctx = getApplication<Application>()
+                val name = ctx.contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cur ->
+                    if (cur.moveToFirst()) cur.getString(0) else null
+                } ?: "Anlage"
+                val f = File(File(ctx.cacheDir, "anlagen").apply { mkdirs() }, "${System.nanoTime()}_$name")
+                withContext(Dispatchers.IO) { ctx.contentResolver.openInputStream(uri)?.use { i -> f.outputStream().use { i.copyTo(it) } } }
+                extraAttachments.add(f to name)
+                createdDocId = null
+            }.onFailure { error = "Anlage konnte nicht geladen werden." }
+        }
     }
 
     fun write() {
@@ -260,7 +310,9 @@ class ReplyViewModel(app: Application, private val docId: Long) : AndroidViewMod
                     "Keine Adressen, kein Datum, keinen Namen unter dem Gruß, keine Erklärungen. Verwende nur Fakten aus dem Schreiben und " +
                     "den Angaben. Setze alle bekannten Angaben (Datum, Nummern, Beträge) direkt ein. Keine Platzhalter, keine eckigen Klammern – " +
                     "was unbekannt ist, lässt du einfach weg. Handschriftliche Notizen im Schreiben sind Angaben von $name."
-                val ans = AiRouter.complete(c.settings, system, listOf(ChatMessage("user", Prompts.withDocument("Schreibe jetzt den Antwortbrief.", text))), 1500)
+                partial = null
+                val ans = AiRouter.complete(c.settings, system, listOf(ChatMessage("user", Prompts.withDocument("Schreibe jetzt den Antwortbrief.", text))), 1500) { partial = it }
+                partial = null
                 if (ans.fallback) note = "Antwort von " + AiRouter.shortName(ans.provider) + " (gewählter Dienst nicht erreichbar)" + if (ans.provider == de.fapdf.data.AiProvider.NANO) " – bitte genau prüfen" else ""
                 applyLetter(ans.text)
                 stage = 1
@@ -314,7 +366,9 @@ class ReplyViewModel(app: Application, private val docId: Long) : AndroidViewMod
                 }
                 val system = "Überarbeite den folgenden Brieftext: $instr. Behalte alle Fakten, Nummern und Daten sowie das Format " +
                     "(Anrede … Mit freundlichen Grüßen) bei. Gib nur den überarbeiteten Brieftext aus, ohne Betreff und ohne Erklärungen."
-                val ans = AiRouter.complete(c.settings, system, listOf(ChatMessage("user", current)), 1500)
+                partial = null
+                val ans = AiRouter.complete(c.settings, system, listOf(ChatMessage("user", current)), 1500) { partial = it }
+                partial = null
                 if (ans.fallback) note = "Antwort von " + AiRouter.shortName(ans.provider) + " (gewählter Dienst nicht erreichbar)" + if (ans.provider == de.fapdf.data.AiProvider.NANO) " – bitte genau prüfen" else ""
                 body = fixPlaceholders(de.fapdf.ai.AiText.clean(ans.text))
                 createdDocId = null
@@ -337,7 +391,7 @@ class ReplyViewModel(app: Application, private val docId: Long) : AndroidViewMod
                 val out = File(getApplication<Application>().cacheDir, "antwort_${System.nanoTime()}.pdf")
                 withContext(Dispatchers.IO) {
                     LetterPdfWriter.write(
-                        LetterPdfWriter.Letter(sender, recipient, placeDate, subject, body, signerName),
+                        LetterPdfWriter.Letter(sender, recipient, placeDate, subject, body, signerName, attachmentNames()),
                         sig, c.fonts, out,
                     )
                 }
@@ -366,6 +420,7 @@ class ReplyViewModel(app: Application, private val docId: Long) : AndroidViewMod
             "genau in diesen Zeilen (jede Angabe in einer Zeile, nichts erfinden, fehlt etwas: \"-\"):\n" +
             "KURZ: 2 Sätze – wer schreibt, worum geht es, was wird verlangt\n" +
             "BRIEFDATUM: Datum des Schreibens als TT.MM.JJJJ\n" +
+            "NOTIZ: handschriftliche Notiz auf dem Brief (z. B. „Bezahlt 21.10.26“), sonst -\n" +
             "FRIST: Frist oder Termin (in Worten)\n" +
             "FRISTDATUM: letzter Tag der Frist als TT.MM.JJJJ, sonst -\n" +
             "BETRAG: wichtigster Betrag\n" +
@@ -408,7 +463,7 @@ fun ReplyPanel(
         }
     }
 
-    LaunchedEffect(file) { if (file != null) withConsent { vm.start(file) } }
+    LaunchedEffect(file) { if (file != null) { vm.originalFile = file; withConsent { vm.start(file) } } }
     LaunchedEffect(Unit) { container.signatures.observeAll().collect { vm.loadSignatures(it) } }
 
     Column(modifier.background(FaColors.Surface)) {
@@ -432,16 +487,17 @@ fun ReplyPanel(
                     vm.stepTitle.ifBlank { "KI arbeitet …" },
                     (if (vm.steps > 1) "Schritt ${vm.step} von ${vm.steps} · " else "") + it,
                     frac,
-                    Modifier.fillMaxWidth().height(230.dp).padding(vertical = 6.dp).clip(RoundedCornerShape(20.dp)).background(FaColors.Background),
+                    Modifier.fillMaxWidth().height(if (vm.partial.isNullOrBlank()) 230.dp else 360.dp).padding(vertical = 6.dp).clip(RoundedCornerShape(20.dp)).background(FaColors.Background),
+                    partial = vm.partial,
                 )
             }
             if (vm.stage == 0) Overview(vm) { withConsent { vm.write() } }
             else LetterEditor(vm, onManageProfiles, onRestyle = { k -> withConsent { vm.restyle(k) } },
                 onOpen = { vm.createdDocId?.let(onOpenDocument) },
-                onShare = { vm.createdFile?.let { FileActions.share(context, it, "Antwort – ${vm.docName}.pdf") } },
+                onShare = { vm.createdFile?.let { FileActions.shareMany(context, listOf(it to "Antwort – ${vm.docName}.pdf") + vm.attachmentFiles()) } },
                 onMail = {
                     vm.createdFile?.let {
-                        FileActions.email(context, it, "Antwort – ${vm.docName}.pdf", listOfNotNull(vm.email.ifBlank { null }), vm.subject,
+                        FileActions.emailMany(context, listOf(it to "Antwort – ${vm.docName}.pdf") + vm.attachmentFiles(), listOfNotNull(vm.email.ifBlank { null }), vm.subject,
                             // Gruß und Name hängt das E-Mail-Programm meist selbst als Signatur an
                             "Sehr geehrte Damen und Herren,\n\nanbei erhalten Sie mein Schreiben als PDF.\n")
                     }
@@ -481,31 +537,51 @@ private fun Card(content: @Composable () -> Unit) {
 @Composable
 private fun Overview(vm: ReplyViewModel, onWrite: () -> Unit) {
     val summary = vm.summary ?: return
+    val context = LocalContext.current
+    // Kopfkarte: Absender-Kürzel, Titel, Datum, kurze Erklärung
     Card {
-        Text("Worum geht es", fontWeight = FontWeight.SemiBold, color = FaColors.Label)
-        Text(summary, color = FaColors.Label)
-        if (vm.deadlines.isNotBlank()) Text("Fristen: ${vm.deadlines}", color = FaColors.Label)
-        if (vm.amounts.isNotBlank()) Text("Beträge: ${vm.amounts}", color = FaColors.Label)
-        if (vm.deadlines.isNotBlank() || vm.deadlineDate != null) {
-            val context = LocalContext.current
-            TextButton(onClick = {
-                val begin = vm.deadlineDate ?: (System.currentTimeMillis() + 3L * 24 * 3600_000)
-                val i = android.content.Intent(android.content.Intent.ACTION_INSERT)
-                    .setData(android.provider.CalendarContract.Events.CONTENT_URI)
-                    .putExtra(android.provider.CalendarContract.EXTRA_EVENT_BEGIN_TIME, begin)
-                    .putExtra(android.provider.CalendarContract.EXTRA_EVENT_ALL_DAY, true)
-                    .putExtra(android.provider.CalendarContract.Events.TITLE, (if (vm.deadlineDate == null) "Frist prüfen: " else "Frist: ") + vm.docName)
-                    .putExtra(android.provider.CalendarContract.Events.DESCRIPTION, listOf(vm.deadlines, vm.amounts, vm.summary.orEmpty()).filter { it.isNotBlank() }.joinToString("\n"))
-                runCatching { context.startActivity(i) }.onFailure { FileActions.toast(context, "Keine Kalender-App gefunden") }
-            }) {
-                Text(if (vm.deadlineDate != null) "Erinnerung in Kalender eintragen (" + java.text.SimpleDateFormat("dd.MM.yyyy", java.util.Locale.GERMANY).format(java.util.Date(vm.deadlineDate!!)) + ")" else "Erinnerung in Kalender eintragen",
-                    color = FaColors.Accent, fontWeight = FontWeight.SemiBold)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            val initials = vm.recipient.lines().firstOrNull { it.isNotBlank() }.orEmpty()
+                .split(Regex("[\\s–-]+")).firstOrNull { it.length >= 2 }?.take(4)?.uppercase() ?: "PDF"
+            Box(Modifier.size(40.dp).clip(RoundedCornerShape(10.dp)).background(Color.White), contentAlignment = Alignment.Center) {
+                Text(initials, color = Color(0xFF1D4E89), fontWeight = FontWeight.ExtraBold, fontSize = 12.sp)
+            }
+            Spacer(Modifier.width(10.dp))
+            Column(Modifier.weight(1f)) {
+                Text(vm.recipient.lines().firstOrNull { it.isNotBlank() } ?: vm.docName, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = FaColors.Label, maxLines = 1)
+                Text(listOf(vm.letterDate, vm.bezugText()).filter { it.isNotBlank() }.joinToString(" · "), fontSize = 12.sp, color = FaColors.SecondaryLabel, maxLines = 1)
             }
         }
+        Text(summary, color = FaColors.Label, fontSize = 14.sp, lineHeight = 20.sp, modifier = Modifier.padding(top = 4.dp))
     }
-    Text("Antwort schreiben", fontWeight = FontWeight.SemiBold, color = FaColors.Label, modifier = Modifier.padding(top = 10.dp, bottom = 6.dp))
-    Text("Was soll die Antwort sagen? Vorschlag antippen oder eigene Stichpunkte eingeben.", color = FaColors.SecondaryLabel, fontSize = 13.sp)
-    FlowRow(Modifier.padding(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    // Frist (rot) und Betrag (grün)
+    if (vm.deadlines.isNotBlank() || vm.deadlineDate != null || vm.amounts.isNotBlank()) Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        if (vm.deadlines.isNotBlank() || vm.deadlineDate != null) Column(
+            Modifier.weight(1f).clip(RoundedCornerShape(16.dp)).background(Color(0xFF2A1416)).border(1.dp, Color(0xFF5A2A2E), RoundedCornerShape(16.dp))
+                .clickable { addToCalendar(context, vm) }.padding(12.dp),
+        ) {
+            Text("FRIST", fontSize = 11.sp, color = Color(0xFFFFB3B3), fontWeight = FontWeight.Bold)
+            Text(vm.deadlineDate?.let { java.text.SimpleDateFormat("dd.MM.yyyy", java.util.Locale.GERMANY).format(java.util.Date(it)) } ?: vm.deadlines,
+                fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color(0xFFFFD6D6), maxLines = 2)
+            Text("In Kalender eintragen", fontSize = 11.sp, color = Color(0xFFFFB3B3), modifier = Modifier.padding(top = 4.dp))
+        }
+        if (vm.amounts.isNotBlank()) Column(
+            Modifier.weight(1f).clip(RoundedCornerShape(16.dp)).background(FaColors.AccentLight).border(1.dp, FaColors.Accent.copy(alpha = 0.4f), RoundedCornerShape(16.dp)).padding(12.dp),
+        ) {
+            Text("BETRAG", fontSize = 11.sp, color = FaColors.Accent, fontWeight = FontWeight.Bold)
+            Text(vm.amounts, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold, color = FaColors.Accent, maxLines = 2)
+        }
+    }
+    if (vm.handNote.isNotBlank()) Row(
+        Modifier.fillMaxWidth().padding(top = 8.dp).clip(RoundedCornerShape(14.dp)).background(FaColors.Card).padding(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(Icons.Outlined.Edit, null, tint = FaColors.Accent, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(8.dp))
+        Text("Notiz im Brief erkannt: „${vm.handNote}“", fontSize = 13.sp, color = FaColors.Label)
+    }
+    Text("Antworten mit …", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = FaColors.Label, modifier = Modifier.padding(top = 16.dp, bottom = 4.dp))
+    FlowRow(Modifier.padding(vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         vm.suggestions.forEach { s ->
             val sel = vm.goal == s
             Box(
@@ -517,17 +593,71 @@ private fun Overview(vm: ReplyViewModel, onWrite: () -> Unit) {
             ) { Text(s, color = if (sel) FaColors.Accent else FaColors.Label, fontSize = 14.sp) }
         }
     }
+    // Eigene Stichpunkte – tippen oder diktieren
+    val speech = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()) { r ->
+        val t = r.data?.getStringArrayListExtra(android.speech.RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()
+        if (!t.isNullOrBlank()) vm.notes = listOf(vm.notes, t).filter { it.isNotBlank() }.joinToString(" ")
+    }
     OutlinedTextField(
         vm.notes, { vm.notes = it }, Modifier.fillMaxWidth().heightIn(min = 90.dp),
         label = { Text("Eigene Stichpunkte (optional)") },
         placeholder = { Text("z. B. Betrag am 21.10. überwiesen, Beleg liegt bei") },
+        trailingIcon = {
+            IconButton(onClick = {
+                val i = android.content.Intent(android.speech.RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
+                    .putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE_MODEL, android.speech.RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                    .putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE, "de-DE")
+                    .putExtra(android.speech.RecognizerIntent.EXTRA_PROMPT, "Stichpunkte für die Antwort")
+                runCatching { speech.launch(i) }.onFailure { FileActions.toast(context, "Spracheingabe nicht verfügbar") }
+            }) { Icon(Icons.Outlined.Mic, "Diktieren", tint = FaColors.Accent) }
+        },
     )
     Button(
         onClick = onWrite, enabled = vm.busy == null && (vm.goal.isNotBlank() || vm.notes.isNotBlank()),
-        modifier = Modifier.fillMaxWidth().padding(top = 12.dp).height(48.dp), shape = RoundedCornerShape(14.dp),
+        modifier = Modifier.fillMaxWidth().padding(top = 12.dp).height(52.dp), shape = RoundedCornerShape(16.dp),
         colors = ButtonDefaults.buttonColors(containerColor = FaColors.Accent, contentColor = FaColors.OnAccent),
-    ) { Text("Brief schreiben", fontWeight = FontWeight.SemiBold) }
+    ) { Icon(Icons.Outlined.Edit, null, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Brief schreiben", fontWeight = FontWeight.SemiBold) }
     if (vm.body.isNotBlank()) TextButton(onClick = { vm.stage = 1 }) { Text("Zum letzten Entwurf") }
+}
+
+private fun addToCalendar(context: android.content.Context, vm: ReplyViewModel) {
+    val begin = vm.deadlineDate ?: (System.currentTimeMillis() + 3L * 24 * 3600_000)
+    val i = android.content.Intent(android.content.Intent.ACTION_INSERT)
+        .setData(android.provider.CalendarContract.Events.CONTENT_URI)
+        .putExtra(android.provider.CalendarContract.EXTRA_EVENT_BEGIN_TIME, begin)
+        .putExtra(android.provider.CalendarContract.EXTRA_EVENT_ALL_DAY, true)
+        .putExtra(android.provider.CalendarContract.Events.TITLE, (if (vm.deadlineDate == null) "Frist prüfen: " else "Frist: ") + vm.docName)
+        .putExtra(android.provider.CalendarContract.Events.DESCRIPTION, listOf(vm.deadlines, vm.amounts, vm.summary.orEmpty()).filter { it.isNotBlank() }.joinToString("\n"))
+    runCatching { context.startActivity(i) }.onFailure { FileActions.toast(context, "Keine Kalender-App gefunden") }
+}
+
+/** Der Brief so, wie er gedruckt aussieht. Antippen öffnet die Felder zum Ändern. */
+@Composable
+private fun LetterPaper(vm: ReplyViewModel, onEdit: () -> Unit) {
+    val ink = Color(0xFF1A1A1F)
+    Column(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(Color.White).clickable(onClick = onEdit).padding(horizontal = 16.dp, vertical = 18.dp),
+    ) {
+        val senderLines = vm.sender.lines().filter { it.isNotBlank() }
+        Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End) {
+            senderLines.forEachIndexed { i, l -> Text(l.trim(), color = ink, fontSize = 10.sp, lineHeight = 13.sp, fontWeight = if (i == 0) FontWeight.Bold else FontWeight.Normal) }
+        }
+        Text(senderLines.take(1).plus(senderLines.drop(1).takeLast(2)).joinToString(" · "), color = Color(0xFF777777), fontSize = 7.sp,
+            modifier = Modifier.padding(top = 10.dp))
+        Column(Modifier.padding(top = 4.dp)) { vm.recipient.lines().filter { it.isNotBlank() }.forEach { Text(it.trim(), color = ink, fontSize = 11.sp, lineHeight = 14.sp) } }
+        Text(vm.placeDate, color = ink, fontSize = 11.sp, modifier = Modifier.fillMaxWidth().padding(top = 14.dp), textAlign = androidx.compose.ui.text.style.TextAlign.End)
+        Text(vm.subject, color = ink, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 10.dp))
+        Text(vm.body, color = ink, fontSize = 11.sp, lineHeight = 15.sp, modifier = Modifier.padding(top = 10.dp))
+        vm.signatureBitmap?.let { b ->
+            androidx.compose.foundation.Image(b.asImageBitmap(), "Unterschrift", Modifier.padding(top = 4.dp).height(44.dp))
+        }
+        if (vm.signerName.isNotBlank()) Text(vm.signerName, color = ink, fontSize = 11.sp, modifier = Modifier.padding(top = if (vm.signatureBitmap == null) 22.dp else 0.dp))
+        val atts = vm.attachmentNames()
+        if (atts.isNotEmpty()) {
+            Text(if (atts.size == 1) "Anlage" else "Anlagen", color = ink, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 14.dp))
+            atts.forEach { Text(it, color = ink, fontSize = 11.sp) }
+        }
+    }
 }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -540,25 +670,35 @@ private fun LetterEditor(
     onShare: () -> Unit,
     onMail: () -> Unit,
 ) {
-    if (vm.profiles.size > 1) {
-        Text("Absender", color = FaColors.SecondaryLabel, fontSize = 13.sp)
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            vm.profiles.forEach { p -> TextButton(onClick = { vm.useProfile(p) }) { Text(p.label.ifBlank { p.fullName }) } }
-        }
-    } else if (vm.profiles.isEmpty()) {
-        TextButton(onClick = onManageProfiles) { Text("Absender einmal als Profil speichern") }
+    var editFields by remember { mutableStateOf(false) }
+    val picker = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) vm.addAttachment(uri)
     }
-    OutlinedTextField(vm.sender, { vm.sender = it }, Modifier.fillMaxWidth(), label = { Text("Absender") }, minLines = 2)
-    OutlinedTextField(vm.recipient, { vm.recipient = it }, Modifier.fillMaxWidth().padding(top = 6.dp), label = { Text("Empfänger") }, minLines = 3)
-    OutlinedTextField(vm.placeDate, { vm.placeDate = it }, Modifier.fillMaxWidth().padding(top = 6.dp), label = { Text("Ort, Datum") }, singleLine = true)
-    OutlinedTextField(vm.subject, { vm.subject = it }, Modifier.fillMaxWidth().padding(top = 6.dp), label = { Text("Betreff") })
-    OutlinedTextField(vm.body, { vm.body = it }, Modifier.fillMaxWidth().padding(top = 6.dp).heightIn(min = 260.dp), label = { Text("Brieftext") })
-    OutlinedTextField(vm.signerName, { vm.signerName = it }, Modifier.fillMaxWidth().padding(top = 6.dp), label = { Text("Name unter dem Brief") }, singleLine = true)
-
-    Row(Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    Row(Modifier.fillMaxWidth().padding(bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         listOf("höflich" to "Höflicher", "bestimmt" to "Bestimmter", "kurz" to "Kürzer").forEach { (k, t) ->
             EqualButton(t, Modifier.weight(1f), enabled = vm.busy == null) { onRestyle(k) }
         }
+    }
+    if (!editFields) {
+        LetterPaper(vm) { editFields = true }
+        Text("Antippen zum Ändern", color = FaColors.SecondaryLabel, fontSize = 12.sp, modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+    } else {
+        if (vm.profiles.size > 1) {
+            Text("Absender", color = FaColors.SecondaryLabel, fontSize = 13.sp)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                vm.profiles.forEach { p -> TextButton(onClick = { vm.useProfile(p) }) { Text(p.label.ifBlank { p.fullName }) } }
+            }
+        } else if (vm.profiles.isEmpty()) {
+            TextButton(onClick = onManageProfiles) { Text("Absender einmal als Profil speichern") }
+        }
+        OutlinedTextField(vm.sender, { vm.sender = it }, Modifier.fillMaxWidth(), label = { Text("Absender") }, minLines = 2)
+        OutlinedTextField(vm.recipient, { vm.recipient = it }, Modifier.fillMaxWidth().padding(top = 6.dp), label = { Text("Empfänger") }, minLines = 3)
+        OutlinedTextField(vm.placeDate, { vm.placeDate = it }, Modifier.fillMaxWidth().padding(top = 6.dp), label = { Text("Ort, Datum") }, singleLine = true)
+        OutlinedTextField(vm.subject, { vm.subject = it }, Modifier.fillMaxWidth().padding(top = 6.dp), label = { Text("Betreff") })
+        OutlinedTextField(vm.body, { vm.body = it }, Modifier.fillMaxWidth().padding(top = 6.dp).heightIn(min = 260.dp), label = { Text("Brieftext") })
+        OutlinedTextField(vm.signerName, { vm.signerName = it }, Modifier.fillMaxWidth().padding(top = 6.dp), label = { Text("Name unter dem Brief") }, singleLine = true)
+        TextButton(onClick = { editFields = false; vm.createdDocId = null }) { Text("Fertig – als Papier ansehen") }
     }
     TextButton(onClick = { vm.write() }, enabled = vm.busy == null) { Text("Neu schreiben") }
 
@@ -567,17 +707,31 @@ private fun LetterEditor(
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             (vm.signatures.map { it.id to it.name } + (null to "Ohne")).forEach { (id, name) ->
                 val sel = vm.signatureId == id
-                TextButton(onClick = { vm.signatureId = id; vm.createdDocId = null }) {
+                TextButton(onClick = { vm.selectSignature(id) }) {
                     Text(name, color = if (sel) FaColors.Accent else FaColors.SecondaryLabel, fontWeight = if (sel) FontWeight.SemiBold else FontWeight.Normal)
                 }
             }
         }
     }
+    // Anlagen
+    Text("Anlagen", color = FaColors.SecondaryLabel, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp))
+    Row(Modifier.fillMaxWidth().clickable { vm.includeOriginal = !vm.includeOriginal; vm.createdDocId = null }, verticalAlignment = Alignment.CenterVertically) {
+        androidx.compose.material3.Checkbox(vm.includeOriginal, { vm.includeOriginal = it; vm.createdDocId = null })
+        Text("Original-Schreiben als Kopie anhängen", color = FaColors.Label, fontSize = 14.sp)
+    }
+    vm.extraAttachments.toList().forEach { (f, n) ->
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text(n, color = FaColors.Label, fontSize = 14.sp, modifier = Modifier.weight(1f).padding(start = 12.dp), maxLines = 1)
+            IconButton(onClick = { vm.extraAttachments.remove(f to n); vm.createdDocId = null }) { Icon(Icons.Outlined.Close, "Entfernen", tint = FaColors.SecondaryLabel) }
+        }
+    }
+    TextButton(onClick = { picker.launch(arrayOf("application/pdf", "image/*")) }) { Text("+ Weitere Anlage (z. B. Zahlungsbeleg)") }
+
     Text("Bitte prüfen Sie den Entwurf vor dem Versand – die KI kann sich irren und ersetzt keine Rechtsberatung.",
         color = FaColors.SecondaryLabel, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
     Button(
         onClick = { vm.createPdf() }, enabled = vm.busy == null && vm.body.isNotBlank(),
-        modifier = Modifier.fillMaxWidth().padding(top = 10.dp).height(48.dp), shape = RoundedCornerShape(14.dp),
+        modifier = Modifier.fillMaxWidth().padding(top = 10.dp).height(50.dp), shape = RoundedCornerShape(14.dp),
         colors = ButtonDefaults.buttonColors(containerColor = FaColors.Accent, contentColor = FaColors.OnAccent),
     ) { Text(if (vm.createdDocId == null) "Als PDF speichern" else "PDF neu erstellen", fontWeight = FontWeight.SemiBold) }
     if (vm.createdDocId != null) {
@@ -586,12 +740,10 @@ private fun LetterEditor(
             EqualButton("E-Mail", Modifier.weight(1f), onClick = onMail)
             EqualButton("Teilen", Modifier.weight(1f), onClick = onShare)
         }
-        if (vm.email.isNotBlank()) Text("E-Mail geht an: ${vm.email}", color = FaColors.SecondaryLabel, fontSize = 12.sp)
+        if (vm.email.isNotBlank()) Text("E-Mail geht an: ${vm.email}" + if (vm.attachmentFiles().isNotEmpty()) " · mit ${vm.attachmentFiles().size} Anlage(n)" else "", color = FaColors.SecondaryLabel, fontSize = 12.sp)
     }
 }
 
-
-/** Gleich hohe, einzeilige Knöpfe – nichts bricht um. */
 @Composable
 private fun EqualButton(text: String, modifier: Modifier, enabled: Boolean = true, onClick: () -> Unit) {
     OutlinedButton(

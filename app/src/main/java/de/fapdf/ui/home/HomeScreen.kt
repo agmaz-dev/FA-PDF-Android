@@ -3,6 +3,7 @@ package de.fapdf.ui.home
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.material.icons.outlined.Add
 import de.fapdf.data.DocumentRepository
+import androidx.compose.foundation.border
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.material.icons.outlined.Link
@@ -172,7 +173,7 @@ fun HomeScreen(vm: AppViewModel, nav: HomeNav) {
                             Text("Dateien", fontSize = 36.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = (-1).sp, modifier = Modifier.weight(1f))
                             Text("${docs.size}", style = MaterialTheme.typography.titleMedium, color = FaColors.SecondaryLabel, modifier = Modifier.padding(bottom = 6.dp))
                         }
-                        RecentDocuments(vm, docs)
+                        RecentDocuments(vm, docs, nav)
                     }
                     // Schwebender Plus-Knopf: PDF öffnen
                     Box(
@@ -331,7 +332,7 @@ private enum class SortMode(val title: String) { OPENED("Zuletzt geöffnet"), MO
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun RecentDocuments(vm: AppViewModel, docs: List<DocumentEntity>) {
+private fun RecentDocuments(vm: AppViewModel, docs: List<DocumentEntity>, nav: HomeNav) {
     val context = LocalContext.current
     var query by remember { mutableStateOf("") }
     var sort by remember { mutableStateOf(SortMode.OPENED) }
@@ -340,10 +341,17 @@ private fun RecentDocuments(vm: AppViewModel, docs: List<DocumentEntity>) {
     var renameDoc by remember { mutableStateOf<DocumentEntity?>(null) }
     var deleteDoc by remember { mutableStateOf<DocumentEntity?>(null) }
     var category by remember { mutableStateOf<String?>(null) }
+    var deadlinesOnly by remember { mutableStateOf(false) }
+    var previewId by remember { mutableStateOf<Long?>(null) }
+    val wide = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp >= 600
     val index = vm.container.index
     @Suppress("UNUSED_VARIABLE") val indexVersion = index.version // neu zeichnen, wenn Text/Kategorien dazukommen
     val presentCats = docs.mapNotNull { index.category(it.id) }.distinct().sortedBy { de.fapdf.data.DocIndex.CATEGORIES.indexOf(it) }
-    val list = docs.filter { (!favOnly || it.favorite) && (category == null || index.category(it.id) == category) && (query.isBlank() || index.matches(it, query)) }
+    val now = System.currentTimeMillis()
+    val withDeadline = docs.mapNotNull { d -> index.deadline(d.id)?.takeIf { it.date != null }?.let { d to it } }
+    val soon = withDeadline.count { (_, dl) -> dl.date!! < now + 14L * 24 * 3600_000 && dl.date > now - 30L * 24 * 3600_000 }
+    val list0 = docs.filter { (!favOnly || it.favorite) && (category == null || index.category(it.id) == category) && (query.isBlank() || index.matches(it, query)) && (!deadlinesOnly || index.deadline(it.id)?.date != null) }
+    val list = if (deadlinesOnly) list0.sortedBy { index.deadline(it.id)?.date ?: Long.MAX_VALUE } else list0
         .let { l ->
             when (sort) {
                 SortMode.OPENED -> l.sortedByDescending { it.lastOpenedAt }
@@ -378,7 +386,10 @@ private fun RecentDocuments(vm: AppViewModel, docs: List<DocumentEntity>) {
             contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier.padding(vertical = 4.dp),
         ) {
-            item { FilterChip(selected = category == null && !favOnly, onClick = { category = null; favOnly = false }, label = { Text("Alle") }) }
+            item { FilterChip(selected = category == null && !favOnly && !deadlinesOnly, onClick = { category = null; favOnly = false; deadlinesOnly = false }, label = { Text("Alle") }) }
+            if (withDeadline.isNotEmpty()) item {
+                FilterChip(selected = deadlinesOnly, onClick = { deadlinesOnly = !deadlinesOnly }, label = { Text("Fristen (${withDeadline.size})") })
+            }
             item {
                 FilterChip(selected = favOnly, onClick = { favOnly = !favOnly }, label = { Text("Favoriten") },
                     leadingIcon = { Icon(if (favOnly) Icons.Filled.Star else Icons.Outlined.StarOutline, null, modifier = Modifier.size(18.dp)) })
@@ -388,6 +399,17 @@ private fun RecentDocuments(vm: AppViewModel, docs: List<DocumentEntity>) {
                 FilterChip(selected = category == c, onClick = { category = if (category == c) null else c }, label = { Text(c) })
             }
         }
+        if (soon > 0 && !deadlinesOnly) Row(
+            Modifier.padding(horizontal = 16.dp, vertical = 4.dp).fillMaxWidth().clip(RoundedCornerShape(14.dp))
+                .background(Color(0xFF2A1416)).clickable { deadlinesOnly = true }.padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(if (soon == 1) "1 Frist in den nächsten 14 Tagen" else "$soon Fristen in den nächsten 14 Tagen",
+                color = Color(0xFFFFD6D6), fontWeight = FontWeight.SemiBold, fontSize = 14.sp, modifier = Modifier.weight(1f))
+            Text("Anzeigen ›", color = Color(0xFFFFB3B3), fontSize = 13.sp)
+        }
+        Row(Modifier.fillMaxSize()) {
+        Box(Modifier.weight(1f).fillMaxHeight()) {
         if (list.isEmpty()) {
             Box(Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
                 Text(
@@ -408,7 +430,8 @@ private fun RecentDocuments(vm: AppViewModel, docs: List<DocumentEntity>) {
                 // Dokument als große Vorschaukarte
                 Column(
                     Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(FaColors.Card)
-                        .combinedClickable(onClick = { vm.actionDocId = d.id }, onLongClick = { menu = true })
+                        .let { if (wide && previewId == d.id) it.border(2.dp, FaColors.Accent, RoundedCornerShape(18.dp)) else it }
+                        .combinedClickable(onClick = { if (wide) previewId = d.id else vm.actionDocId = d.id }, onLongClick = { menu = true })
                         .padding(8.dp),
                 ) {
                     Box {
@@ -437,6 +460,11 @@ private fun RecentDocuments(vm: AppViewModel, docs: List<DocumentEntity>) {
                         Text(Format.dateShort(d.modifiedAt) + " · " + (if (d.pageCount > 0) "${d.pageCount} S." else "geschützt"),
                             color = FaColors.SecondaryLabel, fontSize = 11.sp, maxLines = 1)
                     }
+                    index.deadline(d.id)?.date?.let { t ->
+                        Text("Frist " + java.text.SimpleDateFormat("dd.MM.yyyy", java.util.Locale.GERMANY).format(java.util.Date(t)),
+                            color = if (t < now) Color(0xFFFF6B6B) else Color(0xFFFFB3B3), fontSize = 11.sp, fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(top = 4.dp, start = 2.dp).clip(RoundedCornerShape(8.dp)).background(Color(0xFF2A1416)).padding(horizontal = 6.dp, vertical = 2.dp))
+                    }
                     if (query.isNotBlank() && !d.displayName.contains(query, ignoreCase = true)) index.snippet(d.id, query)?.let { sn ->
                         Text(sn, color = FaColors.SecondaryLabel, fontSize = 11.sp, maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp, start = 2.dp))
                     }
@@ -450,6 +478,12 @@ private fun RecentDocuments(vm: AppViewModel, docs: List<DocumentEntity>) {
                     }
                 }
             }
+        }
+        }
+        if (wide) {
+            val pd = docs.firstOrNull { it.id == previewId } ?: list.firstOrNull()
+            if (pd != null) DocPreviewPane(vm, pd, nav, Modifier.weight(1f).fillMaxHeight())
+        }
         }
     }
     renameDoc?.let { d ->
@@ -688,5 +722,38 @@ private fun BigThumb(path: String?, key: Any?) {
         val i = img
         if (i != null) androidx.compose.foundation.Image(i, null, Modifier.fillMaxSize(), contentScale = androidx.compose.ui.layout.ContentScale.Crop, alignment = Alignment.TopCenter)
         else Text("PDF", color = Color(0xFFB0B0B8), fontWeight = FontWeight.Bold)
+    }
+}
+
+
+/** Fold aufgeklappt: rechts die Vorschau des gewählten Dokuments mit den wichtigsten Aktionen. */
+@Composable
+private fun DocPreviewPane(vm: AppViewModel, d: DocumentEntity, nav: HomeNav, modifier: Modifier) {
+    val src = de.fapdf.ui.components.rememberDocSource(d, null)
+    val index = vm.container.index
+    Column(modifier.padding(end = 16.dp, bottom = 16.dp).clip(RoundedCornerShape(22.dp)).background(FaColors.Card)) {
+        Column(Modifier.padding(16.dp)) {
+            Text(DocumentRepository.baseName(d.displayName), fontWeight = FontWeight.Bold, fontSize = 18.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(listOfNotNull(index.category(d.id), "${d.pageCount} Seiten", Format.date(d.modifiedAt)).joinToString(" · "), color = FaColors.SecondaryLabel, fontSize = 13.sp)
+            index.deadline(d.id)?.let { dl ->
+                Text("Frist: " + (dl.date?.let { java.text.SimpleDateFormat("dd.MM.yyyy", java.util.Locale.GERMANY).format(java.util.Date(it)) } ?: dl.text) +
+                    (if (dl.amount.isNotBlank()) " · ${dl.amount}" else ""), color = Color(0xFFFFB3B3), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 4.dp))
+            }
+            Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(
+                    "Öffnen" to { nav.workspace(d.id, WorkspaceMode.READ) },
+                    "Unterschreiben" to { nav.workspace(d.id, WorkspaceMode.SIGN) },
+                    "Mehr" to { vm.actionDocId = d.id },
+                ).forEachIndexed { i, (t, a) ->
+                    Box(
+                        Modifier.weight(1f).height(44.dp).clip(RoundedCornerShape(12.dp)).background(if (i == 0) FaColors.Accent else FaColors.Background).clickable(onClick = a),
+                        contentAlignment = Alignment.Center,
+                    ) { Text(t, color = if (i == 0) FaColors.OnAccent else FaColors.Label, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, maxLines = 1) }
+                }
+            }
+        }
+        if (src != null) androidx.compose.foundation.lazy.LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 16.dp)) {
+            items(src.pageCount) { p -> de.fapdf.ui.components.LargePagePreview(src, p, maxHeight = 900.dp) }
+        } else Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("Vorschau wird geladen …", color = FaColors.SecondaryLabel) }
     }
 }
