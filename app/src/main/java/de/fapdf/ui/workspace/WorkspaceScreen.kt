@@ -703,11 +703,7 @@ private fun BottomTools(
                     FilterChip(selected = kotlin.math.abs(percent - pct) < 1f, onClick = { p.resizeTo(pageW * pct / 100f) }, label = { Text(label) })
                 }
             }
-            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("Drehung", style = MaterialTheme.typography.bodySmall)
-                Slider(value = p.rotation, onValueChange = { p.rotation = it }, valueRange = -180f..180f, modifier = Modifier.weight(1f).padding(horizontal = 8.dp))
-                Text("${p.rotation.toInt()}°", style = MaterialTheme.typography.bodySmall)
-            }
+            // Drehen nur noch mit zwei Fingern – kein Regler
             ConfirmBar(if (vm.placementIsSignature) "Unterschrift einsetzen?" else "Bild einsetzen?", onCancel = vm::cancelPlacement, onConfirm = vm::commitPlacement)
         }
         return
