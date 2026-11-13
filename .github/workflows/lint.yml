@@ -1,0 +1,29 @@
+name: Lint-Pruefung
+
+on:
+  workflow_dispatch:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+      - run: chmod +x gradlew
+      - name: Lint
+        run: ./gradlew --no-daemon lintDebug -Pandroid.lint.abortOnError=false || true
+      - name: Bericht veroeffentlichen
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ls app/build/reports/ || true
+          cp app/build/reports/lint-results-debug.txt lint.txt 2>/dev/null || echo "kein Bericht" > lint.txt
+          gh release delete lint-report --yes --cleanup-tag || true
+          sleep 3
+          gh release create lint-report lint.txt --title "Lint" --notes "Commit ${GITHUB_SHA::7}" --prerelease
