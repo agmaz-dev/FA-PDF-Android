@@ -67,6 +67,7 @@ import de.fapdf.pdf.PageRef
 import de.fapdf.pdf.PdfOps
 import de.fapdf.ui.AppViewModel
 import de.fapdf.ui.components.DocChooserSheet
+import de.fapdf.ui.components.file
 import de.fapdf.ui.components.LargePagePreview
 import de.fapdf.ui.components.PageThumb
 import de.fapdf.ui.components.rememberDocSource
