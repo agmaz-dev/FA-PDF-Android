@@ -127,7 +127,22 @@ fun SettingsScreen(appVm: AppViewModel, onBack: (() -> Unit)?, onProfiles: () ->
                     supportingText = { Text("Adresse eines OpenAI-kompatiblen Dienstes, endet meist auf /v1") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
                 )
-                if (provider == AiProvider.NANO) {
+                if (provider == AiProvider.PC) {
+                    var pcUrl by remember(s.pcUrl) { mutableStateOf(s.pcUrl.ifBlank { "http://192.168.178.20:11434/v1" }) }
+                    var pcModel by remember(s.pcModel) { mutableStateOf(s.pcModel) }
+                    Text(
+                        "Antworten kommen von Ihrem eigenen PC mit Ollama – privat, ohne Limit. Auf dem PC Ollama starten " +
+                            "(Umgebungsvariable OLLAMA_HOST=0.0.0.0) und das Modell laden. Unterwegs: Tailscale auf PC und Handy, dann die Tailscale-Adresse eintragen. " +
+                            "Ist der PC aus, springt die App automatisch auf Groq bzw. Gemini Nano.",
+                        color = FaColors.SecondaryLabel, modifier = Modifier.padding(vertical = 4.dp),
+                    )
+                    OutlinedTextField(pcUrl, { pcUrl = it }, Modifier.fillMaxWidth(), singleLine = true, label = { Text("Adresse des PCs") },
+                        supportingText = { Text("z. B. http://192.168.178.20:11434/v1 oder http://100.x.y.z:11434/v1") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri))
+                    OutlinedTextField(pcModel, { pcModel = it }, Modifier.fillMaxWidth(), singleLine = true, label = { Text("Modell auf dem PC") },
+                        supportingText = { Text("z. B. gpt-oss:20b oder gpt-oss:120b") })
+                    TextButton(onClick = { scope.launch { repo.setPc(pcUrl, pcModel); FileActions.toast(context, "PC gespeichert") } }) { Text("PC-Adresse speichern") }
+                } else if (provider == AiProvider.NANO) {
                     Text(
                         "Antworten kommen von Gemini Nano, der KI, die in Android auf diesem Handy eingebaut ist – " +
                             "kein Schlüssel, kein Internet, Dokumente verlassen das Handy nicht. Gut für kurze Dokumente " +

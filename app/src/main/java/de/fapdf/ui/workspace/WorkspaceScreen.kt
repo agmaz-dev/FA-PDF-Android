@@ -479,7 +479,8 @@ fun WorkspaceScreen(
             sheet = null
             val target = signatureTarget
             signatureTarget = null
-            vm.startPlacement(target?.first ?: currentPage, bmp, signature = true, target = target?.second)
+            if (target != null) vm.startPlacement(target.first, bmp, signature = true, target = target.second)
+            else vm.startSignaturePlacement(currentPage, bmp)
         }
         "bookmarks" -> BookmarksSheet(vm, currentPage, onDismiss = { sheet = null }) { p -> sheet = null; scope.launch { listState.animateScrollToItem(p) } }
         "profiles" -> ProfilePickerDialog(vm, onDismiss = { sheet = null }, onManage = { sheet = null; onManageProfiles() }) { profile ->

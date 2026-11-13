@@ -178,7 +178,7 @@ fun AiScreen(tool: Tool, docId: Long?, appVm: AppViewModel, onBack: () -> Unit, 
             try {
                 // Ersatz-Kette: gewählter Dienst, sonst Gemini Nano auf dem Handy
                 val ans = de.fapdf.ai.AiRouter.complete(appVm.container.settings, system, messages, maxTokens = 3000)
-                if (ans.fallback) FileActions.toast(context, "${settings.aiProvider.title.substringBefore(" –")} nicht erreichbar – Antwort von Gemini Nano")
+                if (ans.fallback) FileActions.toast(context, "${settings.aiProvider.title.substringBefore(" –")} nicht erreichbar – Antwort von ${de.fapdf.ai.AiRouter.shortName(ans.provider)}")
                 onText(de.fapdf.ai.AiText.clean(ans.text))
             } catch (e: Exception) {
                 error = e.message ?: "Fehler bei der KI-Anfrage"

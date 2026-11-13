@@ -152,7 +152,7 @@ class DocumentRepository(private val context: Context, private val dao: Document
     suspend fun refreshThumbnail(id: Long) = withContext(Dispatchers.IO) {
         val d = dao.get(id) ?: return@withContext
         val thumb = File(thumbsDir, "doc_$id.png")
-        val ok = runCatching { Thumbnails.render(File(d.filePath), thumb, 240) }.getOrDefault(false)
+        val ok = runCatching { Thumbnails.render(File(d.filePath), thumb, 480) }.getOrDefault(false)
         dao.update(d.copy(thumbnailPath = if (ok) thumb.absolutePath else null))
     }
 
@@ -254,6 +254,13 @@ class SettingsRepository(private val context: Context, private val crypto: Crypt
         val MODEL = stringPreferencesKey("ai_model")
         val KEY = stringPreferencesKey("ai_key_enc")
         val BASE_URL = stringPreferencesKey("ai_base_url")
+        val PC_URL = stringPreferencesKey("ai_pc_url")
+        val PC_MODEL = stringPreferencesKey("ai_pc_model")
+    }
+
+    suspend fun setPc(url: String, model: String) = context.dataStore.edit {
+        it[Keys.PC_URL] = url.trim().trimEnd('/')
+        it[Keys.PC_MODEL] = model.trim().ifBlank { "gpt-oss:20b" }
     }
 
     val settings: Flow<AppSettings> = context.dataStore.data.map { p ->
@@ -274,6 +281,8 @@ class SettingsRepository(private val context: Context, private val crypto: Crypt
             savedKeys = AiProvider.entries.filter { !p[keyFor(it)].isNullOrBlank() }.toSet(),
             hasAiKey = provider.isLocal || !p[keyFor(provider)].isNullOrBlank() || !p[Keys.KEY].isNullOrBlank(),
             aiBaseUrl = p[Keys.BASE_URL] ?: DEFAULT_AI_BASE_URL,
+            pcUrl = p[Keys.PC_URL].orEmpty(),
+            pcModel = p[Keys.PC_MODEL] ?: "gpt-oss:20b",
         )
     }
 

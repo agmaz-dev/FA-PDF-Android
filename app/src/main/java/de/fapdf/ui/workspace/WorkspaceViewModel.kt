@@ -585,6 +585,28 @@ class WorkspaceViewModel(app: Application, val docId: Long, initialMode: Workspa
         placementIsSignature = signature
     }
 
+    /** Unterschrift ohne Feld: automatisch unter „Mit freundlichen Grüßen“ o. Ä. setzen, wenn gefunden. */
+    fun startSignaturePlacement(page: Int, bmp: Bitmap) {
+        viewModelScope.launch {
+            val closing = Regex("(mit\\s+freundlichen\\s+gr|freundliche\\s+gr|mit\\s+besten\\s+gr|viele\\s+gr|hochachtungsvoll|beste\\s+gr)", RegexOption.IGNORE_CASE)
+            val size = source?.pageSizes?.getOrNull(page)
+            var found: Box? = null
+            val ocr = ocrPages[page]
+            if (ocr != null) found = ocr.lines.lastOrNull { closing.containsMatchIn(it.text) }?.viewBox
+            if (found == null) {
+                val pt = runCatching { pageText(page) }.getOrNull()
+                if (pt != null) found = pt.lines.lastOrNull { closing.containsMatchIn(it.text) }?.let { pt.viewBoxOf(it) }
+            }
+            if (found != null && size != null) {
+                val w = size.first * 0.30f
+                val h = w * 0.45f
+                val top = found.bottom + 2f
+                startPlacement(page, bmp, signature = true, target = Box(found.left, top, found.left + w, top + h))
+                toast = "Unterschrift unter den Gruß gesetzt – bei Bedarf verschieben"
+            } else startPlacement(page, bmp, signature = true)
+        }
+    }
+
     fun commitPlacement() {
         val p = placement ?: return
         placement = null

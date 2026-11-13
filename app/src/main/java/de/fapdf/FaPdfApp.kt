@@ -24,6 +24,7 @@ class AppContainer(app: Application) {
     val signatures = SignatureRepository(app, database.signatureDao(), crypto)
     val bookmarks = BookmarkRepository(database.bookmarkDao())
     val settings = SettingsRepository(app, crypto)
+    val index = de.fapdf.data.DocIndex(app)
 }
 
 class FaPdfApp : Application() {

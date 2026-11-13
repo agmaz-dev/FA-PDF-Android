@@ -95,6 +95,29 @@ class ReplyViewModel(app: Application, private val docId: Long) : AndroidViewMod
     var amounts by mutableStateOf("")
     var suggestions by mutableStateOf<List<String>>(emptyList())
     var email by mutableStateOf("")
+    var deadlineDate by mutableStateOf<Long?>(null)
+    var profileId: Long? = null
+    private val senderPrefs = app.getSharedPreferences("reply_sender", android.content.Context.MODE_PRIVATE)
+    private fun recipientKey(r: String) = r.lines().firstOrNull { it.isNotBlank() }?.lowercase()?.replace(Regex("[^a-zäöüß0-9]"), "")?.take(40)
+    private fun rememberedFor(r: String): Pair<Long, Long?>? {
+        val k = recipientKey(r) ?: return null
+        val v = senderPrefs.getString(k, null) ?: return null
+        val parts = v.split("|")
+        return (parts.getOrNull(0)?.toLongOrNull() ?: return null) to parts.getOrNull(1)?.toLongOrNull()
+    }
+    private fun remember(r: String) {
+        val k = recipientKey(r) ?: return
+        val pid = profileId ?: return
+        senderPrefs.edit().putString(k, "$pid|${signatureId ?: -1}").apply()
+    }
+    private fun parseDate(s: String?): Long? {
+        val m = Regex("(\\d{1,2})\\.(\\d{1,2})\\.(\\d{2,4})").find(s ?: return null) ?: return null
+        val (d, mo, y0) = m.destructured
+        val y = y0.toInt().let { if (it < 100) 2000 + it else it }
+        return runCatching {
+            java.util.Calendar.getInstance().apply { clear(); set(y, mo.toInt() - 1, d.toInt(), 9, 0) }.timeInMillis
+        }.getOrNull()
+    }
 
     // Brief
     var stage by mutableStateOf(0) // 0 = Übersicht, 1 = Brief
@@ -131,7 +154,7 @@ class ReplyViewModel(app: Application, private val docId: Long) : AndroidViewMod
                 step = 2; sub = null; stepTitle = "KI liest das Schreiben …"
                 busy = "Fristen, Beträge und Antworten suchen"
                 val ans = AiRouter.complete(c.settings, ANALYZE, listOf(ChatMessage("user", Prompts.withDocument("Analysiere dieses Schreiben.", text))), 600)
-                if (ans.fallback) note = "Groq nicht erreichbar – Gemini Nano hat geantwortet"
+                if (ans.fallback) note = "Antwort von " + AiRouter.shortName(ans.provider) + " (gewählter Dienst nicht erreichbar)" + if (ans.provider == de.fapdf.data.AiProvider.NANO) " – bitte genau prüfen" else ""
                 parseAnalysis(ans.text)
             } catch (e: Exception) {
                 error = e.message ?: "Fehler beim Lesen"
@@ -148,10 +171,10 @@ class ReplyViewModel(app: Application, private val docId: Long) : AndroidViewMod
         val vors = ArrayList<String>()
         // 1) Zeilenformat
         raw.lines().forEach { line ->
-            val m = Regex("^\\s*[-*•]?\\s*(KURZ|FRIST(?:EN)?|BETR(?:AG|ÄGE|AEGE)|ABSENDER|EMAIL|E-MAIL|BEZUG|ANSPRECHPARTNER|VORSCHLAG)\\s*\\d*\\s*:\\s*(.*)$", RegexOption.IGNORE_CASE).find(line)
+            val m = Regex("^\\s*[-*•]?\\s*(KURZ|FRISTDATUM|FRIST(?:EN)?|BETR(?:AG|ÄGE|AEGE)|ABSENDER|EMAIL|E-MAIL|BEZUG|ANSPRECHPARTNER|VORSCHLAG)\\s*\\d*\\s*:\\s*(.*)$", RegexOption.IGNORE_CASE).find(line)
             if (m != null) {
                 val key = m.groupValues[1].uppercase().let { k -> when {
-                    k.startsWith("FRIST") -> "FRIST"; k.startsWith("BETR") -> "BETRAG"; k.contains("MAIL") -> "EMAIL"; else -> k } }
+                    k == "FRISTDATUM" -> "FRISTDATUM"; k.startsWith("FRIST") -> "FRIST"; k.startsWith("BETR") -> "BETRAG"; k.contains("MAIL") -> "EMAIL"; else -> k } }
                 val v = m.groupValues[2].trim().trim('"')
                 if (key == "VORSCHLAG") { if (v.isNotBlank()) vors += v } else if (key !in fields && v.isNotBlank()) fields[key] = v
             }
@@ -176,16 +199,23 @@ class ReplyViewModel(app: Application, private val docId: Long) : AndroidViewMod
             raw.lines().filterNot { it.trim().startsWith("{") || it.trim().startsWith("}") || it.contains("\":") }.joinToString(" ").trim().take(600).ifBlank { "–" }
         }
         deadlines = clean(fields["FRIST"])
+        deadlineDate = parseDate(fields["FRISTDATUM"]) ?: parseDate(deadlines)
         amounts = clean(fields["BETRAG"])
         email = Regex("[\\w.+-]+@[\\w-]+(\\.[\\w-]+)+").find(fields["EMAIL"].orEmpty().replace(" de", ".de").replace(" com", ".com"))?.value.orEmpty()
         bezug = clean(fields["BEZUG"])
         contact = clean(fields["ANSPRECHPARTNER"])
         val abs = fields["ABSENDER"].orEmpty().replace("\\n", "\n").replace(" | ", "\n").replace(";", "\n").trim()
         if (recipient.isBlank() && abs.isNotBlank()) recipient = abs
+        // Für diesen Empfänger zuletzt benutzten Absender und Unterschrift wieder nehmen
+        rememberedFor(recipient)?.let { (pid, sid) ->
+            profiles.firstOrNull { it.id == pid }?.let { useProfile(it) }
+            if (sid != null) signatureId = sid.takeIf { it >= 0 }
+        }
         suggestions = vors.map { it.trim().trim('"', ',') }.filter { it.isNotEmpty() }.distinct().take(5).ifEmpty { DEFAULT_SUGGESTIONS }
     }
 
     fun useProfile(p: PersonProfile) {
+        profileId = p.id
         signerName = p.fullName
         sender = listOf(p.fullName, p.streetLine, p.zipCity, p.phone.takeIf { it.isNotBlank() }?.let { "Tel. $it" }, p.email)
             .filter { !it.isNullOrBlank() }.joinToString("\n")
@@ -217,7 +247,7 @@ class ReplyViewModel(app: Application, private val docId: Long) : AndroidViewMod
                     "Keine Adressen, kein Datum, keinen Namen unter dem Gruß, keine Erklärungen. Verwende nur Fakten aus dem Schreiben und " +
                     "den Angaben; fehlende Angaben in [eckigen Klammern] kennzeichnen. Handschriftliche Notizen im Schreiben sind Angaben von $name."
                 val ans = AiRouter.complete(c.settings, system, listOf(ChatMessage("user", Prompts.withDocument("Schreibe jetzt den Antwortbrief.", text))), 1500)
-                if (ans.fallback) note = "Groq nicht erreichbar – Entwurf von Gemini Nano, bitte genau prüfen"
+                if (ans.fallback) note = "Antwort von " + AiRouter.shortName(ans.provider) + " (gewählter Dienst nicht erreichbar)" + if (ans.provider == de.fapdf.data.AiProvider.NANO) " – bitte genau prüfen" else ""
                 applyLetter(ans.text)
                 stage = 1
                 createdDocId = null
@@ -259,7 +289,7 @@ class ReplyViewModel(app: Application, private val docId: Long) : AndroidViewMod
                 val system = "Überarbeite den folgenden Brieftext: $instr. Behalte alle Fakten, Nummern und Daten sowie das Format " +
                     "(Anrede … Mit freundlichen Grüßen) bei. Gib nur den überarbeiteten Brieftext aus, ohne Betreff und ohne Erklärungen."
                 val ans = AiRouter.complete(c.settings, system, listOf(ChatMessage("user", current)), 1500)
-                if (ans.fallback) note = "Groq nicht erreichbar – überarbeitet von Gemini Nano"
+                if (ans.fallback) note = "Antwort von " + AiRouter.shortName(ans.provider) + " (gewählter Dienst nicht erreichbar)" + if (ans.provider == de.fapdf.data.AiProvider.NANO) " – bitte genau prüfen" else ""
                 body = de.fapdf.ai.AiText.clean(ans.text)
                 createdDocId = null
             } catch (e: Exception) {
@@ -287,6 +317,7 @@ class ReplyViewModel(app: Application, private val docId: Long) : AndroidViewMod
                 }
                 val id = c.documents.importFile(out, DocumentRepository.sanitize(name))
                 createdDocId = id
+                remember(recipient)
                 createdFile = c.documents.get(id)?.let { c.documents.fileOf(it) } ?: out
                 note = "Gespeichert als „$name“"
             } catch (e: Exception) {
@@ -308,7 +339,8 @@ class ReplyViewModel(app: Application, private val docId: Long) : AndroidViewMod
         const val ANALYZE = "Du liest ein Schreiben, das der Nutzer erhalten hat. Antworte auf Deutsch, OHNE Einleitung, " +
             "genau in diesen Zeilen (jede Angabe in einer Zeile, nichts erfinden, fehlt etwas: \"-\"):\n" +
             "KURZ: 2 Sätze – wer schreibt, worum geht es, was wird verlangt\n" +
-            "FRIST: Frist oder Termin\n" +
+            "FRIST: Frist oder Termin (in Worten)\n" +
+            "FRISTDATUM: letzter Tag der Frist als TT.MM.JJJJ, sonst -\n" +
             "BETRAG: wichtigster Betrag\n" +
             "ABSENDER: Postanschrift des Absenders, Teile mit | getrennt (Firma | Straße Nr. | PLZ Ort)\n" +
             "EMAIL: E-Mail des Ansprechpartners\n" +
@@ -427,6 +459,22 @@ private fun Overview(vm: ReplyViewModel, onWrite: () -> Unit) {
         Text(summary, color = FaColors.Label)
         if (vm.deadlines.isNotBlank()) Text("Fristen: ${vm.deadlines}", color = FaColors.Label)
         if (vm.amounts.isNotBlank()) Text("Beträge: ${vm.amounts}", color = FaColors.Label)
+        if (vm.deadlines.isNotBlank() || vm.deadlineDate != null) {
+            val context = LocalContext.current
+            TextButton(onClick = {
+                val begin = vm.deadlineDate ?: (System.currentTimeMillis() + 3L * 24 * 3600_000)
+                val i = android.content.Intent(android.content.Intent.ACTION_INSERT)
+                    .setData(android.provider.CalendarContract.Events.CONTENT_URI)
+                    .putExtra(android.provider.CalendarContract.EXTRA_EVENT_BEGIN_TIME, begin)
+                    .putExtra(android.provider.CalendarContract.EXTRA_EVENT_ALL_DAY, true)
+                    .putExtra(android.provider.CalendarContract.Events.TITLE, (if (vm.deadlineDate == null) "Frist prüfen: " else "Frist: ") + vm.docName)
+                    .putExtra(android.provider.CalendarContract.Events.DESCRIPTION, listOf(vm.deadlines, vm.amounts, vm.summary.orEmpty()).filter { it.isNotBlank() }.joinToString("\n"))
+                runCatching { context.startActivity(i) }.onFailure { FileActions.toast(context, "Keine Kalender-App gefunden") }
+            }) {
+                Text(if (vm.deadlineDate != null) "Erinnerung in Kalender eintragen (" + java.text.SimpleDateFormat("dd.MM.yyyy", java.util.Locale.GERMANY).format(java.util.Date(vm.deadlineDate!!)) + ")" else "Erinnerung in Kalender eintragen",
+                    color = FaColors.Accent, fontWeight = FontWeight.SemiBold)
+            }
+        }
     }
     Text("Antwort schreiben", fontWeight = FontWeight.SemiBold, color = FaColors.Label, modifier = Modifier.padding(top = 10.dp, bottom = 6.dp))
     Text("Was soll die Antwort sagen? Vorschlag antippen oder eigene Stichpunkte eingeben.", color = FaColors.SecondaryLabel, fontSize = 13.sp)

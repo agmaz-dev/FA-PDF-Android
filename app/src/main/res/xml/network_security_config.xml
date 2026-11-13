@@ -1,8 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Unverschlüsselte Verbindung NUR zur eigenen KI auf diesem Gerät (FA KI, 127.0.0.1) erlauben -->
+<!-- Unverschlüsselt erlaubt für die eigene KI: FA KI auf dem Handy und der eigene PC (Ollama) im Heimnetz/Tailscale.
+     Alle Internet-Dienste (Groq usw.) laufen weiterhin über HTTPS. -->
 <network-security-config>
-    <domain-config cleartextTrafficPermitted="true">
-        <domain includeSubdomains="false">127.0.0.1</domain>
-        <domain includeSubdomains="false">localhost</domain>
-    </domain-config>
+    <base-config cleartextTrafficPermitted="true" />
 </network-security-config>

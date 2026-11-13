@@ -29,13 +29,14 @@ enum class AiProvider(val title: String, val endpointHost: String, val pricingUr
     ANTHROPIC("Anthropic (Claude)", "api.anthropic.com", "https://www.anthropic.com/pricing", "claude-haiku-5-5"),
     OPENAI("OpenAI", "api.openai.com", "https://openai.com/api/pricing/", ""),
     GROQ("Groq – Internet, kostenlos", "api.groq.com", "https://console.groq.com/keys", "openai/gpt-oss-120b"),
+    PC("PC zu Hause – privat", "eigener Rechner mit Ollama · Adresse eintragen", "", "gpt-oss:20b"),
     NANO("Gemini Nano – auf diesem Handy, privat", "ohne Internet · in Android eingebaut", "", "gemini-nano"),
     FAKI("FA KI – auf diesem Handy, privat", "ohne Internet · App FA KI muss laufen", "", "lokal"),
     /** Beliebiger OpenAI-kompatibler Dienst mit eigener Adresse, z. B. Groq (kostenloser Zugang). */
     CUSTOM("Eigene Adresse", "andere OpenAI-kompatible Dienste", "https://console.groq.com/keys", "openai/gpt-oss-120b");
 
     /** Läuft auf dem Handy – kein Schlüssel, keine Zustimmung zur Übertragung nötig. */
-    val isLocal: Boolean get() = this == FAKI || this == NANO
+    val isLocal: Boolean get() = this == FAKI || this == NANO || this == PC
 }
 
 enum class ThemeMode(val title: String) { SYSTEM("Wie System"), LIGHT("Hell"), DARK("Dunkel") }
@@ -50,6 +51,9 @@ data class AppSettings(
     /** Für welche Dienste ein Schlüssel gespeichert ist. */
     val savedKeys: Set<AiProvider> = emptySet(),
     val aiBaseUrl: String = DEFAULT_AI_BASE_URL,
+    /** Eigener PC mit Ollama (OpenAI-kompatibel), z. B. http://192.168.178.20:11434/v1 */
+    val pcUrl: String = "",
+    val pcModel: String = "gpt-oss:20b",
 )
 
 const val DEFAULT_AI_BASE_URL = "https://api.groq.com/openai/v1"

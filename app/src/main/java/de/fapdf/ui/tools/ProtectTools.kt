@@ -177,7 +177,9 @@ fun ScannerToolV2(appVm: AppViewModel, runner: ToolRunner) {
     val context = LocalContext.current
     var mode by remember { mutableIntStateOf(0) } // 0 Dokument, 1 Ausweis
     var gallery by remember { mutableStateOf(true) }
+    var enhance by remember { mutableStateOf(true) }
     var lastId by remember { mutableStateOf<Long?>(null) }
+    androidx.compose.runtime.LaunchedEffect(runner.results) { runner.results.firstOrNull()?.let { lastId = it } }
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { res ->
         if (res.resultCode == Activity.RESULT_OK) {
             val result = GmsDocumentScanningResult.fromActivityResultIntent(res.data)
@@ -192,6 +194,22 @@ fun ScannerToolV2(appVm: AppViewModel, runner: ToolRunner) {
                     PdfOps.idCardLayout(tmpIn, out)
                     tmpIn.delete()
                     listOf(out to "Ausweis-Scan.pdf")
+                }
+            } else if (enhance && !result.pages.isNullOrEmpty()) {
+                // Schatten entfernen, Papier weiß, Schrift kräftiger
+                val pageUris = result.pages!!.map { it.imageUri }
+                runner.run("Scan wird verbessert …") {
+                    val bitmaps = pageUris.mapNotNull { u ->
+                        context.contentResolver.openInputStream(u)?.use { de.fapdf.pdf.ScanEnhancer.decode(it) }?.let { raw ->
+                            de.fapdf.pdf.ScanEnhancer.enhance(raw).also { if (it !== raw) raw.recycle() }
+                        }
+                    }
+                    if (bitmaps.isEmpty()) throw PdfUserException("Der Scan konnte nicht gelesen werden.")
+                    val out = runner.tmp("scan")
+                    de.fapdf.pdf.ScanEnhancer.buildPdf(bitmaps, out)
+                    bitmaps.forEach { it.recycle() }
+                    val stamp = java.text.SimpleDateFormat("yyyy-MM-dd HH.mm", java.util.Locale.GERMANY).format(java.util.Date())
+                    listOf(out to "Scan $stamp.pdf")
                 }
             } else {
                 appVm.import(uri, persist = false) { id -> lastId = id; runner.results = listOf(id) }
@@ -213,13 +231,14 @@ fun ScannerToolV2(appVm: AppViewModel, runner: ToolRunner) {
     SectionLabel("Modus")
     ChoiceBoxes(listOf("Dokument", "Ausweis"), mode, subtitles = listOf("Mehrseitig, A4", "Vorder- und Rückseite auf einer A4-Seite")) { mode = it }
     ToggleRow("Import aus Galerie erlauben", "Fotos vorhandener Dokumente verwenden", checked = gallery) { gallery = it }
+    ToggleRow("Scan verbessern", "Schatten entfernen, Papier weiß, Schrift kräftiger", checked = enhance) { enhance = it }
     FaButton("Scan starten", icon = Icons.Outlined.CameraAlt) {
         val activity = context.findActivity()
         if (activity == null) { runner.error = "Scanner kann nicht gestartet werden."; return@FaButton }
         val options = GmsDocumentScannerOptions.Builder()
             .setGalleryImportAllowed(gallery)
             .setPageLimit(if (mode == 1) 2 else 60)
-            .setResultFormats(GmsDocumentScannerOptions.RESULT_FORMAT_PDF)
+            .setResultFormats(GmsDocumentScannerOptions.RESULT_FORMAT_PDF, GmsDocumentScannerOptions.RESULT_FORMAT_JPEG)
             .setScannerMode(GmsDocumentScannerOptions.SCANNER_MODE_FULL)
             .build()
         GmsDocumentScanning.getClient(options).getStartScanIntent(activity)

@@ -80,10 +80,101 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         (if (Build.VERSION.SDK_INT >= 33) i.getParcelableArrayListExtra(Intent.EXTRA_STREAM, Uri::class.java)
         else i.getParcelableArrayListExtra<Uri>(Intent.EXTRA_STREAM)) ?: emptyList()
 
+    // ---------- Suchindex, Kategorien und KI-Namen (läuft leise im Hintergrund) ----------
+    private var indexJob: kotlinx.coroutines.Job? = null
+    var namingBusy by mutableStateOf<Long?>(null); private set
+
+    init {
+        viewModelScope.launch { documents.collect { if (it.isNotEmpty()) scheduleIndex() } }
+    }
+
+    private fun scheduleIndex() {
+        if (indexJob?.isActive == true) return
+        indexJob = viewModelScope.launch(kotlinx.coroutines.Dispatchers.Default) {
+            kotlinx.coroutines.delay(2500) // App erst fertig starten lassen
+            val tmp = java.io.File(getApplication<Application>().cacheDir, "index").apply { mkdirs() }
+            while (true) {
+                val idx = container.index
+                val d = documents.value.sortedByDescending { it.importedAt }
+                    .firstOrNull { !it.encrypted && it.pageCount > 0 && !idx.hasText(it.id) } ?: break
+                val text = runCatching {
+                    de.fapdf.ai.DocumentText.extract(java.io.File(d.filePath), tmp, maxChars = 60_000, maxOcrPages = 3).text
+                }.getOrDefault("")
+                idx.setText(d.id, text.ifBlank { " " })
+                if (idx.category(d.id) == null) de.fapdf.data.DocIndex.guessCategory(text)?.let { idx.setCategory(d.id, it) }
+                // Frisch geöffnete Dokumente mit unverständlichem Namen automatisch benennen
+                val fresh = System.currentTimeMillis() - d.importedAt < 2 * 24 * 3600_000L
+                if (fresh && text.isNotBlank() && de.fapdf.data.DocIndex.isGenericName(d.displayName) && !idx.isNamed(d.id) && aiAllowed()) {
+                    runCatching { nameWithAi(d, text) }
+                }
+            }
+            // Ältere, kleine Vorschaubilder für die großen Karten schärfer neu erzeugen
+            documents.value.forEach { d ->
+                val p = d.thumbnailPath ?: return@forEach
+                val o = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                android.graphics.BitmapFactory.decodeFile(p, o)
+                if (o.outWidth in 1..399) runCatching { container.documents.refreshThumbnail(d.id) }
+            }
+        }
+    }
+
+    /** KI darf ohne Nachfrage arbeiten: auf dem Handy oder nach einmaliger Zustimmung. */
+    suspend fun aiAllowed(): Boolean {
+        val p = container.settings.current().aiProvider
+        return p.isLocal || getApplication<Application>().getSharedPreferences("ai_consent", android.content.Context.MODE_PRIVATE).getBoolean(p.name, false)
+    }
+
+    fun consentGiven() = viewModelScope.launch {
+        val p = container.settings.current().aiProvider
+        getApplication<Application>().getSharedPreferences("ai_consent", android.content.Context.MODE_PRIVATE).edit().putBoolean(p.name, true).apply()
+    }
+
+    private suspend fun nameWithAi(d: DocumentEntity, text: String): String? {
+        val ans = de.fapdf.ai.AiRouter.complete(
+            container.settings,
+            "Gib diesem Schreiben einen kurzen, eindeutigen Dateinamen und eine Kategorie. Antworte genau in zwei Zeilen, ohne weitere Wörter:\n" +
+                "TITEL: <Absender kurz> – <Art des Schreibens> – <Datum TT.MM.JJJJ>\n" +
+                "KATEGORIE: eine aus: " + de.fapdf.data.DocIndex.CATEGORIES.joinToString(", "),
+            listOf(de.fapdf.ai.ChatMessage("user", de.fapdf.ai.Prompts.withDocument("Benenne dieses Schreiben.", text.take(6000)))),
+            120,
+        )
+        val clean = de.fapdf.ai.AiText.clean(ans.text)
+        val title = Regex("(?im)^\\s*TITEL\\s*:\\s*(.+)$").find(clean)?.groupValues?.get(1)
+            ?.replace(Regex("[\\\\/:*?\"<>|]"), "-")?.replace(Regex("\\s+"), " ")?.trim()?.trim('-', ' ', '"')?.take(80)
+        val cat = Regex("(?im)^\\s*KATEGORIE\\s*:\\s*(.+)$").find(clean)?.groupValues?.get(1)?.trim()
+            ?.let { c -> de.fapdf.data.DocIndex.CATEGORIES.firstOrNull { c.contains(it, ignoreCase = true) } }
+        if (cat != null) container.index.setCategory(d.id, cat)
+        if (title.isNullOrBlank() || title.length < 5) return null
+        container.documents.rename(d.id, title)
+        container.index.markNamed(d.id)
+        return title
+    }
+
+    /** „Mit KI benennen“ aus dem Dokument-Menü. */
+    fun nameNow(id: Long, onDone: (String?) -> Unit) = viewModelScope.launch {
+        val d = documents.value.firstOrNull { it.id == id } ?: return@launch
+        namingBusy = id
+        try {
+            val tmp = java.io.File(getApplication<Application>().cacheDir, "index").apply { mkdirs() }
+            val text = container.index.text(id)?.takeIf { it.isNotBlank() } ?: kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                de.fapdf.ai.DocumentText.extract(java.io.File(d.filePath), tmp, maxChars = 60_000, maxOcrPages = 3).text
+            }.also { container.index.setText(id, it.ifBlank { " " }) }
+            onDone(if (text.isBlank()) null else nameWithAi(d, text))
+        } catch (e: Exception) {
+            error = e.message ?: "Benennen fehlgeschlagen"
+            onDone(null)
+        } finally {
+            namingBusy = null
+        }
+    }
+
+    fun setCategory(id: Long, c: String?) = container.index.setCategory(id, c)
+
     fun rename(id: Long, name: String) = viewModelScope.launch { container.documents.rename(id, name) }
     fun setFavorite(id: Long, fav: Boolean) = viewModelScope.launch { container.documents.setFavorite(id, fav) }
     fun removeFromHistory(id: Long) = viewModelScope.launch { container.documents.removeFromHistory(id) }
     fun deleteCompletely(id: Long, onResult: (Boolean) -> Unit) = viewModelScope.launch {
+        container.index.forget(id)
         onResult(container.documents.deleteCompletely(id))
     }
 }

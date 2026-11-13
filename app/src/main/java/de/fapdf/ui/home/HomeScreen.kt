@@ -3,6 +3,8 @@ package de.fapdf.ui.home
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.material.icons.outlined.Add
 import de.fapdf.data.DocumentRepository
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Lock
@@ -337,7 +339,11 @@ private fun RecentDocuments(vm: AppViewModel, docs: List<DocumentEntity>) {
     var sortMenu by remember { mutableStateOf(false) }
     var renameDoc by remember { mutableStateOf<DocumentEntity?>(null) }
     var deleteDoc by remember { mutableStateOf<DocumentEntity?>(null) }
-    val list = docs.filter { (!favOnly || it.favorite) && (query.isBlank() || it.displayName.contains(query, ignoreCase = true)) }
+    var category by remember { mutableStateOf<String?>(null) }
+    val index = vm.container.index
+    @Suppress("UNUSED_VARIABLE") val indexVersion = index.version // neu zeichnen, wenn Text/Kategorien dazukommen
+    val presentCats = docs.mapNotNull { index.category(it.id) }.distinct().sortedBy { de.fapdf.data.DocIndex.CATEGORIES.indexOf(it) }
+    val list = docs.filter { (!favOnly || it.favorite) && (category == null || index.category(it.id) == category) && (query.isBlank() || index.matches(it, query)) }
         .let { l ->
             when (sort) {
                 SortMode.OPENED -> l.sortedByDescending { it.lastOpenedAt }
@@ -367,9 +373,20 @@ private fun RecentDocuments(vm: AppViewModel, docs: List<DocumentEntity>) {
                 }
             }
         }
-        Row(Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
-            FilterChip(selected = favOnly, onClick = { favOnly = !favOnly }, label = { Text("Nur Favoriten") },
-                leadingIcon = { Icon(if (favOnly) Icons.Filled.Star else Icons.Outlined.StarOutline, null) })
+        // Kategorien (von der KI bzw. automatisch erkannt) und Favoriten
+        androidx.compose.foundation.lazy.LazyRow(
+            contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.padding(vertical = 4.dp),
+        ) {
+            item { FilterChip(selected = category == null && !favOnly, onClick = { category = null; favOnly = false }, label = { Text("Alle") }) }
+            item {
+                FilterChip(selected = favOnly, onClick = { favOnly = !favOnly }, label = { Text("Favoriten") },
+                    leadingIcon = { Icon(if (favOnly) Icons.Filled.Star else Icons.Outlined.StarOutline, null, modifier = Modifier.size(18.dp)) })
+            }
+            items(presentCats.size) { i ->
+                val c = presentCats[i]
+                FilterChip(selected = category == c, onClick = { category = if (category == c) null else c }, label = { Text(c) })
+            }
         }
         if (list.isEmpty()) {
             Box(Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
@@ -379,40 +396,53 @@ private fun RecentDocuments(vm: AppViewModel, docs: List<DocumentEntity>) {
                     color = FaColors.SecondaryLabel, style = MaterialTheme.typography.bodyMedium,
                 )
             }
-        } else LazyColumn(
-            Modifier.fillMaxSize().navigationBarsPadding(),
+        } else androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
+            columns = androidx.compose.foundation.lazy.grid.GridCells.Adaptive(150.dp),
+            modifier = Modifier.fillMaxSize().navigationBarsPadding(),
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 96.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            items(list, key = { it.id }) { d ->
+            items(list.size, key = { list[it].id }) { i ->
+                val d = list[i]
                 var menu by remember { mutableStateOf(false) }
-                // Dokumente als abgerundete Karten (Design „Dunkel“)
-                Row(
-                    Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(FaColors.Card)
+                // Dokument als große Vorschaukarte
+                Column(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(FaColors.Card)
                         .combinedClickable(onClick = { vm.actionDocId = d.id }, onLongClick = { menu = true })
-                        .padding(horizontal = 14.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
+                        .padding(8.dp),
                 ) {
-                    Thumbnail(d.thumbnailPath, key = d.modifiedAt)
-                    Spacer(Modifier.width(12.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(DocumentRepository.baseName(d.displayName), maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                        Text(
-                            "Bearbeitet ${Format.date(d.modifiedAt)} · Importiert ${Format.dateShort(d.importedAt)}",
-                            style = MaterialTheme.typography.bodySmall, color = FaColors.SecondaryLabel,
-                        )
-                        Text(
-                            (if (d.encrypted) "🔒 " else "") + "${if (d.pageCount > 0) "${d.pageCount} Seiten" else "geschützt"} · ${Format.size(d.sizeBytes)}",
-                            style = MaterialTheme.typography.bodySmall, color = FaColors.SecondaryLabel,
+                    Box {
+                        BigThumb(d.thumbnailPath, d.modifiedAt)
+                        Box(
+                            Modifier.align(Alignment.TopEnd).padding(4.dp).size(34.dp).clip(CircleShape).background(Color(0x990B0B0F))
+                                .clickable { vm.setFavorite(d.id, !d.favorite) },
+                            contentAlignment = Alignment.Center,
+                        ) { Icon(if (d.favorite) Icons.Filled.Star else Icons.Outlined.StarOutline, "Favorit", tint = if (d.favorite) Color(0xFFFFB300) else Color.White, modifier = Modifier.size(20.dp)) }
+                        if (vm.namingBusy == d.id) Text(
+                            "KI benennt …", color = Color(0xFF0B0B0F), fontSize = 11.sp, fontWeight = FontWeight.Bold,
+                            modifier = Modifier.align(Alignment.BottomStart).padding(6.dp).clip(RoundedCornerShape(8.dp)).background(FaColors.Accent).padding(horizontal = 6.dp, vertical = 2.dp),
                         )
                     }
-                    IconButton(onClick = { vm.setFavorite(d.id, !d.favorite) }) {
-                        Icon(if (d.favorite) Icons.Filled.Star else Icons.Outlined.StarOutline, "Favorit", tint = if (d.favorite) Color(0xFFFFB300) else FaColors.SecondaryLabel)
+                    Text(
+                        DocumentRepository.baseName(d.displayName), maxLines = 2, overflow = TextOverflow.Ellipsis,
+                        fontWeight = FontWeight.Bold, fontSize = 14.sp, lineHeight = 18.sp, color = FaColors.Label,
+                        modifier = Modifier.padding(top = 8.dp, start = 2.dp, end = 2.dp),
+                    )
+                    Row(Modifier.padding(top = 4.dp, start = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                        index.category(d.id)?.let { c ->
+                            Text(c, color = FaColors.Accent, fontSize = 11.sp, fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.clip(RoundedCornerShape(8.dp)).background(FaColors.AccentLight).padding(horizontal = 6.dp, vertical = 2.dp))
+                            Spacer(Modifier.width(6.dp))
+                        }
+                        Text(Format.dateShort(d.modifiedAt) + " · " + (if (d.pageCount > 0) "${d.pageCount} S." else "geschützt"),
+                            color = FaColors.SecondaryLabel, fontSize = 11.sp, maxLines = 1)
+                    }
+                    if (query.isNotBlank() && !d.displayName.contains(query, ignoreCase = true)) index.snippet(d.id, query)?.let { sn ->
+                        Text(sn, color = FaColors.SecondaryLabel, fontSize = 11.sp, maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp, start = 2.dp))
                     }
                     Box {
-                        IconButton(onClick = { menu = true }) { Icon(Icons.Outlined.MoreVert, "Mehr") }
                         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                            DropdownMenuItem(text = { Text("Erneut öffnen") }, onClick = { menu = false; vm.actionDocId = d.id })
+                            DropdownMenuItem(text = { Text("Öffnen") }, onClick = { menu = false; vm.actionDocId = d.id })
                             DropdownMenuItem(text = { Text("Umbenennen") }, leadingIcon = { Icon(Icons.Outlined.DriveFileRenameOutline, null) }, onClick = { menu = false; renameDoc = d })
                             DropdownMenuItem(text = { Text("Aus Verlauf entfernen") }, leadingIcon = { Icon(Icons.Outlined.RemoveCircleOutline, null) }, onClick = { menu = false; vm.removeFromHistory(d.id) })
                             DropdownMenuItem(text = { Text("Löschen", color = FaColors.Destructive) }, leadingIcon = { Icon(Icons.Outlined.Delete, null, tint = FaColors.Destructive) }, onClick = { menu = false; deleteDoc = d })
@@ -447,6 +477,11 @@ private fun ActionSheet(vm: AppViewModel, d: DocumentEntity, nav: HomeNav, onDis
     val context = LocalContext.current
     var confirmDelete by remember { mutableStateOf(false) }
     var expanded by remember { mutableStateOf<String?>(null) }
+    var askConsent by remember { mutableStateOf(false) }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    fun nameIt() {
+        vm.nameNow(d.id) { t -> FileActions.toast(context, if (t != null) "Neuer Name: $t" else "Kein passender Name gefunden") }
+    }
     fun go(mode: WorkspaceMode) { onDismiss(); nav.workspace(d.id, mode) }
     fun tool(t: Tool) { onDismiss(); nav.tool(t, d.id) }
     ModalBottomSheet(
@@ -459,7 +494,14 @@ private fun ActionSheet(vm: AppViewModel, d: DocumentEntity, nav: HomeNav, onDis
                 Spacer(Modifier.width(14.dp))
                 Column {
                     Text(DocumentRepository.baseName(d.displayName), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    Text("${d.pageCount} Seiten · ${Format.size(d.sizeBytes)}", style = MaterialTheme.typography.bodySmall, color = FaColors.SecondaryLabel)
+                    Text("${d.pageCount} Seiten · ${Format.size(d.sizeBytes)}" + (vm.container.index.category(d.id)?.let { " · $it" } ?: ""), style = MaterialTheme.typography.bodySmall, color = FaColors.SecondaryLabel)
+                    Text(
+                        if (vm.namingBusy == d.id) "KI benennt …" else "Mit KI benennen",
+                        color = FaColors.Accent, fontWeight = FontWeight.SemiBold, fontSize = 14.sp,
+                        modifier = Modifier.padding(top = 4.dp).clip(RoundedCornerShape(8.dp)).clickable(enabled = vm.namingBusy == null) {
+                            scope.launch { if (vm.aiAllowed()) nameIt() else askConsent = true }
+                        }.padding(vertical = 4.dp),
+                    )
                 }
             }
             Spacer(Modifier.height(16.dp))
@@ -489,6 +531,10 @@ private fun ActionSheet(vm: AppViewModel, d: DocumentEntity, nav: HomeNav, onDis
             Spacer(Modifier.height(16.dp))
         }
     }
+    if (askConsent) ConfirmDialog(
+        "Text an KI senden?", "Zum Benennen wird der Text dieses Dokuments an den gewählten KI-Dienst übertragen.", "Zustimmen – nicht mehr fragen",
+        onConfirm = { askConsent = false; vm.consentGiven(); nameIt() }, onDismiss = { askConsent = false },
+    )
     if (confirmDelete) ConfirmDialog(
         "Dokument löschen?", "„${d.displayName}“ wird endgültig gelöscht.", "Löschen", destructive = true,
         onConfirm = { confirmDelete = false; onDismiss(); vm.deleteCompletely(d.id) {} },
@@ -624,5 +670,23 @@ private fun GroupSheet(g: ToolGroup, onDismiss: () -> Unit, onPick: (Tool) -> Un
             }
             Spacer(Modifier.height(20.dp))
         }
+    }
+}
+
+
+/** Große Vorschau der ersten Seite für die Dokument-Karten. */
+@Composable
+private fun BigThumb(path: String?, key: Any?) {
+    val img by androidx.compose.runtime.produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, path, key) {
+        value = path?.let { p ->
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                runCatching { android.graphics.BitmapFactory.decodeFile(p)?.asImageBitmap() }.getOrNull()
+            }
+        }
+    }
+    Box(Modifier.fillMaxWidth().aspectRatio(0.78f).clip(RoundedCornerShape(10.dp)).background(Color.White), contentAlignment = Alignment.Center) {
+        val i = img
+        if (i != null) androidx.compose.foundation.Image(i, null, Modifier.fillMaxSize(), contentScale = androidx.compose.ui.layout.ContentScale.Crop, alignment = Alignment.TopCenter)
+        else Text("PDF", color = Color(0xFFB0B0B8), fontWeight = FontWeight.Bold)
     }
 }

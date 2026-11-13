@@ -4,30 +4,40 @@ import de.fapdf.data.AiProvider
 import de.fapdf.data.SettingsRepository
 
 /**
- * Automatische Ersatz-Kette: zuerst der gewählte KI-Dienst (z. B. Groq). Ist er nicht erreichbar,
- * am Limit oder fehlt der Schlüssel, antwortet Gemini Nano auf dem Handy.
+ * Automatische Ersatz-Kette: zuerst der gewählte KI-Dienst, dann (falls eingerichtet) der eigene PC,
+ * dann Groq (falls Schlüssel vorhanden), zuletzt Gemini Nano auf dem Handy.
  */
 object AiRouter {
     data class Answer(val text: String, val provider: AiProvider, val fallback: Boolean)
 
     suspend fun complete(settings: SettingsRepository, system: String, messages: List<ChatMessage>, maxTokens: Int): Answer {
         val s = settings.current()
-        val p = s.aiProvider
-        if (p == AiProvider.NANO) return Answer(GeminiNano.complete(system, messages, maxTokens), p, false)
-        var first: Exception? = null
-        val key = settings.apiKey() ?: if (p == AiProvider.CUSTOM || p.isLocal) "lokal" else null
-        if (key != null) {
-            try {
-                return Answer(AiClient(p, key, s.aiModel, s.aiBaseUrl).complete(system, messages, maxTokens), p, false)
-            } catch (e: Exception) {
-                first = e
-            }
-        } else first = AiException("Für ${p.title} ist kein Schlüssel hinterlegt.")
-        return try {
-            Answer(GeminiNano.complete(system, messages, maxTokens), AiProvider.NANO, true)
-        } catch (e: Exception) {
-            throw AiException((first?.message ?: "KI nicht erreichbar.") + "\nErsatz Gemini Nano: " + (e.message ?: "nicht verfügbar"))
+        val primary = s.aiProvider
+        val order = LinkedHashSet<AiProvider>().apply {
+            add(primary)
+            if (s.pcUrl.isNotBlank()) add(AiProvider.PC)
+            if (AiProvider.GROQ in s.savedKeys) add(AiProvider.GROQ)
+            add(AiProvider.NANO)
         }
+        val errors = ArrayList<String>()
+        for (p in order) {
+            try {
+                val text = when (p) {
+                    AiProvider.NANO -> GeminiNano.complete(system, messages, maxTokens)
+                    AiProvider.PC -> AiClient(p, "ollama", s.pcModel, s.pcUrl).complete(system, messages, maxTokens)
+                    else -> {
+                        val key = settings.apiKey(p) ?: if (p == AiProvider.CUSTOM || p.isLocal) "lokal" else null
+                            ?: throw AiException("Für ${shortName(p)} ist kein Schlüssel hinterlegt.")
+                        val model = if (p == primary) s.aiModel else p.defaultModel
+                        AiClient(p, key, model, s.aiBaseUrl).complete(system, messages, maxTokens)
+                    }
+                }
+                return Answer(text, p, p != primary)
+            } catch (e: Exception) {
+                errors += "${shortName(p)}: ${e.message ?: "Fehler"}"
+            }
+        }
+        throw AiException(errors.joinToString("\n"))
     }
 
     /** Kurzname für Hinweise („Antwort von …“). */

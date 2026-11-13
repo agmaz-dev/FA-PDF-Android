@@ -38,6 +38,7 @@ class AiClient(private val provider: AiProvider, private val apiKey: String, pri
             AiProvider.OPENAI -> openai(system, messages, maxTokens)
             AiProvider.GROQ -> openai(system, messages, maxTokens, "https://api.groq.com/openai/v1")
             AiProvider.NANO -> GeminiNano.complete(system, messages, maxTokens)
+            AiProvider.PC -> openai(system, messages, maxTokens, baseUrl.trimEnd('/').ifBlank { throw AiException("Bitte in den Einstellungen die Adresse des PCs eintragen.") })
             AiProvider.FAKI -> openai(system, messages, maxTokens, "http://127.0.0.1:8080/v1")
             AiProvider.CUSTOM -> openai(system, messages, maxTokens, baseUrl.trimEnd('/').ifBlank { throw AiException("Bitte in den Einstellungen die Adresse eintragen.") })
         }
@@ -78,7 +79,8 @@ class AiClient(private val provider: AiProvider, private val apiKey: String, pri
         val conn = URL(url).openConnection() as HttpURLConnection
         try {
             conn.requestMethod = "POST"
-            conn.connectTimeout = 20_000
+            // Eigener PC/Handy: schnell aufgeben, damit die Ersatz-KI übernimmt
+            conn.connectTimeout = if (url.startsWith("http://")) 5_000 else 20_000
             // Die KI auf dem Handy (FA KI) braucht für lange Dokumente mehrere Minuten
             conn.readTimeout = if (url.startsWith("http://127.0.0.1") || url.startsWith("http://localhost")) 600_000 else 120_000
             conn.doOutput = true
@@ -99,7 +101,11 @@ class AiClient(private val provider: AiProvider, private val apiKey: String, pri
             }
             return JSONObject(text)
         } catch (e: java.io.IOException) {
-            throw AiException(if (url.startsWith("http://127.0.0.1")) "FA KI ist nicht erreichbar. Bitte die App FA KI öffnen und einschalten." else "Keine Verbindung zum KI-Dienst: ${e.message}")
+            throw AiException(when {
+                url.startsWith("http://127.0.0.1") -> "FA KI ist nicht erreichbar. Bitte die App FA KI öffnen und einschalten."
+                url.startsWith("http://") -> "Der PC ist nicht erreichbar (aus, schläft oder nicht im selben Netz)."
+                else -> "Keine Verbindung zum KI-Dienst: ${e.message}"
+            })
         } finally {
             conn.disconnect()
         }
@@ -241,7 +247,7 @@ object LanguageDetector {
 object DocumentText {
     data class Result(val text: String, val pages: Int, val ocrPages: Int, val truncated: Boolean)
 
-    suspend fun extract(file: File, tmpDir: File, maxChars: Int = 150_000, onProgress: (Int, Int) -> Unit = { _, _ -> }): Result {
+    suspend fun extract(file: File, tmpDir: File, maxChars: Int = 150_000, maxOcrPages: Int = Int.MAX_VALUE, onProgress: (Int, Int) -> Unit = { _, _ -> }): Result {
         val sb = StringBuilder()
         var ocrPages = 0
         var pages = 0
@@ -256,7 +262,7 @@ object DocumentText {
             for (i in texts.indices) {
                 onProgress(i + 1, texts.size)
                 var text = texts[i]
-                if (text.trim().length < 20) {
+                if (text.trim().length < 20 && ocrPages < maxOcrPages) {
                     val bmp = withContext(Dispatchers.IO) { PageRaster.render(file, i, OcrEngine.OCR_SCALE, tmpDir) }
                     val res = ocr.recognize(i, bmp, OcrEngine.OCR_SCALE)
                     bmp.recycle()
