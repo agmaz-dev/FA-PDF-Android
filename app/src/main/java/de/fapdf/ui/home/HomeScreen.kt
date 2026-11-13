@@ -144,23 +144,24 @@ fun HomeScreen(vm: AppViewModel, nav: HomeNav) {
     Scaffold(
         containerColor = FaColors.Background,
         bottomBar = {
-            NavigationBar(containerColor = FaColors.Surface, tonalElevation = 0.dp, modifier = Modifier.shadow(8.dp)) {
+            // Schmale Leiste: kleine Symbole, kleine Schrift
+            Row(
+                Modifier.fillMaxWidth().background(FaColors.Surface).navigationBarsPadding().height(54.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 listOf(
                     Triple("Dokumente", Icons.Outlined.Description, Icons.Filled.Description),
                     Triple("Werkzeuge", Icons.Outlined.GridView, Icons.Filled.GridView),
                     Triple("Einstellungen", Icons.Outlined.Settings, Icons.Filled.Settings),
                 ).forEachIndexed { i, (label, icon, iconSel) ->
                     val sel = pager.currentPage == i
-                    NavigationBarItem(
-                        selected = sel, onClick = { scope.launch { pager.animateScrollToPage(i) } },
-                        icon = { Icon(if (sel) iconSel else icon, label) },
-                        label = { Text(label, style = MaterialTheme.typography.labelMedium) },
-                        colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = FaColors.Accent, selectedTextColor = FaColors.Accent,
-                            indicatorColor = Color.Transparent, unselectedIconColor = FaColors.SecondaryLabel,
-                            unselectedTextColor = FaColors.SecondaryLabel,
-                        ),
-                    )
+                    Column(
+                        Modifier.weight(1f).fillMaxHeight().clickable { scope.launch { pager.animateScrollToPage(i) } },
+                        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
+                    ) {
+                        Icon(if (sel) iconSel else icon, label, tint = if (sel) FaColors.Accent else FaColors.SecondaryLabel, modifier = Modifier.size(22.dp))
+                        Text(label, fontSize = 11.sp, color = if (sel) FaColors.Accent else FaColors.SecondaryLabel, fontWeight = if (sel) FontWeight.SemiBold else FontWeight.Normal)
+                    }
                 }
             }
         },
@@ -168,16 +169,18 @@ fun HomeScreen(vm: AppViewModel, nav: HomeNav) {
         HorizontalPager(state = pager, modifier = Modifier.padding(padding).fillMaxSize(), beyondViewportPageCount = 1) { page ->
             when (page) {
                 0 -> Box(Modifier.fillMaxSize()) {
-                    Column(Modifier.fillMaxSize().statusBarsPadding()) {
-                        Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 10.dp), verticalAlignment = Alignment.Bottom) {
-                            Text("Dateien", fontSize = 36.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = (-1).sp, modifier = Modifier.weight(1f))
-                            Text("${docs.size}", style = MaterialTheme.typography.titleMedium, color = FaColors.SecondaryLabel, modifier = Modifier.padding(bottom = 6.dp))
+                    Column(Modifier.fillMaxSize()) {
+                        // Schmale Kopfzeile – der Platz gehört den Dokumenten
+                        Row(Modifier.fillMaxWidth().padding(start = 18.dp, end = 18.dp, top = 4.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text("Dateien", fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.weight(1f))
+                            Text("${docs.size}", fontSize = 14.sp, color = FaColors.SecondaryLabel)
                         }
                         RecentDocuments(vm, docs, nav)
                     }
                     // Schwebender Plus-Knopf: PDF öffnen
                     Box(
-                        Modifier.align(Alignment.BottomEnd).padding(20.dp).size(60.dp).clip(RoundedCornerShape(20.dp))
+                        Modifier.align(if (androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp >= 600) Alignment.BottomStart else Alignment.BottomEnd)
+                            .padding(16.dp).size(56.dp).clip(RoundedCornerShape(18.dp))
                             .background(FaColors.Accent).clickable { opener.launch(arrayOf("application/pdf")) },
                         contentAlignment = Alignment.Center,
                     ) { Icon(Icons.Outlined.Add, "PDF öffnen", tint = FaColors.OnAccent, modifier = Modifier.size(30.dp)) }
@@ -221,21 +224,18 @@ private fun ToolsHome(onOpen: () -> Unit, onScan: () -> Unit, onProfile: () -> U
         val contentWidth = if (maxWidth > 900.dp) 900.dp else maxWidth
         val cols = ((contentWidth - 32.dp) / 118.dp).toInt().coerceIn(3, 6)
         Column(
-            Modifier.width(contentWidth).fillMaxHeight().verticalScroll(rememberScrollState()).statusBarsPadding()
+            Modifier.width(contentWidth).fillMaxHeight().verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp)
         ) {
-            Row(Modifier.fillMaxWidth().padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Filled.Description, null, tint = FaColors.Accent, modifier = Modifier.size(34.dp))
-                Spacer(Modifier.width(8.dp))
-                Text("FA PDF", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            Row(Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("Werkzeuge", fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.weight(1f))
                 Box(
-                    Modifier.size(44.dp).clip(CircleShape).background(FaColors.AccentLight).clickable(onClick = onProfile),
+                    Modifier.size(36.dp).clip(CircleShape).background(FaColors.AccentLight).clickable(onClick = onProfile),
                     contentAlignment = Alignment.Center,
-                ) { Icon(Icons.Filled.Person, "Profile", tint = FaColors.Accent, modifier = Modifier.size(26.dp)) }
+                ) { Icon(Icons.Filled.Person, "Profile", tint = FaColors.Accent, modifier = Modifier.size(22.dp)) }
             }
-            Text("Werkzeuge", fontSize = 36.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = (-1).sp, modifier = Modifier.padding(top = 18.dp))
             OutlinedTextField(
-                query, { query = it }, Modifier.fillMaxWidth().padding(top = 14.dp), singleLine = true,
+                query, { query = it }, Modifier.fillMaxWidth().padding(top = 6.dp), singleLine = true,
                 leadingIcon = { Icon(Icons.Outlined.Search, null) }, placeholder = { Text("Werkzeug suchen") },
                 shape = RoundedCornerShape(12.dp),
                 colors = OutlinedTextFieldDefaults.colors(
@@ -243,7 +243,7 @@ private fun ToolsHome(onOpen: () -> Unit, onScan: () -> Unit, onProfile: () -> U
                     unfocusedBorderColor = FaColors.CardBorder,
                 ),
             )
-            Row(Modifier.fillMaxWidth().padding(top = 14.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Button(
                     onClick = onOpen, modifier = Modifier.weight(1f).height(54.dp), shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = FaColors.Accent),
@@ -262,12 +262,12 @@ private fun ToolsHome(onOpen: () -> Unit, onScan: () -> Unit, onProfile: () -> U
             } else {
                 // Werkzeuge in wenigen Gruppen; Antippen öffnet die Gruppe von unten
                 val gcols = if (contentWidth > 600.dp) 3 else 2
-                Spacer(Modifier.height(18.dp))
+                Spacer(Modifier.height(12.dp))
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     toolGroups.chunked(gcols).forEach { row ->
-                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Row(Modifier.height(androidx.compose.foundation.layout.IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             row.forEach { g ->
-                                GroupTile(g, Modifier.weight(1f)) { if (g.tools.size == 1) onTool(g.tools[0].first) else openGroup = g }
+                                GroupTile(g, Modifier.weight(1f).fillMaxHeight()) { if (g.tools.size == 1) onTool(g.tools[0].first) else openGroup = g }
                             }
                             repeat(gcols - row.size) { Spacer(Modifier.weight(1f)) }
                         }
@@ -409,7 +409,7 @@ private fun RecentDocuments(vm: AppViewModel, docs: List<DocumentEntity>, nav: H
             Text("Anzeigen ›", color = Color(0xFFFFB3B3), fontSize = 13.sp)
         }
         Row(Modifier.fillMaxSize()) {
-        Box(Modifier.weight(1f).fillMaxHeight()) {
+        Box(Modifier.weight(1.15f).fillMaxHeight()) {
         if (list.isEmpty()) {
             Box(Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
                 Text(
@@ -457,8 +457,8 @@ private fun RecentDocuments(vm: AppViewModel, docs: List<DocumentEntity>, nav: H
                                 modifier = Modifier.clip(RoundedCornerShape(8.dp)).background(FaColors.AccentLight).padding(horizontal = 6.dp, vertical = 2.dp))
                             Spacer(Modifier.width(6.dp))
                         }
-                        Text(Format.dateShort(d.modifiedAt) + " · " + (if (d.pageCount > 0) "${d.pageCount} S." else "geschützt"),
-                            color = FaColors.SecondaryLabel, fontSize = 11.sp, maxLines = 1)
+                        Text(java.text.SimpleDateFormat("dd.MM.yy", java.util.Locale.GERMANY).format(java.util.Date(d.modifiedAt)),
+                            color = FaColors.SecondaryLabel, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                     }
                     index.deadline(d.id)?.date?.let { t ->
                         Text("Frist " + java.text.SimpleDateFormat("dd.MM.yyyy", java.util.Locale.GERMANY).format(java.util.Date(t)),
@@ -661,11 +661,11 @@ private val toolGroups = listOf(
 @Composable
 private fun GroupTile(g: ToolGroup, modifier: Modifier, onClick: () -> Unit) {
     Column(
-        modifier.heightIn(min = 118.dp).clip(RoundedCornerShape(20.dp)).background(FaColors.Card).clickable(onClick = onClick).padding(14.dp),
-        verticalArrangement = Arrangement.SpaceBetween,
+        modifier.heightIn(min = 110.dp).clip(RoundedCornerShape(20.dp)).background(FaColors.Card).clickable(onClick = onClick).padding(14.dp),
+        verticalArrangement = Arrangement.Top,
     ) {
         Icon(g.icon, null, tint = FaColors.Accent, modifier = Modifier.size(26.dp))
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(12.dp))
         Text(g.title, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = FaColors.Label)
         Text(g.subtitle, fontSize = 12.sp, lineHeight = 16.sp, color = FaColors.SecondaryLabel)
     }
