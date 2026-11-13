@@ -84,6 +84,7 @@ class ToolRunner(private val scope: CoroutineScope, private val appVm: AppViewMo
     var results by mutableStateOf<List<Long>>(emptyList())
     var password by mutableStateOf<String?>(null)
     var askPassword by mutableStateOf<(() -> Unit)?>(null)
+    var openDoc: ((Long) -> Unit)? = null
 
     val repo get() = appVm.container.documents
     val fonts get() = appVm.container.fonts
@@ -177,15 +178,17 @@ fun ToolScaffold(
     onAction: () -> Unit = {},
     title: String = tool.title,
     scroll: Boolean = true,
+    showResult: Boolean = true,
     content: @Composable () -> Unit,
 ) {
+    runner.openDoc = onOpenDoc
     ScreenScaffold(title, onBack, actionText = actionText, actionEnabled = actionEnabled, onAction = onAction) { mod ->
         Column(mod.fillMaxSize().let { if (scroll) it.verticalScroll(rememberScrollState()) else it }) {
             tool.limitedNote?.let { de.fapdf.ui.components.InfoCard("Hinweis: $it") }
-            if (runner.results.isNotEmpty()) ResultCard(runner, onOpenDoc, replaceTarget)
+            if (showResult && runner.results.isNotEmpty()) ResultCard(runner, onOpenDoc, replaceTarget)
             runner.doneMessage?.let { msg -> InPlaceCard(msg, runner, onOpenDoc) }
             content()
-            if (scroll) Spacer(Modifier.height(40.dp))
+            if (scroll) Spacer(Modifier.height(24.dp))
         }
     }
     runner.busy?.let { BusyDialog(it) }

@@ -129,6 +129,7 @@ fun ScreenScaffold(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = FaColors.Background),
+                expandedHeight = 48.dp,
             )
         },
         bottomBar = bottomBar,

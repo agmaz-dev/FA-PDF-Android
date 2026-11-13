@@ -1,5 +1,19 @@
 package de.fapdf.ui.tools
 
+import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.TextFields
+import androidx.compose.material.icons.outlined.AutoFixHigh
+import androidx.compose.material.icons.outlined.Download
+import androidx.compose.material.icons.outlined.Share
+import androidx.compose.material.icons.outlined.OpenInNew
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import android.app.Activity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
@@ -196,7 +210,6 @@ fun ScannerToolV2(appVm: AppViewModel, runner: ToolRunner) {
             val uri = result?.pdf?.uri
             if (uri == null) { runner.error = "Der Scan hat keine PDF geliefert."; return@rememberLauncherForActivityResult }
             if (mode == 1) {
-                // Ausweis: Vorder- und Rückseite auf eine A4-Seite setzen
                 runner.run("Ausweis wird auf A4 gesetzt …") {
                     val tmpIn = runner.tmp("id_in")
                     context.contentResolver.openInputStream(uri)?.use { i -> tmpIn.outputStream().use { i.copyTo(it) } }
@@ -218,35 +231,17 @@ fun ScannerToolV2(appVm: AppViewModel, runner: ToolRunner) {
                     val out = runner.tmp("scan")
                     try { ScanStore.build(pend, m, List(pageUris.size) { 0 }, out) } catch (e: IllegalArgumentException) { throw PdfUserException("Der Scan konnte nicht gelesen werden.") }
                     pendingMode = m
-                    val stamp = java.text.SimpleDateFormat("yyyy-MM-dd HH.mm", java.util.Locale.GERMANY).format(java.util.Date())
-                    listOf(out to "Scan $stamp.pdf")
+                    val stampName = java.text.SimpleDateFormat("yyyy-MM-dd HH.mm", java.util.Locale.GERMANY).format(java.util.Date())
+                    listOf(out to "Scan $stampName.pdf")
                 }
             } else {
                 appVm.import(uri, persist = false) { id -> lastId = id; runner.results = listOf(id) }
             }
         }
     }
-    // Nach dem Scan: große Vorschau und Nachbearbeiten
-    lastId?.let { id ->
-        var d by remember(id) { mutableStateOf<de.fapdf.data.DocumentEntity?>(null) }
-        androidx.compose.runtime.LaunchedEffect(id, stamp) { d = runner.repo.get(id) }
-        d?.let { doc ->
-            PdfFirstPage(doc.file(), stamp + doc.modifiedAt,
-                Modifier.padding(horizontal = 16.dp).fillMaxWidth().height(380.dp).clip(RoundedCornerShape(16.dp)).background(FaColors.Card).padding(10.dp))
-            if (ScanStore.has(context, id)) {
-                androidx.compose.foundation.layout.Row(Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
-                    SlimButton("Scan nachbearbeiten (Filter, Drehen)", Modifier.fillMaxWidth(), primary = false) { editId = id }
-                }
-            }
-        }
-    }
-    SectionLabel("Modus")
-    ChoiceBoxes(listOf("Dokument", "Ausweis"), mode, subtitles = listOf("Mehrseitig, A4", "Vorder- und Rückseite auf einer A4-Seite")) { mode = it }
-    ToggleRow("Import aus Galerie erlauben", "Fotos vorhandener Dokumente verwenden", checked = gallery) { gallery = it }
-    ToggleRow("Scan verbessern", "Schatten entfernen, Papier weiß, Schrift kräftiger", checked = enhance) { enhance = it }
-    FaButton("Scan starten", icon = Icons.Outlined.CameraAlt) {
+    val startScan: () -> Unit = start@{
         val activity = context.findActivity()
-        if (activity == null) { runner.error = "Scanner kann nicht gestartet werden."; return@FaButton }
+        if (activity == null) { runner.error = "Scanner kann nicht gestartet werden."; return@start }
         val options = GmsDocumentScannerOptions.Builder()
             .setGalleryImportAllowed(gallery)
             .setPageLimit(if (mode == 1) 2 else 60)
@@ -257,36 +252,114 @@ fun ScannerToolV2(appVm: AppViewModel, runner: ToolRunner) {
             .addOnSuccessListener { sender -> launcher.launch(IntentSenderRequest.Builder(sender).build()) }
             .addOnFailureListener { e -> runner.error = "Scanner nicht verfügbar (Google Play-Dienste nötig): ${e.message}" }
     }
-    Text(
-        "Die Aufnahme übernimmt der Dokumentscanner von Google (auf dem Gerät, kostenlos) mit automatischer Auslösung, Zuschnitt und Filtern.",
-        Modifier.padding(horizontal = 16.dp), style = MaterialTheme.typography.bodySmall, color = FaColors.SecondaryLabel,
-    )
-    val id = lastId
-    if (id != null) {
-        SectionLabel("Texterkennung")
-        FaSoftButton("Durchsuchbar machen (OCR)") {
-            runner.run("Texterkennung läuft …") {
-                val d = runner.repo.get(id) ?: throw PdfUserException("Scan nicht gefunden")
-                val ocr = OcrEngine()
-                try {
-                    val count = PdfIo.load(d.file()).use { it.numberOfPages }
-                    val pages = (0 until count).map { p ->
-                        val bmp = PageRaster.render(d.file(), p, OcrEngine.OCR_SCALE, runner.tmpDir)
-                        ocr.recognize(p, bmp, OcrEngine.OCR_SCALE).also { bmp.recycle() }
-                    }
-                    val out = runner.tmp("ocr")
-                    PdfIo.transform(d.file(), out) { doc ->
-                        val cache = DocFontCache(doc, runner.fonts)
-                        pages.forEach { OcrLayer.addInvisibleText(doc, it.pageIndex, it.lines, cache) }
-                    }
-                    val found = PdfIo.load(out).use { doc -> (0 until doc.numberOfPages).sumOf { PageAnalyzer.analyze(doc, it).hiddenLines.size } }
-                    runner.info = "Texterkennung abgeschlossen: $found Zeilen erkannt."
-                    listOf(out to d.displayName.replace(".pdf", " (durchsuchbar).pdf"))
-                } finally {
-                    ocr.close()
+    val runOcr: (Long) -> Unit = { id ->
+        runner.run("Texterkennung läuft …") {
+            val d = runner.repo.get(id) ?: throw PdfUserException("Scan nicht gefunden")
+            val ocr = OcrEngine()
+            try {
+                val count = PdfIo.load(d.file()).use { it.numberOfPages }
+                val pages = (0 until count).map { p ->
+                    val bmp = PageRaster.render(d.file(), p, OcrEngine.OCR_SCALE, runner.tmpDir)
+                    ocr.recognize(p, bmp, OcrEngine.OCR_SCALE).also { bmp.recycle() }
                 }
+                val out = runner.tmp("ocr")
+                PdfIo.transform(d.file(), out) { doc ->
+                    val cache = DocFontCache(doc, runner.fonts)
+                    pages.forEach { OcrLayer.addInvisibleText(doc, it.pageIndex, it.lines, cache) }
+                }
+                val found = PdfIo.load(out).use { doc -> (0 until doc.numberOfPages).sumOf { PageAnalyzer.analyze(doc, it).hiddenLines.size } }
+                runner.info = "Texterkennung abgeschlossen: $found Zeilen erkannt."
+                listOf(out to d.displayName.replace(".pdf", " (durchsuchbar).pdf"))
+            } finally {
+                ocr.close()
             }
         }
+    }
+
+    // Einstellungen (vor dem ersten Scan groß, danach im Nebenbereich)
+    val settings: @Composable () -> Unit = {
+        ChoiceBoxes(listOf("Dokument", "Ausweis"), mode, subtitles = listOf("Mehrseitig, A4", "Vorder- und Rückseite auf A4")) { mode = it }
+        ToggleRow("Aus Galerie importieren", null, checked = gallery) { gallery = it }
+        ToggleRow("Scan verbessern", "Schatten weg, Papier weiß", checked = enhance) { enhance = it }
+    }
+
+    var doc by remember { mutableStateOf<de.fapdf.data.DocumentEntity?>(null) }
+    androidx.compose.runtime.LaunchedEffect(lastId, stamp) { doc = lastId?.let { runner.repo.get(it) } }
+    val exporter = de.fapdf.ui.components.rememberExportLauncher()
+    val d = doc
+
+    if (d == null) {
+        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(top = 4.dp)) {
+            settings()
+            FaButton("Scan starten", icon = Icons.Outlined.CameraAlt, onClick = startScan)
+            Text(
+                "Die Kamera erkennt die Ränder, schneidet zu und korrigiert die Perspektive (Google-Scanner, auf dem Gerät).",
+                Modifier.padding(horizontal = 16.dp), style = MaterialTheme.typography.bodySmall, color = FaColors.SecondaryLabel,
+            )
+        }
+        return
+    }
+
+    val canEdit = remember(d.id, stamp) { ScanStore.has(context, d.id) }
+    val actions: @Composable (Modifier) -> Unit = { m ->
+        Row(m, horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(6.dp)) {
+            IconAction(Icons.Outlined.OpenInNew, "Öffnen", Modifier.weight(1f), primary = true) { runner.openDoc?.invoke(d.id) }
+            IconAction(Icons.Outlined.Share, "Teilen", Modifier.weight(1f)) { de.fapdf.ui.components.FileActions.share(context, d.file(), d.displayName) }
+            IconAction(Icons.Outlined.Download, "Export", Modifier.weight(1f)) { exporter(d.file(), d.displayName) }
+            IconAction(Icons.Outlined.Print, "Drucken", Modifier.weight(1f)) { de.fapdf.ui.components.FileActions.print(context, d.file(), d.displayName) }
+        }
+    }
+    val more: @Composable (Modifier) -> Unit = { m ->
+        Row(m, horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(6.dp)) {
+            if (canEdit) IconAction(Icons.Outlined.AutoFixHigh, "Nachbearbeiten", Modifier.weight(1f)) { editId = d.id }
+            IconAction(Icons.Outlined.TextFields, "Text erkennen", Modifier.weight(1f)) { runOcr(d.id) }
+            IconAction(Icons.Outlined.CameraAlt, "Neuer Scan", Modifier.weight(1f), primary = true, onClick = startScan)
+        }
+    }
+    val title: @Composable () -> Unit = {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            androidx.compose.material3.Icon(Icons.Outlined.CheckCircle, null, tint = FaColors.Success, modifier = Modifier.padding(end = 6.dp))
+            Text(d.displayName, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+            Text("${d.pageCount} S.", fontSize = 12.sp, color = FaColors.SecondaryLabel)
+        }
+    }
+    androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
+        if (maxWidth >= 600.dp) {
+            // Aufgeklappt: Dokument links über die ganze Höhe, Bedienung rechts schmal
+            Row(Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 4.dp)) {
+                PdfFirstPage(d.file(), stamp + d.modifiedAt,
+                    Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(14.dp)).background(FaColors.Card).padding(8.dp))
+                Column(Modifier.width(320.dp).fillMaxHeight().verticalScroll(rememberScrollState()).padding(start = 12.dp)) {
+                    title()
+                    actions(Modifier.fillMaxWidth().padding(top = 10.dp))
+                    more(Modifier.fillMaxWidth().padding(top = 8.dp))
+                    Text("Für den nächsten Scan", fontSize = 13.sp, color = FaColors.SecondaryLabel, modifier = Modifier.padding(top = 16.dp, bottom = 4.dp))
+                    settings()
+                }
+            }
+        } else {
+            // Zugeklappt: Dokument nimmt den Platz, Bedienung kompakt darüber und darunter
+            Column(Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 2.dp)) {
+                title()
+                actions(Modifier.fillMaxWidth().padding(top = 8.dp))
+                PdfFirstPage(d.file(), stamp + d.modifiedAt,
+                    Modifier.weight(1f).fillMaxWidth().padding(vertical = 8.dp).clip(RoundedCornerShape(14.dp)).background(FaColors.Card).padding(6.dp))
+                more(Modifier.fillMaxWidth().padding(bottom = 6.dp))
+            }
+        }
+    }
+}
+
+/** Kompakter Knopf: Symbol mit kleiner Beschriftung darunter – alle gleich groß. */
+@Composable
+fun IconAction(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, modifier: Modifier, primary: Boolean = false, onClick: () -> Unit) {
+    Column(
+        modifier.height(54.dp).clip(RoundedCornerShape(12.dp)).background(if (primary) FaColors.Accent else FaColors.Card).clickable(onClick = onClick),
+        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = androidx.compose.foundation.layout.Arrangement.Center,
+    ) {
+        androidx.compose.material3.Icon(icon, label, tint = if (primary) FaColors.OnAccent else FaColors.Accent, modifier = Modifier.size(20.dp))
+        Text(label, fontSize = 11.sp, maxLines = 1, softWrap = false, color = if (primary) FaColors.OnAccent else FaColors.Label, modifier = Modifier.padding(top = 2.dp))
     }
 }
 

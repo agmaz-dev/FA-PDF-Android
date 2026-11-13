@@ -41,7 +41,7 @@ fun ToolScreen(tool: Tool, docId: Long?, appVm: AppViewModel, onBack: () -> Unit
             else -> null
         }
         ToolScaffold(tool, runner, onBack, onOpenDoc, replaceTarget, actionText = actionText, onAction = { actionHolder[0]?.invoke() },
-            title = if (tool == Tool.ORGANIZE) "Seiten" else tool.title, scroll = tool != Tool.ORGANIZE) {
+            title = if (tool == Tool.ORGANIZE) "Seiten" else tool.title, scroll = tool != Tool.ORGANIZE && tool != Tool.SCANNER, showResult = tool != Tool.SCANNER) {
             val change = { choose = true }
             when (tool) {
                 Tool.MERGE -> MergeToolV2(appVm, runner, docs, docId)

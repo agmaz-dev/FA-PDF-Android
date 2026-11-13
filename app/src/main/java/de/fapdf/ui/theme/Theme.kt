@@ -128,5 +128,11 @@ fun FaPdfTheme(mode: ThemeMode = ThemeMode.SYSTEM, content: @Composable () -> Un
         ThemeMode.DARK -> true
     }
     if (FaColors.dark != dark) FaColors.dark = dark
-    MaterialTheme(colorScheme = scheme(dark), typography = typography, shapes = shapes, content = content)
+    // Sehr große System-Schrift sprengt sonst die Bildschirme: auf 1,0 begrenzen
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    androidx.compose.runtime.CompositionLocalProvider(
+        androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(density.density, density.fontScale.coerceAtMost(1.0f)),
+    ) {
+        MaterialTheme(colorScheme = scheme(dark), typography = typography, shapes = shapes, content = content)
+    }
 }
