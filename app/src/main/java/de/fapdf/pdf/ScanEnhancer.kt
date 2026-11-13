@@ -35,40 +35,49 @@ object ScanEnhancer {
         val w = bmp.width; val h = bmp.height
         val px = IntArray(w * h); bmp.getPixels(px, 0, w, 0, 0, w, h)
 
-        // Hintergrund: Helligkeit stark verkleinert und weichgezeichnet (helle Werte bevorzugt)
+        // Hintergrund je Farbkanal schätzen (90%-Quantil je Block ≈ Papier) – gleicht Schatten
+        // und Farbstich der Lampe aus, statt nur die Helligkeit aufzuziehen.
         val sw = max(8, w / 24); val sh = max(8, h / 24)
-        val bg = FloatArray(sw * sh)
-        for (y in 0 until sh) for (x in 0 until sw) {
-            var best = 0
-            val x0 = x * w / sw; val x1 = (x + 1) * w / sw; val y0 = y * h / sh; val y1 = (y + 1) * h / sh
-            // 90%-Quantil der Helligkeit im Block ≈ Papierfarbe
-            val hist = IntArray(256); var n = 0
-            var yy = y0
-            while (yy < y1) { var xx = x0; while (xx < x1) { hist[lum(px[yy * w + xx])]++; n++; xx += 2 }; yy += 2 }
-            var acc = 0; val target = (n * 0.9f).toInt()
-            for (i in 0 until 256) { acc += hist[i]; if (acc >= target) { best = i; break } }
-            bg[y * sw + x] = max(best, 60).toFloat()
-        }
-        // Glätten
-        val sm = bg.copyOf()
-        repeat(2) {
+        val bgs = Array(3) { ch ->
+            val shift = 16 - ch * 8
+            val bg = FloatArray(sw * sh)
             for (y in 0 until sh) for (x in 0 until sw) {
-                var s = 0f; var c = 0
-                for (dy in -1..1) for (dx in -1..1) { val nx = x + dx; val ny = y + dy; if (nx in 0 until sw && ny in 0 until sh) { s += bg[ny * sw + nx]; c++ } }
-                sm[y * sw + x] = s / c
+                val x0 = x * w / sw; val x1 = (x + 1) * w / sw; val y0 = y * h / sh; val y1 = (y + 1) * h / sh
+                val hist = IntArray(256); var n = 0
+                var yy = y0
+                while (yy < y1) { var xx = x0; while (xx < x1) { hist[(px[yy * w + xx] shr shift) and 255]++; n++; xx += 2 }; yy += 2 }
+                var acc = 0; var best = 255; val target = (n * 0.9f).toInt()
+                for (i in 0 until 256) { acc += hist[i]; if (acc >= target) { best = i; break } }
+                bg[y * sw + x] = max(best, 60).toFloat()
             }
-            System.arraycopy(sm, 0, bg, 0, bg.size)
+            val sm = bg.copyOf()
+            repeat(2) {
+                for (y in 0 until sh) for (x in 0 until sw) {
+                    var s = 0f; var c = 0
+                    for (dy in -1..1) for (dx in -1..1) { val nx = x + dx; val ny = y + dy; if (nx in 0 until sw && ny in 0 until sh) { s += bg[ny * sw + nx]; c++ } }
+                    sm[y * sw + x] = s / c
+                }
+                System.arraycopy(sm, 0, bg, 0, bg.size)
+            }
+            bg
         }
+        val lut = IntArray(1025) { i -> curve(i / 1024f) }
         for (y in 0 until h) {
             val fy = (y.toFloat() / h * sh - 0.5f).coerceIn(0f, sh - 1f)
             val y0 = fy.toInt(); val y1 = min(y0 + 1, sh - 1); val ty = fy - y0
             for (x in 0 until w) {
                 val fx = (x.toFloat() / w * sw - 0.5f).coerceIn(0f, sw - 1f)
                 val x0 = fx.toInt(); val x1 = min(x0 + 1, sw - 1); val tx = fx - x0
-                val b = (bg[y0 * sw + x0] * (1 - tx) + bg[y0 * sw + x1] * tx) * (1 - ty) + (bg[y1 * sw + x0] * (1 - tx) + bg[y1 * sw + x1] * tx) * ty
                 val c = px[y * w + x]
-                val k = 255f / b
-                px[y * w + x] = (0xFF shl 24) or (curve(((c shr 16) and 255) * k) shl 16) or (curve(((c shr 8) and 255) * k) shl 8) or curve((c and 255) * k)
+                var o = 0xFF shl 24
+                for (ch in 0..2) {
+                    val bg = bgs[ch]
+                    val b = (bg[y0 * sw + x0] * (1 - tx) + bg[y0 * sw + x1] * tx) * (1 - ty) + (bg[y1 * sw + x0] * (1 - tx) + bg[y1 * sw + x1] * tx) * ty
+                    val shift = 16 - ch * 8
+                    val n = (((c shr shift) and 255) / b).coerceIn(0f, 1f)
+                    o = o or (lut[(n * 1024).toInt()] shl shift)
+                }
+                px[y * w + x] = o
             }
         }
         val out = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
@@ -77,16 +86,10 @@ object ScanEnhancer {
         return out
     }
 
-    private fun lum(c: Int) = (((c shr 16) and 255) * 299 + ((c shr 8) and 255) * 587 + (c and 255) * 114) / 1000
-
-    /** Papier rein weiß, Schrift kräftiger. */
-    private fun curve(v: Float): Int {
-        val n = (v / 255f).coerceIn(0f, 1f)
-        val r = when {
-            n > 0.88f -> 1f
-            else -> (n / 0.88f).let { it * it * (3 - 2 * it) } // weiche S-Kurve
-        }
-        return (r * 255f).roundToInt().coerceIn(0, 255)
+    /** Papier rein weiß, Schrift und feine Linien kräftiger (n = Wert relativ zum Papier, 0..1). */
+    private fun curve(n: Float): Int {
+        val t = (n / 0.93f).coerceIn(0f, 1f)
+        return (Math.pow(t.toDouble(), 1.8) * 255).roundToInt().coerceIn(0, 255)
     }
 
     /** Baut aus den verbesserten Seiten eine PDF (A4-Breite, Seitenverhältnis wie Scan). */
