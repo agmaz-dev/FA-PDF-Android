@@ -123,4 +123,23 @@ class PdfEngineIntegrationTest {
             }
         }
     }
+
+    @Test
+    fun replyLetterIsWritten() {
+        val f = File(out, "antwortbrief.pdf")
+        de.fapdf.pdf.LetterPdfWriter.write(
+            de.fapdf.pdf.LetterPdfWriter.Letter(
+                sender = "Emine Agmaz\nTaxibetrieb\nAlt Schönefeld 18\n12529 Schönefeld",
+                recipient = "HEK – Hanseatische Krankenkasse\nBeitrag und Versicherung\nWandsbeker Zollstraße 86-90\n22041 Hamburg",
+                placeDate = "Schönefeld, 13.11.2026",
+                subject = "Ihr Kontoauszug vom 19.10.2026 – Betriebsnummer 95852881",
+                body = "Sehr geehrte Frau Block,\n\nmit Ihrem Schreiben vom 19.10.2026 weisen Sie eine offene Forderung von 57,00 € aus. " +
+                    "Diesen Betrag habe ich am 21.10.2026 überwiesen. Ich bitte Sie, den Zahlungseingang zu prüfen und von weiteren Säumniszuschlägen abzusehen.\n\nMit freundlichen Grüßen",
+                signerName = "Emine Agmaz",
+            ), null, fonts, f,
+        )
+        assertAllFontsEmbedded(f)
+        val t = text(f)
+        assertTrue(t, t.contains("Säumniszuschlägen") && t.contains("22041 Hamburg") && t.contains("Mit freundlichen Grüßen"))
+    }
 }
