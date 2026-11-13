@@ -50,7 +50,7 @@ fun AppNav(appVm: AppViewModel) {
         ) { entry ->
             val docId = entry.arguments?.getLong("docId") ?: return@composable
             val mode = runCatching { WorkspaceMode.valueOf(entry.arguments?.getString("mode") ?: "") }.getOrDefault(WorkspaceMode.READ)
-            WorkspaceScreen(docId, mode, onBack = { nav.popBackStack() }, onNewSignature = { nav.navigate("signaturePad") }, onManageProfiles = { nav.navigate("profiles") })
+            WorkspaceScreen(docId, mode, onBack = { nav.popBackStack() }, onNewSignature = { nav.navigate("signaturePad") }, onManageProfiles = { nav.navigate("profiles") }, onOpenDocument = { id -> nav.navigate("workspace/$id/READ") })
         }
         composable(
             "tool/{tool}?docId={docId}",

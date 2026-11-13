@@ -176,9 +176,10 @@ fun AiScreen(tool: Tool, docId: Long?, appVm: AppViewModel, onBack: () -> Unit, 
         scope.launch {
             busy = "Anfrage an ${settings.aiProvider.title} …"
             try {
-                val key = appVm.container.settings.apiKey() ?: if (appVm.container.settings.current().aiProvider .let { it == de.fapdf.data.AiProvider.CUSTOM || it.isLocal }) "lokal" else throw IllegalStateException("Kein API-Schlüssel hinterlegt.")
-                val s = appVm.container.settings.current()
-                onText(AiClient(s.aiProvider, key, s.aiModel, s.aiBaseUrl).complete(system, messages, maxTokens = 3000))
+                // Ersatz-Kette: gewählter Dienst, sonst Gemini Nano auf dem Handy
+                val ans = de.fapdf.ai.AiRouter.complete(appVm.container.settings, system, messages, maxTokens = 3000)
+                if (ans.fallback) FileActions.toast(context, "${settings.aiProvider.title.substringBefore(" –")} nicht erreichbar – Antwort von Gemini Nano")
+                onText(ans.text)
             } catch (e: Exception) {
                 error = e.message ?: "Fehler bei der KI-Anfrage"
             } finally {
@@ -211,7 +212,7 @@ fun AiScreen(tool: Tool, docId: Long?, appVm: AppViewModel, onBack: () -> Unit, 
             val translated = if (offline) {
                 OfflineTranslator(context).translateAll(texts, src, to) { p, n -> busy = "Übersetze Absatz $p von $n …" }
             } else {
-                val key = appVm.container.settings.apiKey() ?: if (appVm.container.settings.current().aiProvider .let { it == de.fapdf.data.AiProvider.CUSTOM || it.isLocal }) "lokal" else throw IllegalStateException("Kein API-Schlüssel hinterlegt.")
+                val key = appVm.container.settings.apiKey() ?: if (appVm.container.settings.current().aiProvider.let { it == de.fapdf.data.AiProvider.CUSTOM || it.isLocal }) "lokal" else throw IllegalStateException("Kein API-Schlüssel hinterlegt.")
                 val s = appVm.container.settings.current()
                 AiBatchTranslator.translateAll(AiClient(s.aiProvider, key, s.aiModel, s.aiBaseUrl), texts, to) { p, n -> busy = "KI-Übersetzung Teil $p von $n …" }
             }

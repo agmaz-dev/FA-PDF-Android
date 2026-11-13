@@ -39,6 +39,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.Redo
 import androidx.compose.material.icons.automirrored.outlined.Undo
@@ -169,6 +170,7 @@ fun WorkspaceScreen(
     onBack: () -> Unit,
     onNewSignature: () -> Unit,
     onManageProfiles: () -> Unit,
+    onOpenDocument: (Long) -> Unit = {},
 ) {
     val context = LocalContext.current
     val app = context.applicationContext as Application
@@ -182,6 +184,7 @@ fun WorkspaceScreen(
     var searchOpen by remember { mutableStateOf(false) }
     var fullscreen by remember { mutableStateOf(false) }
     var commentsOpen by remember { mutableStateOf(false) }
+    var replyOpen by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
     var overflow by remember { mutableStateOf(false) }
     var fullEditor by remember { mutableStateOf(false) }
     var newTextAlign by remember { mutableStateOf(de.fapdf.pdf.Alignment.LEFT) }
@@ -230,6 +233,9 @@ fun WorkspaceScreen(
                 },
                 actions = {
                     if (vm.mode == WorkspaceMode.READ) {
+                        IconButton(onClick = { replyOpen = !replyOpen }) {
+                            Icon(Icons.Outlined.AutoAwesome, "KI-Assistent – Antwort schreiben", tint = FaColors.Accent)
+                        }
                         IconButton(onClick = { searchOpen = !searchOpen; if (!searchOpen) vm.clearSearch() }) {
                             Icon(Icons.Outlined.Search, "Suchen", tint = if (searchOpen) FaColors.Accent else FaColors.Label)
                         }
@@ -346,7 +352,25 @@ fun WorkspaceScreen(
                     ) { Icon(Icons.Outlined.FullscreenExit, "Vollbild beenden", tint = Color.White) }
                 }
             }
+            // Aufgeklappt: KI-Assistent rechts neben dem Dokument
+            if (wide && replyOpen && !fullscreen && vm.mode == WorkspaceMode.READ) {
+                val w = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp
+                ReplyPanel(docId, vm.current, Modifier.width((w * 0.46f).dp).fillMaxHeight(),
+                    onClose = { replyOpen = false }, onOpenDocument = onOpenDocument, onManageProfiles = onManageProfiles)
             }
+            }
+        }
+    }
+
+    // Zugeklappt: KI-Assistent als Fenster von unten
+    if (replyOpen && vm.mode == WorkspaceMode.READ && androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp < 600) {
+        androidx.compose.material3.ModalBottomSheet(
+            onDismissRequest = { replyOpen = false },
+            sheetState = androidx.compose.material3.rememberModalBottomSheetState(skipPartiallyExpanded = true),
+            containerColor = FaColors.Surface,
+        ) {
+            ReplyPanel(docId, vm.current, Modifier.fillMaxWidth().fillMaxHeight(0.92f),
+                onClose = { replyOpen = false }, onOpenDocument = onOpenDocument, onManageProfiles = onManageProfiles)
         }
     }
 
