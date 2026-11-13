@@ -7,6 +7,9 @@
 #include <vector>
 #include <unistd.h>
 #include <algorithm>
+#include <csignal>
+#include <cstring>
+#include <fcntl.h>
 
 #include "logging.h"
 #include "chat.h"
@@ -37,7 +40,72 @@ Java_de_faki_Native_progress(JNIEnv *env, jclass) {
     return env->NewStringUTF(s.c_str());
 }
 
+static std::string jstr_early(JNIEnv *env, jstring s) {
+    if (!s) return "";
+    const char *c = env->GetStringUTFChars(s, nullptr);
+    std::string r(c ? c : "");
+    if (c) env->ReleaseStringUTFChars(s, c);
+    return r;
+}
+
 static constexpr int BATCH = 512;
+static constexpr int UBATCH = 256;
+
+// ---------- Absturz-Protokoll: letzte Meldungen + Signal in eine Datei schreiben ----------
+static char g_crash_path[512] = {0};
+static constexpr int RING = 24;
+static char g_ring[RING][240];
+static std::atomic<int> g_ring_pos{0};
+
+static void ring_add(const char *text) {
+    const int p = g_ring_pos.fetch_add(1) % RING;
+    strncpy(g_ring[p], text ? text : "", sizeof(g_ring[p]) - 1);
+    g_ring[p][sizeof(g_ring[p]) - 1] = 0;
+}
+
+static void wr(int fd, const char *s) { if (s) { ssize_t r = write(fd, s, strlen(s)); (void) r; } }
+
+static void write_crash(const char *what) {
+    if (!g_crash_path[0]) return;
+    int fd = open(g_crash_path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    if (fd < 0) return;
+    char buf[200];
+    snprintf(buf, sizeof(buf), "\nPhase %d · gelesen %d/%d · geschrieben %d\n", g_phase.load(), g_in_done.load(), g_in_total.load(), g_out.load());
+    wr(fd, what); wr(fd, buf);
+    wr(fd, "Letzte Meldungen:\n");
+    const int end = g_ring_pos.load();
+    for (int k = std::max(0, end - RING); k < end; k++) { wr(fd, g_ring[k % RING]); const size_t l = strlen(g_ring[k % RING]); if (!l || g_ring[k % RING][l - 1] != '\n') wr(fd, "\n"); }
+    close(fd);
+}
+
+static void on_ggml_abort(const char *msg) { write_crash(msg ? msg : "ggml abort"); }
+
+static struct sigaction g_old[32];
+static void on_signal(int sig, siginfo_t *info, void *uc) {
+    char b[80];
+    snprintf(b, sizeof(b), "Signal %d (%s)", sig, sig == SIGSEGV ? "Speicherzugriff" : sig == SIGABRT ? "Abbruch" : sig == SIGBUS ? "Bus" : sig == SIGILL ? "Befehl" : "andere");
+    // Bei SIGABRT nach ggml-Abbruch nicht überschreiben
+    if (!(sig == SIGABRT && access(g_crash_path, F_OK) == 0)) write_crash(b);
+    sigaction(sig, &g_old[sig], nullptr);
+    raise(sig);
+}
+
+static void log_cb(enum ggml_log_level level, const char *text, void *user) {
+    if (level >= GGML_LOG_LEVEL_INFO || level == GGML_LOG_LEVEL_CONT) ring_add(text);
+    aichat_android_log_callback(level, text, user);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_de_faki_Native_setCrashFile(JNIEnv *env, jclass, jstring jpath) {
+    std::string p = jstr_early(env, jpath);
+    strncpy(g_crash_path, p.c_str(), sizeof(g_crash_path) - 1);
+    ggml_set_abort_callback(on_ggml_abort);
+    struct sigaction sa{};
+    sa.sa_sigaction = on_signal;
+    sa.sa_flags = SA_SIGINFO | SA_ONSTACK;
+    sigemptyset(&sa.sa_mask);
+    for (int s : {SIGSEGV, SIGABRT, SIGBUS, SIGILL, SIGFPE}) sigaction(s, &sa, &g_old[s]);
+}
 
 static std::string jstr(JNIEnv *env, jstring s) {
     if (!s) return "";
@@ -77,7 +145,7 @@ static jstring to_jstring(JNIEnv *env, const std::string &s) {
 
 extern "C" JNIEXPORT void JNICALL
 Java_de_faki_Native_nativeInit(JNIEnv *env, jclass, jstring jlibdir) {
-    llama_log_set(aichat_android_log_callback, nullptr);
+    llama_log_set(log_cb, nullptr);
     std::string dir = jstr(env, jlibdir);
     ggml_backend_load_all_from_path(dir.c_str());
     llama_backend_init();
@@ -116,7 +184,7 @@ Java_de_faki_Native_load(JNIEnv *env, jclass, jstring jpath, jint n_ctx, jint n_
     g_n_ctx = std::min((int) n_ctx, (int) llama_model_n_ctx_train(g_model));
     cp.n_ctx = g_n_ctx;
     cp.n_batch = BATCH;
-    cp.n_ubatch = BATCH;
+    cp.n_ubatch = UBATCH;
     cp.n_threads = threads;
     cp.n_threads_batch = threads;
     g_ctx = llama_init_from_model(g_model, cp);

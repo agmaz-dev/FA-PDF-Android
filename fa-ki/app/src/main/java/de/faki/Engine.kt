@@ -13,6 +13,7 @@ object Native {
     @Synchronized fun ensure(context: Context) {
         if (ready) return
         System.loadLibrary("fa-ki")
+        setCrashFile(java.io.File(context.filesDir, "native_crash.txt").absolutePath)
         nativeInit(context.applicationInfo.nativeLibraryDir)
         ready = true
     }
@@ -20,6 +21,7 @@ object Native {
     @JvmStatic external fun nativeInit(libDir: String)
     @JvmStatic external fun devices(): String
     @JvmStatic external fun progress(): String
+    @JvmStatic external fun setCrashFile(path: String)
     @JvmStatic external fun load(path: String, nCtx: Int, nGpuLayers: Int): Int
     @JvmStatic external fun complete(roles: Array<String>, contents: Array<String>, maxTokens: Int, temp: Float): String
     @JvmStatic external fun abort()
