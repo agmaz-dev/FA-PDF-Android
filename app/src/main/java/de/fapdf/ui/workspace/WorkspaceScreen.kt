@@ -222,13 +222,16 @@ fun WorkspaceScreen(
         topBar = {
             if (!fullscreen && vm.mode != WorkspaceMode.EDIT) TopAppBar(
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = FaColors.Background),
+                // Außerhalb des Lesens schmalere Kopfzeile
+                expandedHeight = if (vm.mode == WorkspaceMode.READ) TopAppBarDefaults.TopAppBarExpandedHeight else 48.dp,
                 navigationIcon = {
                     IconButton(onClick = { leave() }) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Zurück") }
                 },
                 title = {
                     Text(
                         if (vm.mode == WorkspaceMode.READ) DocumentRepository.baseName(doc?.displayName ?: "") else modeTitle(vm.mode),
-                        maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleLarge,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        style = if (vm.mode == WorkspaceMode.READ) MaterialTheme.typography.titleLarge else MaterialTheme.typography.titleMedium,
                     )
                 },
                 actions = {
@@ -320,7 +323,13 @@ fun WorkspaceScreen(
                     })
             }
             if (vm.mode != WorkspaceMode.READ && vm.mode != WorkspaceMode.EDIT && doc != null) {
-                DocCard(doc, subtitle = "Seite ${currentPage + 1} von ${source?.pageCount ?: doc.pageCount}" + if (vm.dirty) " · nicht gespeichert" else "")
+                // Schmale Zeile statt Karte – möglichst viel Fläche für das Papier
+                Text(
+                    DocumentRepository.baseName(doc.displayName) + " · Seite ${currentPage + 1} von ${source?.pageCount ?: doc.pageCount}" +
+                        if (vm.dirty) " · nicht gespeichert" else "",
+                    style = MaterialTheme.typography.bodySmall, color = FaColors.SecondaryLabel, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 2.dp),
+                )
             }
             if (!fullscreen) ModeBanners(vm, onSignatureField = { f ->
                 val w = f.widgets.first()
@@ -622,9 +631,8 @@ private fun ModeBanners(vm: WorkspaceViewModel, onSignatureField: (de.fapdf.pdf.
         }
         WorkspaceMode.SIGN -> {
             val sig = vm.formInfo?.signatureFields?.firstOrNull()
-            if (vm.placement != null) InfoBanner("Unterschrift verschieben und unten in der Größe anpassen, dann „Übernehmen“.")
-            else if (sig != null) InfoBanner("Unterschriftsfeld erkannt.", FaColors.Sign, "Einfügen" to { onSignatureField(sig) })
-            else InfoBanner("Wählen Sie unten eine Unterschrift. Eine eingefügte Unterschrift können Sie antippen, um sie zu verschieben, zu skalieren oder zu entfernen. (Einfache elektronische Unterschrift, keine kryptografische Signatur.)")
+            if (vm.placement == null && sig != null) InfoBanner("Unterschriftsfeld erkannt.", FaColors.Sign, "Einfügen" to { onSignatureField(sig) })
+            // Sonst kein Hinweis: die ganze Fläche bleibt für das Papier
         }
         WorkspaceMode.REDACT -> if (vm.redactScroll) InfoBanner("Blättern aktiv – tippen Sie unten auf „Bereich markieren“, um Inhalte auszuwählen.")
         WorkspaceMode.ANNOTATE -> when (vm.annotTool) {
