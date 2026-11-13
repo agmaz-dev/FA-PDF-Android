@@ -130,7 +130,7 @@ class ReplyViewModel(app: Application, private val docId: Long) : AndroidViewMod
                 if (text.replace(Regex("\\[Seite \\d+]"), "").isBlank()) throw IllegalStateException("Im Dokument wurde kein Text gefunden.")
                 step = 2; sub = null; stepTitle = "KI liest das Schreiben …"
                 busy = "Fristen, Beträge und Antworten suchen"
-                val ans = AiRouter.complete(c.settings, ANALYZE, listOf(ChatMessage("user", Prompts.withDocument("Analysiere dieses Schreiben.", text))), 1200)
+                val ans = AiRouter.complete(c.settings, ANALYZE, listOf(ChatMessage("user", Prompts.withDocument("Analysiere dieses Schreiben.", text))), 600)
                 if (ans.fallback) note = "Groq nicht erreichbar – Gemini Nano hat geantwortet"
                 parseAnalysis(ans.text)
             } catch (e: Exception) {
@@ -141,25 +141,48 @@ class ReplyViewModel(app: Application, private val docId: Long) : AndroidViewMod
         }
     }
 
-    private fun parseAnalysis(raw: String) {
-        val s = raw.indexOf('{'); val e = raw.lastIndexOf('}')
-        val o = if (s >= 0 && e > s) runCatching { JSONObject(raw.substring(s, e + 1)) }.getOrNull() else null
-        if (o == null) {
-            summary = raw.trim().take(800)
-            suggestions = DEFAULT_SUGGESTIONS
-            return
+    /** Liest die Analyse: Zeilenformat (KURZ: …), sonst JSON, sonst einzelne Felder aus kaputtem JSON. */
+    private fun parseAnalysis(rawIn: String) {
+        val raw = de.fapdf.ai.AiText.clean(rawIn)
+        val fields = HashMap<String, String>()
+        val vors = ArrayList<String>()
+        // 1) Zeilenformat
+        raw.lines().forEach { line ->
+            val m = Regex("^\\s*[-*•]?\\s*(KURZ|FRIST(?:EN)?|BETR(?:AG|ÄGE|AEGE)|ABSENDER|EMAIL|E-MAIL|BEZUG|ANSPRECHPARTNER|VORSCHLAG)\\s*\\d*\\s*:\\s*(.*)$", RegexOption.IGNORE_CASE).find(line)
+            if (m != null) {
+                val key = m.groupValues[1].uppercase().let { k -> when {
+                    k.startsWith("FRIST") -> "FRIST"; k.startsWith("BETR") -> "BETRAG"; k.contains("MAIL") -> "EMAIL"; else -> k } }
+                val v = m.groupValues[2].trim().trim('"')
+                if (key == "VORSCHLAG") { if (v.isNotBlank()) vors += v } else if (key !in fields && v.isNotBlank()) fields[key] = v
+            }
         }
-        summary = o.optString("kurzfassung").trim().ifBlank { "–" }
-        deadlines = o.optString("fristen").trim().takeUnless { it.equals("leer", true) || it == "-" }.orEmpty()
-        amounts = o.optString("betraege").trim().takeUnless { it.equals("leer", true) || it == "-" }.orEmpty()
-        email = Regex("[\\w.+-]+@[\\w-]+\\.[\\w.]+").find(o.optString("email"))?.value.orEmpty()
-        bezug = o.optString("bezug").trim()
-        contact = o.optString("ansprechpartner").trim()
-        val abs = o.optString("absender").replace("\\n", "\n").trim()
-        if (recipient.isBlank()) recipient = abs
-        val arr = o.optJSONArray("vorschlaege")
-        suggestions = (0 until (arr?.length() ?: 0)).map { arr!!.optString(it).trim() }.filter { it.isNotEmpty() }.take(5)
-            .ifEmpty { DEFAULT_SUGGESTIONS }
+        // 2) JSON (auch abgeschnitten): Felder einzeln herausholen
+        fun jsonField(name: String) = Regex("\"$name\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"").find(raw)?.groupValues?.get(1)?.replace("\\n", "\n")?.trim()
+        if (fields.isEmpty()) {
+            jsonField("kurzfassung")?.let { fields["KURZ"] = it }
+            jsonField("fristen")?.let { fields["FRIST"] = it }
+            jsonField("betraege")?.let { fields["BETRAG"] = it }
+            jsonField("absender")?.let { fields["ABSENDER"] = it }
+            jsonField("email")?.let { fields["EMAIL"] = it }
+            jsonField("bezug")?.let { fields["BEZUG"] = it }
+            jsonField("ansprechpartner")?.let { fields["ANSPRECHPARTNER"] = it }
+            Regex("\"vorschlaege\"\\s*:\\s*\\[(.*?)(]|$)", RegexOption.DOT_MATCHES_ALL).find(raw)?.groupValues?.get(1)?.let { arr ->
+                Regex("\"((?:[^\"\\\\]|\\\\.)+)\"").findAll(arr).forEach { vors += it.groupValues[1] }
+            }
+        }
+        fun clean(v: String?) = v?.trim()?.takeUnless { it.isBlank() || it.equals("leer", true) || it == "-" || it.startsWith("keine", true) }.orEmpty()
+        summary = clean(fields["KURZ"]).ifBlank {
+            // Nichts erkannt: lesbaren Text zeigen, nie Rohformat
+            raw.lines().filterNot { it.trim().startsWith("{") || it.trim().startsWith("}") || it.contains("\":") }.joinToString(" ").trim().take(600).ifBlank { "–" }
+        }
+        deadlines = clean(fields["FRIST"])
+        amounts = clean(fields["BETRAG"])
+        email = Regex("[\\w.+-]+@[\\w-]+(\\.[\\w-]+)+").find(fields["EMAIL"].orEmpty().replace(" de", ".de").replace(" com", ".com"))?.value.orEmpty()
+        bezug = clean(fields["BEZUG"])
+        contact = clean(fields["ANSPRECHPARTNER"])
+        val abs = fields["ABSENDER"].orEmpty().replace("\\n", "\n").replace(" | ", "\n").replace(";", "\n").trim()
+        if (recipient.isBlank() && abs.isNotBlank()) recipient = abs
+        suggestions = vors.map { it.trim().trim('"', ',') }.filter { it.isNotEmpty() }.distinct().take(5).ifEmpty { DEFAULT_SUGGESTIONS }
     }
 
     fun useProfile(p: PersonProfile) {
@@ -207,7 +230,7 @@ class ReplyViewModel(app: Application, private val docId: Long) : AndroidViewMod
     }
 
     private fun applyLetter(raw: String) {
-        val lines = raw.trim().removePrefix("```").removeSuffix("```").trim().lines()
+        val lines = de.fapdf.ai.AiText.clean(raw).lines()
         val subjIdx = lines.indexOfFirst { it.trim().startsWith("Betreff", true) }
         if (subjIdx >= 0) {
             subject = lines[subjIdx].substringAfter(":").trim().trim('*')
@@ -237,7 +260,7 @@ class ReplyViewModel(app: Application, private val docId: Long) : AndroidViewMod
                     "(Anrede … Mit freundlichen Grüßen) bei. Gib nur den überarbeiteten Brieftext aus, ohne Betreff und ohne Erklärungen."
                 val ans = AiRouter.complete(c.settings, system, listOf(ChatMessage("user", current)), 1500)
                 if (ans.fallback) note = "Groq nicht erreichbar – überarbeitet von Gemini Nano"
-                body = ans.text.trim().removePrefix("```").removeSuffix("```").trim()
+                body = de.fapdf.ai.AiText.clean(ans.text)
                 createdDocId = null
             } catch (e: Exception) {
                 error = e.message ?: "Fehler beim Überarbeiten"
@@ -282,16 +305,19 @@ class ReplyViewModel(app: Application, private val docId: Long) : AndroidViewMod
     companion object {
         val DEFAULT_SUGGESTIONS = listOf("Zustimmen und bestätigen", "Widersprechen", "Um Fristverlängerung bitten", "Rückfrage stellen")
 
-        const val ANALYZE = "Du liest ein Schreiben, das der Nutzer erhalten hat. Antworte AUSSCHLIESSLICH mit JSON ohne weiteren Text:\n" +
-            "{\"kurzfassung\":\"2–3 Sätze: wer schreibt, worum geht es, was wird verlangt\"," +
-            "\"fristen\":\"Fristen und Termine, sonst leer\",\"betraege\":\"Beträge, sonst leer\"," +
-            "\"absender\":\"vollständige Postanschrift des Absenders dieses Schreibens, Zeilen mit \\\\n getrennt (Firma/Abteilung, Straße Nr., PLZ Ort)\"," +
-            "\"email\":\"E-Mail-Adresse des Ansprechpartners, sonst leer\"," +
-            "\"bezug\":\"Aktenzeichen, Kunden-, Vertrags-, Schaden- oder Betriebsnummer und Datum des Schreibens, kurz\"," +
-            "\"ansprechpartner\":\"Name, sonst leer\"," +
-            "\"vorschlaege\":[\"3 bis 5 kurze, konkrete Antwortmöglichkeiten aus Sicht des Empfängers, je höchstens 12 Wörter\"]}\n" +
-            "Handschriftliche Notizen im Schreiben (z. B. „Bezahlt am …“) sind Wissen des Empfängers und sollen in die Vorschläge einfließen. " +
-            "Antworte auf Deutsch. Erfinde nichts."
+        const val ANALYZE = "Du liest ein Schreiben, das der Nutzer erhalten hat. Antworte auf Deutsch, OHNE Einleitung, " +
+            "genau in diesen Zeilen (jede Angabe in einer Zeile, nichts erfinden, fehlt etwas: \"-\"):\n" +
+            "KURZ: 2 Sätze – wer schreibt, worum geht es, was wird verlangt\n" +
+            "FRIST: Frist oder Termin\n" +
+            "BETRAG: wichtigster Betrag\n" +
+            "ABSENDER: Postanschrift des Absenders, Teile mit | getrennt (Firma | Straße Nr. | PLZ Ort)\n" +
+            "EMAIL: E-Mail des Ansprechpartners\n" +
+            "BEZUG: Aktenzeichen/Kunden-/Betriebsnummer und Datum des Schreibens\n" +
+            "ANSPRECHPARTNER: Name\n" +
+            "VORSCHLAG: kurze Antwortmöglichkeit aus Sicht des Empfängers (höchstens 10 Wörter)\n" +
+            "VORSCHLAG: zweite Möglichkeit\n" +
+            "VORSCHLAG: dritte Möglichkeit\n" +
+            "Handschriftliche Notizen im Schreiben (z. B. „Bezahlt am …“) sind Wissen des Empfängers und gehören in die Vorschläge."
     }
 }
 

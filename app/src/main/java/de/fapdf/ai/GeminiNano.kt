@@ -65,14 +65,19 @@ object GeminiNano {
                 prompt.take(MAX_INPUT_CHARS - sb.length.coerceAtMost(2500) - 200) +
                     "\n\nBisherige Antwort:\n" + sb.takeLast(2500) +
                     "\n\nSetze die Antwort genau an dieser Stelle fort, ohne Wiederholung. Wenn sie schon vollständig ist, antworte nur mit ENDE."
-            val part = generate(input).trim()
+            val part = AiText.clean(generate(input))
             if (part.isEmpty() || part.startsWith("ENDE")) break
+            // Nano beginnt manchmal von vorn: Wiederholung erkennen und aufhören
+            if (r > 0) {
+                val h = AiText.head(part)
+                if (h.length >= 15 && AiText.head(sb.toString(), 4000).contains(h)) break
+            }
             if (sb.isNotEmpty()) sb.append(if (part.first().isLetterOrDigit() && !sb.last().isWhitespace()) " " else "")
             sb.append(part.removeSuffix("ENDE").trimEnd())
             // Endet mit Satzzeichen und ist deutlich kürzer als das Limit → fertig
             if (part.length < 600 || part.trimEnd().last() in ".!?)“\"") break
         }
-        val text = sb.toString().trim()
+        val text = AiText.clean(sb.toString())
         if (text.isEmpty()) throw AiException("Gemini Nano hat keine Antwort geliefert.")
         return if (cut) "$text\n\n(Hinweis: Gemini Nano kann nur kurze Texte lesen – berücksichtigt wurde nur der Anfang des Dokuments.)" else text
     }
