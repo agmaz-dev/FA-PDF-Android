@@ -270,7 +270,9 @@ fun WorkspaceScreen(
                 // Leiste wandert mit der Tastatur nach oben – das Eingabefeld bleibt sichtbar
                 Column(Modifier.windowInsetsPadding(WindowInsets.navigationBars.union(WindowInsets.ime))) {
                     if (vm.mode == WorkspaceMode.READ && source != null && source.pageCount > 0 && vm.placement == null) {
-                        ThumbStrip(vm, source, currentPage) { p -> scope.launch { listState.animateScrollToItem(p) } }
+                        // Aufgeklappt (breit): Seiten links in der Seitenleiste; zugeklappt: Leiste unten
+                        if (androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp < 600)
+                            ThumbStrip(vm, source, currentPage) { p -> scope.launch { listState.animateScrollToItem(p) } }
                         ZoomRow(zoom, onZoom = { zoom = it }, onFullscreen = { fullscreen = true }, onGrid = { sheet = "grid" })
                     }
                     if (vm.mode == WorkspaceMode.ANNOTATE && commentsOpen && vm.placement == null) {
@@ -322,7 +324,7 @@ fun WorkspaceScreen(
             })
             val wide = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp >= 600
             Row(Modifier.weight(1f).fillMaxWidth()) {
-            if (wide && !fullscreen && source != null && source.pageCount > 1) PageSidebar(source, currentPage) { p -> scope.launch { listState.animateScrollToItem(p) } }
+            if (wide && !fullscreen && source != null && source.pageCount > 0) PageSidebar(source, currentPage) { p -> scope.launch { listState.animateScrollToItem(p) } }
             Box(Modifier.weight(1f).fillMaxHeight().background(FaColors.PageArea)) {
                 if (source != null) {
                     val gestures = gesturesFor(vm)
