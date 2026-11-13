@@ -195,7 +195,7 @@ Java_de_faki_Native_complete(JNIEnv *env, jclass, jobjectArray roles, jobjectArr
     }
 
     g_in_total = (int) toks.size(); g_in_done = 0; g_out = 0;
-    g_t_start = now_ms(); g_t_gen = g_t_start; g_phase = 1;
+    g_t_start = now_ms(); g_t_gen = g_t_start.load(); g_phase = 1;
     common_batch batch(g_ctx);
     for (int i = 0; i < (int) toks.size(); i += BATCH) {
         const int m = std::min(BATCH, (int) toks.size() - i);
