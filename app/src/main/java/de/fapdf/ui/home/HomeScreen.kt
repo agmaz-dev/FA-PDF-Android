@@ -3,6 +3,9 @@ package de.fapdf.ui.home
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.material.icons.outlined.Add
 import de.fapdf.data.DocumentRepository
+import androidx.compose.material.icons.outlined.Link
+import androidx.compose.material.icons.outlined.AutoAwesome
+import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.MenuBook
 import androidx.compose.material.icons.outlined.Gesture
 import androidx.compose.material.icons.outlined.Edit
@@ -208,6 +211,8 @@ private fun openTool(nav: HomeNav, tool: Tool, docId: Long) {
 @Composable
 private fun ToolsHome(onOpen: () -> Unit, onScan: () -> Unit, onProfile: () -> Unit, onTool: (Tool) -> Unit) {
     var query by remember { mutableStateOf("") }
+    var openGroup by remember { mutableStateOf<ToolGroup?>(null) }
+    openGroup?.let { g -> GroupSheet(g, onDismiss = { openGroup = null }) { t -> openGroup = null; onTool(t) } }
     BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
         // Auf Tablets bleibt der Inhalt lesbar breit und mittig
         val contentWidth = if (maxWidth > 900.dp) 900.dp else maxWidth
@@ -252,18 +257,27 @@ private fun ToolsHome(onOpen: () -> Unit, onScan: () -> Unit, onProfile: () -> U
                 if (hits.isEmpty()) Text("Kein Werkzeug gefunden.", color = FaColors.SecondaryLabel)
                 TileGrid(hits, cols, onTool)
             } else {
-                // Scannen ist bereits oben als eigene Schaltfläche erreichbar – kein doppelter Scanner-Bereich
-                ToolCategory.entries.filter { it != ToolCategory.SCAN }.forEach { cat ->
-                    Row(Modifier.padding(top = 22.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(cat.headerIcon, null, tint = FaColors.Accent, modifier = Modifier.size(26.dp))
-                        Spacer(Modifier.width(10.dp))
-                        Text(cat.title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                // Werkzeuge in wenigen Gruppen; Antippen öffnet die Gruppe von unten
+                val gcols = if (contentWidth > 600.dp) 3 else 2
+                Spacer(Modifier.height(18.dp))
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    toolGroups.chunked(gcols).forEach { row ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            row.forEach { g ->
+                                GroupTile(g, Modifier.weight(1f)) { if (g.tools.size == 1) onTool(g.tools[0].first) else openGroup = g }
+                            }
+                            repeat(gcols - row.size) { Spacer(Modifier.weight(1f)) }
+                        }
                     }
-                    // Drehen, Löschen, Herauslösen stecken jetzt in „Seiten verwalten“ (über die Suche weiter erreichbar)
-                    val tools = Tool.byCategory(cat).filter { it !in setOf(Tool.ROTATE, Tool.DELETE_PAGES, Tool.EXTRACT_PAGES) }
-                    when (cat) {
-                        ToolCategory.SIGN -> TileGrid(tools, ((cols + 1) / 2).coerceAtLeast(2), onTool)
-                        else -> TileGrid(tools, cols, onTool)
+                    Row(
+                        Modifier.fillMaxWidth().height(56.dp).clip(RoundedCornerShape(18.dp)).background(FaColors.Card)
+                            .clickable { onTool(Tool.SHARE) }.padding(horizontal = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(Icons.Outlined.Share, null, tint = FaColors.Accent, modifier = Modifier.size(22.dp))
+                        Spacer(Modifier.width(12.dp))
+                        Text("Teilen & Drucken", fontWeight = FontWeight.SemiBold, fontSize = 15.sp, modifier = Modifier.weight(1f))
+                        Text("›", color = FaColors.SecondaryLabel, fontSize = 20.sp)
                     }
                 }
             }
@@ -524,6 +538,91 @@ private fun SubChips(items: List<Pair<String, () -> Unit>>) {
                 Modifier.clip(RoundedCornerShape(16.dp)).background(FaColors.AccentLight).clickable(onClick = action)
                     .padding(horizontal = 12.dp, vertical = 9.dp),
             ) { Text(label, color = FaColors.Accent, fontSize = 14.sp, fontWeight = FontWeight.SemiBold) }
+        }
+    }
+}
+
+
+/** Werkzeug-Gruppe auf der Startseite: wenige große Kacheln statt vieler kleiner. */
+private class ToolGroup(val title: String, val subtitle: String, val icon: androidx.compose.ui.graphics.vector.ImageVector, val tools: List<Pair<Tool, String>>)
+
+private val toolGroups = listOf(
+    ToolGroup("Bearbeiten", "Text · Kommentieren · Schwärzen · Stempel", Icons.Outlined.Edit, listOf(
+        Tool.EDIT to "Antippen und tippen – Schrift wird erkannt",
+        Tool.ANNOTATE to "Markieren, Notizen, Zeichnen",
+        Tool.REDACT to "Stellen dauerhaft unkenntlich machen",
+        Tool.PAGE_NUMBERS to "Unten oder oben einfügen",
+        Tool.WATERMARK to "Text oder Bild über alle Seiten",
+        Tool.CROP to "Ränder entfernen",
+    )),
+    ToolGroup("Ausfüllen & Unterschreiben", "Formulare · Unterschrift · anfordern", Icons.Outlined.Gesture, listOf(
+        Tool.FORM to "Felder ausfüllen, Profil einsetzen",
+        Tool.SIGN to "Gespeicherte Unterschrift einsetzen",
+        Tool.REQUEST_SIGNATURES to "Per E-Mail zum Unterschreiben senden",
+    )),
+    ToolGroup("Seiten", "Sortieren · Drehen · Aufteilen · Löschen", Icons.Outlined.GridView, listOf(
+        Tool.ORGANIZE to "Große Vorschau, sortieren, drehen, löschen",
+        Tool.SPLIT to "In mehrere PDFs aufteilen",
+    )),
+    ToolGroup("Zusammenfügen", "Mehrere PDFs zu einer", Icons.Outlined.Link, listOf(Tool.MERGE to "")),
+    ToolGroup("KI-Assistent", "Erklären · Chat · Übersetzen · Fragen", Icons.Outlined.AutoAwesome, listOf(
+        Tool.AI_SUMMARY to "Worum geht es, Fristen, Beträge",
+        Tool.AI_CHAT to "Fragen zum Dokument stellen",
+        Tool.TRANSLATE to "In andere Sprache übersetzen",
+        Tool.AI_QUESTIONS to "Lernfragen aus dem Dokument",
+    )),
+    ToolGroup("Schutz", "Passwort · entsperren · reduzieren", Icons.Outlined.Lock, listOf(
+        Tool.ENCRYPT to "Mit Passwort schützen",
+        Tool.REMOVE_PASSWORD to "Passwort entfernen",
+        Tool.FLATTEN to "Felder und Kommentare fest einbrennen",
+    )),
+)
+
+@Composable
+private fun GroupTile(g: ToolGroup, modifier: Modifier, onClick: () -> Unit) {
+    Column(
+        modifier.heightIn(min = 118.dp).clip(RoundedCornerShape(20.dp)).background(FaColors.Card).clickable(onClick = onClick).padding(14.dp),
+        verticalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Icon(g.icon, null, tint = FaColors.Accent, modifier = Modifier.size(26.dp))
+        Spacer(Modifier.height(14.dp))
+        Text(g.title, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = FaColors.Label)
+        Text(g.subtitle, fontSize = 12.sp, lineHeight = 16.sp, color = FaColors.SecondaryLabel)
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun GroupSheet(g: ToolGroup, onDismiss: () -> Unit, onPick: (Tool) -> Unit) {
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = FaColors.Surface) {
+        Column(Modifier.padding(horizontal = 16.dp).navigationBarsPadding().verticalScroll(rememberScrollState())) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(g.icon, null, tint = FaColors.Accent, modifier = Modifier.size(26.dp))
+                Spacer(Modifier.width(12.dp))
+                Text(g.title, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
+            }
+            Spacer(Modifier.height(14.dp))
+            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(FaColors.Card)) {
+                g.tools.forEachIndexed { i, (t, desc) ->
+                    if (i > 0) HorizontalDivider(color = FaColors.Separator)
+                    Row(
+                        Modifier.fillMaxWidth().heightIn(min = 60.dp).clickable { onPick(t) }.padding(horizontal = 14.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Box(Modifier.size(38.dp).clip(RoundedCornerShape(11.dp)).background(FaColors.AccentLight), contentAlignment = Alignment.Center) {
+                            val txt = t.iconText
+                            if (txt != null) Text(txt, color = FaColors.Accent, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                            else Icon(t.icon, null, tint = FaColors.Accent, modifier = Modifier.size(22.dp))
+                        }
+                        Spacer(Modifier.width(14.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(t.title, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, color = FaColors.Label)
+                            if (desc.isNotBlank()) Text(desc, fontSize = 12.sp, color = FaColors.SecondaryLabel)
+                        }
+                    }
+                }
+            }
+            Spacer(Modifier.height(20.dp))
         }
     }
 }
