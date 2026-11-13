@@ -135,6 +135,16 @@ class ReplyViewModel(app: Application, private val docId: Long) : AndroidViewMod
     var createdDocId by mutableStateOf<Long?>(null)
     var createdFile: File? = null
     private var bezug = ""
+    /** Datum des erhaltenen Schreibens, z. B. „19.10.2026“. */
+    var letterDate by mutableStateOf("")
+
+    /** Datum des Schreibens direkt aus dem Text: zuerst neben „Datum“, sonst das erste Datum im Brief. */
+    private fun findLetterDate(text: String): String {
+        val d = "(\\d{1,2}\\.\\s?\\d{1,2}\\.\\s?\\d{2,4})"
+        val near = Regex("(?i)datum[^\\d]{0,40}$d").find(text)?.groupValues?.get(1)
+        val any = Regex(d).find(text)?.groupValues?.get(1)
+        return (near ?: any).orEmpty().replace(" ", "")
+    }
     private var contact = ""
 
     fun start(file: File) {
@@ -150,6 +160,7 @@ class ReplyViewModel(app: Application, private val docId: Long) : AndroidViewMod
                 val tmp = File(getApplication<Application>().cacheDir, "reply").apply { mkdirs() }
                 val text = DocumentText.extract(file, tmp, maxChars = 40_000) { p, n -> busy = "Seite $p von $n wird gelesen"; sub = (p - 1f) / n }.text
                 docText = text
+                letterDate = findLetterDate(text)
                 if (text.replace(Regex("\\[Seite \\d+]"), "").isBlank()) throw IllegalStateException("Im Dokument wurde kein Text gefunden.")
                 step = 2; sub = null; stepTitle = "KI liest das Schreiben …"
                 busy = "Fristen, Beträge und Antworten suchen"
@@ -171,10 +182,10 @@ class ReplyViewModel(app: Application, private val docId: Long) : AndroidViewMod
         val vors = ArrayList<String>()
         // 1) Zeilenformat
         raw.lines().forEach { line ->
-            val m = Regex("^\\s*[-*•]?\\s*(KURZ|FRISTDATUM|FRIST(?:EN)?|BETR(?:AG|ÄGE|AEGE)|ABSENDER|EMAIL|E-MAIL|BEZUG|ANSPRECHPARTNER|VORSCHLAG)\\s*\\d*\\s*:\\s*(.*)$", RegexOption.IGNORE_CASE).find(line)
+            val m = Regex("^\\s*[-*•]?\\s*(KURZ|BRIEFDATUM|FRISTDATUM|FRIST(?:EN)?|BETR(?:AG|ÄGE|AEGE)|ABSENDER|EMAIL|E-MAIL|BEZUG|ANSPRECHPARTNER|VORSCHLAG)\\s*\\d*\\s*:\\s*(.*)$", RegexOption.IGNORE_CASE).find(line)
             if (m != null) {
                 val key = m.groupValues[1].uppercase().let { k -> when {
-                    k == "FRISTDATUM" -> "FRISTDATUM"; k.startsWith("FRIST") -> "FRIST"; k.startsWith("BETR") -> "BETRAG"; k.contains("MAIL") -> "EMAIL"; else -> k } }
+                    k == "FRISTDATUM" -> "FRISTDATUM"; k == "BRIEFDATUM" -> "BRIEFDATUM"; k.startsWith("FRIST") -> "FRIST"; k.startsWith("BETR") -> "BETRAG"; k.contains("MAIL") -> "EMAIL"; else -> k } }
                 val v = m.groupValues[2].trim().trim('"')
                 if (key == "VORSCHLAG") { if (v.isNotBlank()) vors += v } else if (key !in fields && v.isNotBlank()) fields[key] = v
             }
@@ -198,6 +209,7 @@ class ReplyViewModel(app: Application, private val docId: Long) : AndroidViewMod
             // Nichts erkannt: lesbaren Text zeigen, nie Rohformat
             raw.lines().filterNot { it.trim().startsWith("{") || it.trim().startsWith("}") || it.contains("\":") }.joinToString(" ").trim().take(600).ifBlank { "–" }
         }
+        Regex("\\d{1,2}\\.\\d{1,2}\\.\\d{2,4}").find(fields["BRIEFDATUM"].orEmpty())?.value?.let { letterDate = it }
         deadlines = clean(fields["FRIST"])
         deadlineDate = parseDate(fields["FRISTDATUM"]) ?: parseDate(deadlines)
         amounts = clean(fields["BETRAG"])
@@ -240,12 +252,14 @@ class ReplyViewModel(app: Application, private val docId: Long) : AndroidViewMod
                 val system = "Du schreibst im Namen von $name einen Antwortbrief auf das Schreiben im <dokument>. " +
                     "Ziel des Briefes: ${goal.ifBlank { "passend antworten" }}. " +
                     (if (notes.isNotBlank()) "Zusätzliche Angaben von $name: $notes. " else "") +
-                    (if (bezug.isNotBlank()) "Bezug (Nummern, Datum): $bezug. " else "") +
+                    (if (letterDate.isNotBlank()) "Datum des erhaltenen Schreibens: $letterDate. " else "") +
+                    (if (bezug.isNotBlank()) "Bezug (Nummern): $bezug. " else "") +
                     (if (contact.isNotBlank()) "Ansprechpartner: $contact. " else "") +
                     "Schreibe sachlich, höflich und klar im deutschen Geschäftsbriefstil (DIN 5008). Gib GENAU dieses Format aus:\n" +
                     "Betreff: <kurzer Betreff mit Bezug, z. B. Nummern>\n\n<Anrede>,\n\n<Text in kurzen Absätzen>\n\nMit freundlichen Grüßen\n" +
                     "Keine Adressen, kein Datum, keinen Namen unter dem Gruß, keine Erklärungen. Verwende nur Fakten aus dem Schreiben und " +
-                    "den Angaben; fehlende Angaben in [eckigen Klammern] kennzeichnen. Handschriftliche Notizen im Schreiben sind Angaben von $name."
+                    "den Angaben. Setze alle bekannten Angaben (Datum, Nummern, Beträge) direkt ein. Keine Platzhalter, keine eckigen Klammern – " +
+                    "was unbekannt ist, lässt du einfach weg. Handschriftliche Notizen im Schreiben sind Angaben von $name."
                 val ans = AiRouter.complete(c.settings, system, listOf(ChatMessage("user", Prompts.withDocument("Schreibe jetzt den Antwortbrief.", text))), 1500)
                 if (ans.fallback) note = "Antwort von " + AiRouter.shortName(ans.provider) + " (gewählter Dienst nicht erreichbar)" + if (ans.provider == de.fapdf.data.AiProvider.NANO) " – bitte genau prüfen" else ""
                 applyLetter(ans.text)
@@ -269,9 +283,21 @@ class ReplyViewModel(app: Application, private val docId: Long) : AndroidViewMod
             subject = "Ihr Schreiben" + if (bezug.isNotBlank()) " – $bezug" else ""
             body = raw.trim()
         }
+        body = fixPlaceholders(body); subject = fixPlaceholders(subject)
         // Name unter dem Gruß setzt die App selbst
         if (signerName.isNotBlank()) body = body.lines().dropLastWhile { it.isBlank() || it.trim() == signerName.trim() }.joinToString("\n")
     }
+
+    /** Übrig gebliebene Platzhalter wie „[Datum des Schreibens einfügen …]“ füllen oder entfernen. */
+    private fun fixPlaceholders(t: String): String = t.replace(Regex("\\s?\\[([^\\]]{2,120})]")) { m ->
+        val inner = m.groupValues[1]
+        when {
+            inner.contains("datum", true) && letterDate.isNotBlank() -> " $letterDate"
+            inner.contains("betrag", true) && amounts.isNotBlank() -> " " + amounts
+            Regex("(?i)einfügen|falls|sonst|weglassen|bitte|angeben|unbekannt|xx").containsMatchIn(inner) -> ""
+            else -> m.value
+        }
+    }.replace(Regex(" {2,}"), " ").replace(Regex(" ([,.])"), "$1")
 
     fun restyle(kind: String) {
         val current = body
@@ -290,7 +316,7 @@ class ReplyViewModel(app: Application, private val docId: Long) : AndroidViewMod
                     "(Anrede … Mit freundlichen Grüßen) bei. Gib nur den überarbeiteten Brieftext aus, ohne Betreff und ohne Erklärungen."
                 val ans = AiRouter.complete(c.settings, system, listOf(ChatMessage("user", current)), 1500)
                 if (ans.fallback) note = "Antwort von " + AiRouter.shortName(ans.provider) + " (gewählter Dienst nicht erreichbar)" + if (ans.provider == de.fapdf.data.AiProvider.NANO) " – bitte genau prüfen" else ""
-                body = de.fapdf.ai.AiText.clean(ans.text)
+                body = fixPlaceholders(de.fapdf.ai.AiText.clean(ans.text))
                 createdDocId = null
             } catch (e: Exception) {
                 error = e.message ?: "Fehler beim Überarbeiten"
@@ -339,6 +365,7 @@ class ReplyViewModel(app: Application, private val docId: Long) : AndroidViewMod
         const val ANALYZE = "Du liest ein Schreiben, das der Nutzer erhalten hat. Antworte auf Deutsch, OHNE Einleitung, " +
             "genau in diesen Zeilen (jede Angabe in einer Zeile, nichts erfinden, fehlt etwas: \"-\"):\n" +
             "KURZ: 2 Sätze – wer schreibt, worum geht es, was wird verlangt\n" +
+            "BRIEFDATUM: Datum des Schreibens als TT.MM.JJJJ\n" +
             "FRIST: Frist oder Termin (in Worten)\n" +
             "FRISTDATUM: letzter Tag der Frist als TT.MM.JJJJ, sonst -\n" +
             "BETRAG: wichtigster Betrag\n" +
