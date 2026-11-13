@@ -737,29 +737,35 @@ private fun BigThumb(path: String?, key: Any?) {
 private fun DocPreviewPane(vm: AppViewModel, d: DocumentEntity, nav: HomeNav, modifier: Modifier) {
     val src = de.fapdf.ui.components.rememberDocSource(d, null)
     val index = vm.container.index
-    Column(modifier.padding(end = 16.dp, bottom = 16.dp).clip(RoundedCornerShape(22.dp)).background(FaColors.Card)) {
-        Column(Modifier.padding(16.dp)) {
-            Text(DocumentRepository.baseName(d.displayName), fontWeight = FontWeight.Bold, fontSize = 18.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            Text(listOfNotNull(index.category(d.id), "${d.pageCount} Seiten", Format.date(d.modifiedAt)).joinToString(" · "), color = FaColors.SecondaryLabel, fontSize = 13.sp)
-            index.deadline(d.id)?.let { dl ->
-                Text("Frist: " + (dl.date?.let { java.text.SimpleDateFormat("dd.MM.yyyy", java.util.Locale.GERMANY).format(java.util.Date(it)) } ?: dl.text) +
-                    (if (dl.amount.isNotBlank()) " · ${dl.amount}" else ""), color = Color(0xFFFFB3B3), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 4.dp))
+    Column(modifier.padding(end = 12.dp, bottom = 8.dp).clip(RoundedCornerShape(18.dp)).background(FaColors.Card)) {
+        // Kompakte Kopfzeile: Name, Angaben und kleine Knöpfe in einer Zeile – die Seiten bekommen den Platz
+        Row(Modifier.fillMaxWidth().padding(start = 14.dp, end = 8.dp, top = 8.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(DocumentRepository.baseName(d.displayName), fontWeight = FontWeight.Bold, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                val dl = index.deadline(d.id)
+                Text(listOfNotNull(index.category(d.id), "${d.pageCount} S.", Format.dateShort(d.modifiedAt),
+                    dl?.let { "Frist " + (it.date?.let { t -> java.text.SimpleDateFormat("dd.MM.yy", java.util.Locale.GERMANY).format(java.util.Date(t)) } ?: it.text) }).joinToString(" · "),
+                    color = if (dl != null) Color(0xFFFFB3B3) else FaColors.SecondaryLabel, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-            Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf(
-                    "Öffnen" to { nav.workspace(d.id, WorkspaceMode.READ) },
-                    "Unterschreiben" to { nav.workspace(d.id, WorkspaceMode.SIGN) },
-                    "Mehr" to { vm.actionDocId = d.id },
-                ).forEachIndexed { i, (t, a) ->
-                    Box(
-                        Modifier.weight(1f).height(44.dp).clip(RoundedCornerShape(12.dp)).background(if (i == 0) FaColors.Accent else FaColors.Background).clickable(onClick = a),
-                        contentAlignment = Alignment.Center,
-                    ) { Text(t, color = if (i == 0) FaColors.OnAccent else FaColors.Label, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, maxLines = 1) }
+            listOf(
+                Triple(Icons.Outlined.MenuBook, "Öffnen") { nav.workspace(d.id, WorkspaceMode.READ) },
+                Triple(Icons.Outlined.Gesture, "Unterschreiben") { nav.workspace(d.id, WorkspaceMode.SIGN) },
+                Triple(Icons.Outlined.MoreVert, "Mehr") { vm.actionDocId = d.id },
+            ).forEachIndexed { i, (ic, t, a) ->
+                Column(
+                    Modifier.width(64.dp).clip(RoundedCornerShape(10.dp)).clickable(onClick = a).padding(vertical = 4.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Icon(ic, t, tint = FaColors.Accent, modifier = Modifier.size(20.dp))
+                    Text(t, fontSize = 10.sp, maxLines = 1, color = if (i == 0) FaColors.Accent else FaColors.SecondaryLabel)
                 }
             }
         }
         if (src != null) androidx.compose.foundation.lazy.LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 16.dp)) {
-            items(src.pageCount) { p -> de.fapdf.ui.components.LargePagePreview(src, p, maxHeight = 900.dp) }
+            items(src.pageCount) { p ->
+                // Antippen öffnet das Dokument im Reader
+                de.fapdf.ui.components.LargePagePreview(src, p, Modifier.clickable { nav.workspace(d.id, WorkspaceMode.READ) }, maxHeight = 2000.dp)
+            }
         } else Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("Vorschau wird geladen …", color = FaColors.SecondaryLabel) }
     }
 }

@@ -301,53 +301,37 @@ fun ScannerToolV2(appVm: AppViewModel, runner: ToolRunner) {
     }
 
     val canEdit = remember(d.id, stamp) { ScanStore.has(context, d.id) }
-    val actions: @Composable (Modifier) -> Unit = { m ->
-        Row(m, horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(6.dp)) {
-            IconAction(Icons.Outlined.OpenInNew, "Öffnen", Modifier.weight(1f), primary = true) { runner.openDoc?.invoke(d.id) }
-            IconAction(Icons.Outlined.Share, "Teilen", Modifier.weight(1f)) { de.fapdf.ui.components.FileActions.share(context, d.file(), d.displayName) }
-            IconAction(Icons.Outlined.Download, "Export", Modifier.weight(1f)) { exporter(d.file(), d.displayName) }
-            IconAction(Icons.Outlined.Print, "Drucken", Modifier.weight(1f)) { de.fapdf.ui.components.FileActions.print(context, d.file(), d.displayName) }
-        }
-    }
-    val more: @Composable (Modifier) -> Unit = { m ->
-        Row(m, horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(6.dp)) {
-            if (canEdit) IconAction(Icons.Outlined.AutoFixHigh, "Nachbearbeiten", Modifier.weight(1f)) { editId = d.id }
-            IconAction(Icons.Outlined.TextFields, "Text erkennen", Modifier.weight(1f)) { runOcr(d.id) }
-            IconAction(Icons.Outlined.CameraAlt, "Neuer Scan", Modifier.weight(1f), primary = true, onClick = startScan)
-        }
-    }
-    val title: @Composable () -> Unit = {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            androidx.compose.material3.Icon(Icons.Outlined.CheckCircle, null, tint = FaColors.Success, modifier = Modifier.padding(end = 6.dp))
-            Text(d.displayName, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+    // Wie beim Samsung-Scanner: Dokument groß, schlichte Leiste unten
+    Column(Modifier.fillMaxSize()) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+            androidx.compose.material3.Icon(Icons.Outlined.CheckCircle, null, tint = FaColors.Success, modifier = Modifier.size(18.dp).padding(end = 4.dp))
+            Text(d.displayName, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, fontSize = 13.sp,
+                color = FaColors.SecondaryLabel, modifier = Modifier.weight(1f))
             Text("${d.pageCount} S.", fontSize = 12.sp, color = FaColors.SecondaryLabel)
         }
-    }
-    androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
-        if (maxWidth >= 600.dp) {
-            // Aufgeklappt: Dokument links über die ganze Höhe, Bedienung rechts schmal
-            Row(Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 4.dp)) {
-                PdfFirstPage(d.file(), stamp + d.modifiedAt,
-                    Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(14.dp)).background(FaColors.Card).padding(8.dp))
-                Column(Modifier.width(320.dp).fillMaxHeight().verticalScroll(rememberScrollState()).padding(start = 12.dp)) {
-                    title()
-                    actions(Modifier.fillMaxWidth().padding(top = 10.dp))
-                    more(Modifier.fillMaxWidth().padding(top = 8.dp))
-                    Text("Für den nächsten Scan", fontSize = 13.sp, color = FaColors.SecondaryLabel, modifier = Modifier.padding(top = 16.dp, bottom = 4.dp))
-                    settings()
-                }
-            }
-        } else {
-            // Zugeklappt: Dokument nimmt den Platz, Bedienung kompakt darüber und darunter
-            Column(Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 2.dp)) {
-                title()
-                actions(Modifier.fillMaxWidth().padding(top = 8.dp))
-                PdfFirstPage(d.file(), stamp + d.modifiedAt,
-                    Modifier.weight(1f).fillMaxWidth().padding(vertical = 8.dp).clip(RoundedCornerShape(14.dp)).background(FaColors.Card).padding(6.dp))
-                more(Modifier.fillMaxWidth().padding(bottom = 6.dp))
-            }
+        PdfFirstPage(d.file(), stamp + d.modifiedAt,
+            Modifier.weight(1f).fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp).clickable { runner.openDoc?.invoke(d.id) })
+        Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp), horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(2.dp)) {
+            BarAction(Icons.Outlined.OpenInNew, "Öffnen") { runner.openDoc?.invoke(d.id) }
+            BarAction(Icons.Outlined.Share, "Teilen") { de.fapdf.ui.components.FileActions.share(context, d.file(), d.displayName) }
+            BarAction(Icons.Outlined.Download, "Export") { exporter(d.file(), d.displayName) }
+            BarAction(Icons.Outlined.Print, "Drucken") { de.fapdf.ui.components.FileActions.print(context, d.file(), d.displayName) }
+            if (canEdit) BarAction(Icons.Outlined.AutoFixHigh, "Filter") { editId = d.id }
+            BarAction(Icons.Outlined.TextFields, "Text") { runOcr(d.id) }
+            BarAction(Icons.Outlined.CameraAlt, "Neu", accent = true) { lastId = null; runner.results = emptyList() }
         }
+    }
+}
+
+/** Schlichter Leisten-Knopf (Symbol + kleiner Text, kein Hintergrund). */
+@Composable
+private fun androidx.compose.foundation.layout.RowScope.BarAction(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, accent: Boolean = false, onClick: () -> Unit) {
+    Column(
+        Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).clickable(onClick = onClick).padding(vertical = 6.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        androidx.compose.material3.Icon(icon, label, tint = if (accent) FaColors.Accent else FaColors.Label, modifier = Modifier.size(22.dp))
+        Text(label, fontSize = 11.sp, maxLines = 1, softWrap = false, color = if (accent) FaColors.Accent else FaColors.Label, modifier = Modifier.padding(top = 3.dp))
     }
 }
 
