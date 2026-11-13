@@ -380,7 +380,6 @@ fun WorkspaceScreen(
                 skipPartiallyExpanded = true,
                 confirmValueChange = { it != androidx.compose.material3.SheetValue.Hidden },
             ),
-            sheetGesturesEnabled = false,
             dragHandle = null,
             containerColor = FaColors.Surface,
         ) {
