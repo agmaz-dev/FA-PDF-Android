@@ -529,7 +529,7 @@ fun SignatureSheet(vm: WorkspaceViewModel, onDismiss: () -> Unit, onNew: () -> U
                     val preview = remember(typed, color) { de.fapdf.ui.components.SignatureRender.typed(typed, color) }
                     Box(
                         Modifier.padding(16.dp).fillMaxWidth().height(110.dp).clip(RoundedCornerShape(14.dp))
-                            .background(FaColors.Card),
+                            .background(Color.White),
                         contentAlignment = Alignment.Center,
                     ) {
                         if (preview != null) Image(preview.asImageBitmap(), "Vorschau", Modifier.padding(12.dp))
@@ -540,7 +540,7 @@ fun SignatureSheet(vm: WorkspaceViewModel, onDismiss: () -> Unit, onNew: () -> U
                 3 -> {
                     Box(
                         Modifier.padding(horizontal = 16.dp).fillMaxWidth().height(150.dp).clip(RoundedCornerShape(14.dp))
-                            .background(FaColors.Card).clickable {
+                            .background(Color.White).clickable {
                                 photoPicker.launch(androidx.activity.result.PickVisualMediaRequest(androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly))
                             },
                         contentAlignment = Alignment.Center,
@@ -601,10 +601,10 @@ private fun SignatureRow(vm: WorkspaceViewModel, s: SignatureEntity, showThumb: 
         Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable(onClick = onClick).padding(vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(Modifier.size(width = 110.dp, height = 48.dp).clip(RoundedCornerShape(8.dp)).background(FaColors.Card), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(width = 110.dp, height = 48.dp).clip(RoundedCornerShape(8.dp)).background(Color.White), contentAlignment = Alignment.Center) {
             val t = thumb
             if (t != null) Image(t.asImageBitmap(), contentDescription = s.name, modifier = Modifier.padding(4.dp))
-            else Text("Geschützt", color = FaColors.SecondaryLabel, style = MaterialTheme.typography.bodySmall)
+            else Text("Geschützt", color = Color(0xFF6B7280), style = MaterialTheme.typography.bodySmall)
         }
         Spacer(Modifier.width(12.dp))
         Text(s.name, style = MaterialTheme.typography.bodyLarge)
