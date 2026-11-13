@@ -57,12 +57,33 @@ object GeminiNano {
             prompt = prompt.take(MAX_INPUT_CHARS - 200) + "\n</dokument>\n\nAntworte auf Deutsch, falls nicht anders verlangt."
             cut = true
         }
+        // Gemini Nano schreibt höchstens 256 Tokens pro Aufruf – längere Antworten in Stücken fortsetzen
+        val rounds = if (maxTokens > 256) 4 else 1
+        val sb = StringBuilder()
+        for (r in 0 until rounds) {
+            val input = if (r == 0) prompt else
+                prompt.take(MAX_INPUT_CHARS - sb.length.coerceAtMost(2500) - 200) +
+                    "\n\nBisherige Antwort:\n" + sb.takeLast(2500) +
+                    "\n\nSetze die Antwort genau an dieser Stelle fort, ohne Wiederholung. Wenn sie schon vollständig ist, antworte nur mit ENDE."
+            val part = generate(input).trim()
+            if (part.isEmpty() || part.startsWith("ENDE")) break
+            if (sb.isNotEmpty()) sb.append(if (part.first().isLetterOrDigit() && !sb.last().isWhitespace()) " " else "")
+            sb.append(part.removeSuffix("ENDE").trimEnd())
+            // Endet mit Satzzeichen und ist deutlich kürzer als das Limit → fertig
+            if (part.length < 600 || part.trimEnd().last() in ".!?)“\"") break
+        }
+        val text = sb.toString().trim()
+        if (text.isEmpty()) throw AiException("Gemini Nano hat keine Antwort geliefert.")
+        return if (cut) "$text\n\n(Hinweis: Gemini Nano kann nur kurze Texte lesen – berücksichtigt wurde nur der Anfang des Dokuments.)" else text
+    }
+
+    private suspend fun generate(prompt: String): String {
         val response = try {
             client().generateContent(
                 generateContentRequest(TextPart(prompt)) {
                     temperature = 0.2f
                     topK = 10
-                    maxOutputTokens = maxTokens.coerceIn(64, 1024)
+                    maxOutputTokens = 256
                 }
             )
         } catch (e: Exception) {
@@ -76,8 +97,6 @@ object GeminiNano {
                 }
             )
         }
-        val text = response.candidates.firstOrNull()?.text?.trim().orEmpty()
-        if (text.isEmpty()) throw AiException("Gemini Nano hat keine Antwort geliefert.")
-        return if (cut) "$text\n\n(Hinweis: Gemini Nano kann nur kurze Texte lesen – berücksichtigt wurde nur der Anfang des Dokuments.)" else text
+        return response.candidates.firstOrNull()?.text.orEmpty()
     }
 }
