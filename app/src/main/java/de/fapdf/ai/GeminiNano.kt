@@ -74,8 +74,9 @@ object GeminiNano {
             }
             if (sb.isNotEmpty()) sb.append(if (part.first().isLetterOrDigit() && !sb.last().isWhitespace()) " " else "")
             sb.append(part.removeSuffix("ENDE").trimEnd())
-            // Endet mit Satzzeichen und ist deutlich kürzer als das Limit → fertig
-            if (part.length < 600 || part.trimEnd().last() in ".!?)“\"") break
+            // Fertig erst, wenn der Text mit einem Satzende aufhört – sonst mitten im Satz weiterschreiben lassen
+            if (part.trimEnd().last() in ".!?)“\"" && (part.length < 600 || r == rounds - 1)) break
+            if (part.trimEnd().last() in ".!?)“\"" && sb.contains("Grüß")) break
         }
         val text = AiText.clean(sb.toString())
         if (text.isEmpty()) throw AiException("Gemini Nano hat keine Antwort geliefert.")

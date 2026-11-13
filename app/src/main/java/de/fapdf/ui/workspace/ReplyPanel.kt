@@ -253,8 +253,8 @@ class ReplyViewModel(app: Application, private val docId: Long) : AndroidViewMod
 
     fun useProfile(p: PersonProfile) {
         profileId = p.id
-        signerName = p.fullName
-        sender = listOf(p.fullName, p.streetLine, p.zipCity, p.phone.takeIf { it.isNotBlank() }?.let { "Tel. $it" }, p.email)
+        signerName = p.fullName.replace(Regex("\\s+"), " ").trim()
+        sender = listOf(signerName, p.streetLine, p.zipCity, p.phone.takeIf { it.isNotBlank() }?.let { "Tel. $it" }, p.email)
             .filter { !it.isNullOrBlank() }.joinToString("\n")
         val today = SimpleDateFormat("dd.MM.yyyy", Locale.GERMANY).format(Date())
         placeDate = listOf(p.city.trim(), today).filter { it.isNotBlank() }.joinToString(", ")
@@ -373,6 +373,21 @@ class ReplyViewModel(app: Application, private val docId: Long) : AndroidViewMod
         body = fixPlaceholders(body); subject = fixPlaceholders(subject)
         // Name unter dem Gruß setzt die App selbst
         if (signerName.isNotBlank()) body = body.lines().dropLastWhile { it.isBlank() || it.trim() == signerName.trim() }.joinToString("\n")
+        body = completeEnding(body)
+        if (raw.contains("(Hinweis: Gemini Nano")) note = "Gemini Nano hat nur den Anfang des Schreibens gelesen – bitte genau prüfen."
+    }
+
+    /** Bricht der Text mitten im Satz ab (KI-Limit), bis zum letzten vollständigen Satz kürzen und den Gruß ergänzen. */
+    private fun completeEnding(t: String): String {
+        var b = t.trimEnd()
+        if (b.isEmpty()) return b
+        val hasGreeting = Regex("(?i)(mit freundlichen grüßen|freundliche grüße|hochachtungsvoll)\\s*$").containsMatchIn(b)
+        if (hasGreeting) return b
+        if (b.last() !in ".!?)") {
+            val cut = b.lastIndexOfAny(charArrayOf('.', '!', '?'))
+            if (cut > b.length / 2) b = b.substring(0, cut + 1)
+        }
+        return "$b\n\nMit freundlichen Grüßen"
     }
 
     /** Übrig gebliebene Platzhalter wie „[Datum des Schreibens einfügen …]“ füllen oder entfernen. */
@@ -408,7 +423,7 @@ class ReplyViewModel(app: Application, private val docId: Long) : AndroidViewMod
                 val ans = AiRouter.complete(c.settings, system, listOf(ChatMessage("user", input)), if (kind == "ausführlich") 2500 else 1500) { partial = it }
                 partial = null
                 if (ans.fallback) note = "Antwort von " + AiRouter.shortName(ans.provider) + " (gewählter Dienst nicht erreichbar)" + if (ans.provider == de.fapdf.data.AiProvider.NANO) " – bitte genau prüfen" else ""
-                body = fixPlaceholders(de.fapdf.ai.AiText.letter(ans.text))
+                body = completeEnding(fixPlaceholders(de.fapdf.ai.AiText.letter(ans.text)))
                 createdDocId = null
             } catch (e: Exception) {
                 error = e.message ?: "Fehler beim Überarbeiten"

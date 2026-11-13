@@ -11,7 +11,7 @@ object AiText {
 
     /** Für Brieftexte: Markdown-Zeichen weg und wiederholte Sätze nur einmal behalten. */
     fun letter(s: String): String {
-        val noMd = clean(s)
+        val noMd = clean(s).lines().filterNot { it.trim().startsWith("(Hinweis: Gemini Nano") }.joinToString("\n")
             .replace(Regex("\\*\\*(.+?)\\*\\*"), "$1").replace(Regex("__(.+?)__"), "$1")
             .replace(Regex("(?m)^\\s*#{1,6}\\s*"), "").replace(Regex("(?m)^\\s*[*•]\\s+"), "- ")
             .replace("**", "")
