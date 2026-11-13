@@ -375,7 +375,13 @@ fun WorkspaceScreen(
     if (replyOpen && vm.mode == WorkspaceMode.READ && androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp < 600) {
         androidx.compose.material3.ModalBottomSheet(
             onDismissRequest = { replyOpen = false },
-            sheetState = androidx.compose.material3.rememberModalBottomSheetState(skipPartiallyExpanded = true),
+            // Nicht durch Wischen schließen – nur über das X (sonst ginge der Entwurf beim Scrollen verloren)
+            sheetState = androidx.compose.material3.rememberModalBottomSheetState(
+                skipPartiallyExpanded = true,
+                confirmValueChange = { it != androidx.compose.material3.SheetValue.Hidden },
+            ),
+            sheetGesturesEnabled = false,
+            dragHandle = null,
             containerColor = FaColors.Surface,
         ) {
             ReplyPanel(docId, vm.current, Modifier.fillMaxWidth().fillMaxHeight(0.92f),
