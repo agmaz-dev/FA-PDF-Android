@@ -60,7 +60,8 @@ object LetterPdfWriter {
             }
 
             // Rücksendeangabe (klein, über dem Anschriftfeld) und Anschrift ab 45 mm
-            val returnLine = senderLines.take(3).joinToString(" · ")
+            val postal = senderLines.filterNot { it.startsWith("Tel", true) || it.contains("@") }
+            val returnLine = (if (postal.size > 3) listOf(postal.first()) + postal.takeLast(2) else postal).joinToString(" · ")
             var ay = a4.height - 45 * MM - 3 * MM
             if (returnLine.isNotBlank()) {
                 put(regular, 7f, left, ay, returnLine, 0xFF555555.toInt())
