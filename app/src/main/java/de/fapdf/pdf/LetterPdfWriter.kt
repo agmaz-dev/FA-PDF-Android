@@ -21,7 +21,14 @@ object LetterPdfWriter {
 
     private const val MM = 2.8346457f
 
-    fun write(letter: Letter, signature: Bitmap?, fonts: FontLibrary, out: File) {
+    /** Mehrfache Leerzeichen und Leerzeichen vor Satzzeichen entfernen. */
+    private fun tidy(s: String) = s.lines().joinToString("\n") { it.replace(Regex("[ \\t]+"), " ").replace(Regex(" ([,.;:])"), "$1").trim() }
+
+    fun write(letterIn: Letter, signature: Bitmap?, fonts: FontLibrary, out: File) {
+        val letter = letterIn.copy(
+            sender = tidy(letterIn.sender), recipient = tidy(letterIn.recipient), placeDate = tidy(letterIn.placeDate),
+            subject = tidy(letterIn.subject), signerName = tidy(letterIn.signerName),
+        )
         PDDocument().use { doc ->
             val cache = DocFontCache(doc, fonts)
             val regular = cache.get(FontFamily.SANS, false, false)
@@ -50,12 +57,12 @@ object LetterPdfWriter {
                 return a4.height - 20 * MM
             }
 
-            // Absender oben rechts
+            // Absender oben rechts – rechtsbündig, auf einer Linie mit dem Datum
             val senderLines = letter.sender.lines().map { it.trim() }.filter { it.isNotEmpty() }
             var y = a4.height - 15 * MM
-            val senderX = 125 * MM
             senderLines.forEachIndexed { i, l ->
-                put(if (i == 0) bold else regular, 10f, senderX, y, l)
+                val f = if (i == 0) bold else regular
+                put(f, 10f, right - width(f, l, 10f), y, l)
                 y -= 10f * 1.35f
             }
 

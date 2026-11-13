@@ -190,7 +190,7 @@ class ReplyViewModel(app: Application, private val docId: Long) : AndroidViewMod
         sender = listOf(p.fullName, p.streetLine, p.zipCity, p.phone.takeIf { it.isNotBlank() }?.let { "Tel. $it" }, p.email)
             .filter { !it.isNullOrBlank() }.joinToString("\n")
         val today = SimpleDateFormat("dd.MM.yyyy", Locale.GERMANY).format(Date())
-        placeDate = listOf(p.city, today).filter { it.isNotBlank() }.joinToString(", ")
+        placeDate = listOf(p.city.trim(), today).filter { it.isNotBlank() }.joinToString(", ")
     }
 
     fun loadSignatures(list: List<SignatureEntity>) {
@@ -383,7 +383,8 @@ fun ReplyPanel(
                 onMail = {
                     vm.createdFile?.let {
                         FileActions.email(context, it, "Antwort – ${vm.docName}.pdf", listOfNotNull(vm.email.ifBlank { null }), vm.subject,
-                            "Sehr geehrte Damen und Herren,\n\nanbei erhalten Sie mein Schreiben als PDF.\n\nMit freundlichen Grüßen\n${vm.signerName}")
+                            // Gruß und Name hängt das E-Mail-Programm meist selbst als Signatur an
+                            "Sehr geehrte Damen und Herren,\n\nanbei erhalten Sie mein Schreiben als PDF.\n")
                     }
                 })
             Spacer(Modifier.height(24.dp))
@@ -481,7 +482,7 @@ private fun LetterEditor(
 
     Row(Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         listOf("höflich" to "Höflicher", "bestimmt" to "Bestimmter", "kurz" to "Kürzer").forEach { (k, t) ->
-            OutlinedButton(onClick = { onRestyle(k) }, enabled = vm.busy == null, modifier = Modifier.weight(1f), shape = RoundedCornerShape(12.dp)) { Text(t, fontSize = 13.sp) }
+            EqualButton(t, Modifier.weight(1f), enabled = vm.busy == null) { onRestyle(k) }
         }
     }
     TextButton(onClick = { vm.write() }, enabled = vm.busy == null) { Text("Neu schreiben") }
@@ -506,10 +507,20 @@ private fun LetterEditor(
     ) { Text(if (vm.createdDocId == null) "Als PDF speichern" else "PDF neu erstellen", fontWeight = FontWeight.SemiBold) }
     if (vm.createdDocId != null) {
         Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = onOpen, modifier = Modifier.weight(1f), shape = RoundedCornerShape(12.dp)) { Text("Öffnen") }
-            OutlinedButton(onClick = onMail, modifier = Modifier.weight(1f), shape = RoundedCornerShape(12.dp)) { Text("Per E-Mail") }
-            OutlinedButton(onClick = onShare, modifier = Modifier.weight(1f), shape = RoundedCornerShape(12.dp)) { Text("Teilen") }
+            EqualButton("Öffnen", Modifier.weight(1f), onClick = onOpen)
+            EqualButton("E-Mail", Modifier.weight(1f), onClick = onMail)
+            EqualButton("Teilen", Modifier.weight(1f), onClick = onShare)
         }
         if (vm.email.isNotBlank()) Text("E-Mail geht an: ${vm.email}", color = FaColors.SecondaryLabel, fontSize = 12.sp)
     }
+}
+
+
+/** Gleich hohe, einzeilige Knöpfe – nichts bricht um. */
+@Composable
+private fun EqualButton(text: String, modifier: Modifier, enabled: Boolean = true, onClick: () -> Unit) {
+    OutlinedButton(
+        onClick = onClick, enabled = enabled, modifier = modifier.height(48.dp), shape = RoundedCornerShape(12.dp),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp),
+    ) { Text(text, fontSize = 14.sp, maxLines = 1, softWrap = false, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis) }
 }
