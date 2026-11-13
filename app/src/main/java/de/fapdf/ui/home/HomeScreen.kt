@@ -1,5 +1,7 @@
 package de.fapdf.ui.home
 
+import androidx.compose.ui.draw.clipToBounds
+import de.fapdf.ui.components.pinchZoom
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.AutoFixHigh
@@ -761,10 +763,12 @@ private fun DocPreviewPane(vm: AppViewModel, d: DocumentEntity, nav: HomeNav, mo
                 }
             }
         }
-        if (src != null) androidx.compose.foundation.lazy.LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 16.dp)) {
+        val zoom = remember(d.id) { de.fapdf.ui.components.ZoomState() }
+        if (src != null) androidx.compose.foundation.lazy.LazyColumn(
+            Modifier.fillMaxSize().clipToBounds().pinchZoom(zoom) { nav.workspace(d.id, WorkspaceMode.READ) }, contentPadding = PaddingValues(bottom = 16.dp)) {
             items(src.pageCount) { p ->
                 // Antippen öffnet das Dokument im Reader
-                de.fapdf.ui.components.LargePagePreview(src, p, Modifier.clickable { nav.workspace(d.id, WorkspaceMode.READ) }, maxHeight = 2000.dp)
+                de.fapdf.ui.components.LargePagePreview(src, p, maxHeight = 2000.dp)
             }
         } else Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("Vorschau wird geladen …", color = FaColors.SecondaryLabel) }
     }

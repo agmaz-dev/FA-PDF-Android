@@ -1,5 +1,7 @@
 package de.fapdf.ui.tools
 
+import androidx.compose.ui.draw.clipToBounds
+import de.fapdf.ui.components.pinchZoom
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.TextFields
 import androidx.compose.material.icons.outlined.AutoFixHigh
@@ -301,6 +303,7 @@ fun ScannerToolV2(appVm: AppViewModel, runner: ToolRunner) {
     }
 
     val canEdit = remember(d.id, stamp) { ScanStore.has(context, d.id) }
+    val zoom = remember(d.id, stamp) { de.fapdf.ui.components.ZoomState() }
     // Wie beim Samsung-Scanner: Dokument groß, schlichte Leiste unten
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -310,7 +313,8 @@ fun ScannerToolV2(appVm: AppViewModel, runner: ToolRunner) {
             Text("${d.pageCount} S.", fontSize = 12.sp, color = FaColors.SecondaryLabel)
         }
         PdfFirstPage(d.file(), stamp + d.modifiedAt,
-            Modifier.weight(1f).fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp).clickable { runner.openDoc?.invoke(d.id) })
+            Modifier.weight(1f).fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp).clipToBounds()
+                .pinchZoom(zoom) { runner.openDoc?.invoke(d.id) })
         Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp), horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(2.dp)) {
             BarAction(Icons.Outlined.OpenInNew, "Öffnen") { runner.openDoc?.invoke(d.id) }
             BarAction(Icons.Outlined.Share, "Teilen") { de.fapdf.ui.components.FileActions.share(context, d.file(), d.displayName) }
