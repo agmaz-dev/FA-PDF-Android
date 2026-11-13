@@ -176,7 +176,7 @@ fun AiScreen(tool: Tool, docId: Long?, appVm: AppViewModel, onBack: () -> Unit, 
         scope.launch {
             busy = "Anfrage an ${settings.aiProvider.title} …"
             try {
-                val key = appVm.container.settings.apiKey() ?: if (appVm.container.settings.current().aiProvider in setOf(de.fapdf.data.AiProvider.CUSTOM, de.fapdf.data.AiProvider.FAKI)) "lokal" else throw IllegalStateException("Kein API-Schlüssel hinterlegt.")
+                val key = appVm.container.settings.apiKey() ?: if (appVm.container.settings.current().aiProvider .let { it == de.fapdf.data.AiProvider.CUSTOM || it.isLocal }) "lokal" else throw IllegalStateException("Kein API-Schlüssel hinterlegt.")
                 val s = appVm.container.settings.current()
                 onText(AiClient(s.aiProvider, key, s.aiModel, s.aiBaseUrl).complete(system, messages, maxTokens = 3000))
             } catch (e: Exception) {
@@ -191,7 +191,7 @@ fun AiScreen(tool: Tool, docId: Long?, appVm: AppViewModel, onBack: () -> Unit, 
     val consentPrefs = remember { context.getSharedPreferences("ai_consent", android.content.Context.MODE_PRIVATE) }
     fun withConsent(action: () -> Unit) {
         val p = settings.aiProvider
-        if (consentGiven || p == de.fapdf.data.AiProvider.FAKI || consentPrefs.getBoolean(p.name, false)) action() else consentFor = action
+        if (consentGiven || p.isLocal || consentPrefs.getBoolean(p.name, false)) action() else consentFor = action
     }
 
     var translatedId by remember { mutableStateOf<Long?>(null) }
@@ -211,7 +211,7 @@ fun AiScreen(tool: Tool, docId: Long?, appVm: AppViewModel, onBack: () -> Unit, 
             val translated = if (offline) {
                 OfflineTranslator(context).translateAll(texts, src, to) { p, n -> busy = "Übersetze Absatz $p von $n …" }
             } else {
-                val key = appVm.container.settings.apiKey() ?: if (appVm.container.settings.current().aiProvider in setOf(de.fapdf.data.AiProvider.CUSTOM, de.fapdf.data.AiProvider.FAKI)) "lokal" else throw IllegalStateException("Kein API-Schlüssel hinterlegt.")
+                val key = appVm.container.settings.apiKey() ?: if (appVm.container.settings.current().aiProvider .let { it == de.fapdf.data.AiProvider.CUSTOM || it.isLocal }) "lokal" else throw IllegalStateException("Kein API-Schlüssel hinterlegt.")
                 val s = appVm.container.settings.current()
                 AiBatchTranslator.translateAll(AiClient(s.aiProvider, key, s.aiModel, s.aiBaseUrl), texts, to) { p, n -> busy = "KI-Übersetzung Teil $p von $n …" }
             }

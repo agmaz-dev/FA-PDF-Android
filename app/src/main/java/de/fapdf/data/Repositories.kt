@@ -272,7 +272,7 @@ class SettingsRepository(private val context: Context, private val crypto: Crypt
             aiProvider = provider,
             aiModel = (if (provider != stored) null else p[Keys.MODEL])?.takeIf { it.isNotBlank() } ?: provider.defaultModel,
             savedKeys = AiProvider.entries.filter { !p[keyFor(it)].isNullOrBlank() }.toSet(),
-            hasAiKey = provider == AiProvider.FAKI || !p[keyFor(provider)].isNullOrBlank() || !p[Keys.KEY].isNullOrBlank(),
+            hasAiKey = provider.isLocal || !p[keyFor(provider)].isNullOrBlank() || !p[Keys.KEY].isNullOrBlank(),
             aiBaseUrl = p[Keys.BASE_URL] ?: DEFAULT_AI_BASE_URL,
         )
     }

@@ -13,8 +13,8 @@ android {
         applicationId = "de.fapdf"
         minSdk = 26
         targetSdk = 35
-        versionCode = 19
-        versionName = "1.7.5"
+        versionCode = 20
+        versionName = "1.8.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // Nur 64-Bit-ARM (Galaxy Z Fold 7): spart rund 75 MB gegenüber allen Prozessortypen
         ndk { abiFilters += "arm64-v8a" }
@@ -117,6 +117,7 @@ dependencies {
     implementation("com.google.mlkit:text-recognition:16.0.1")          // OCR (lateinische Schrift: DE/EN/TR)
     implementation("com.google.mlkit:translate:17.0.3")                 // Offline-Übersetzung
     implementation("com.google.mlkit:language-id:17.0.6")               // Spracherkennung (auf dem Gerät)
+    implementation("com.google.mlkit:genai-prompt:1.0.0-beta2")         // Gemini Nano (eingebaute KI)
     implementation("com.google.android.gms:play-services-mlkit-document-scanner:16.0.0-beta1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.9.0")

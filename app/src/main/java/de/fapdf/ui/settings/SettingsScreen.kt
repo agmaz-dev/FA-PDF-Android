@@ -127,7 +127,17 @@ fun SettingsScreen(appVm: AppViewModel, onBack: (() -> Unit)?, onProfiles: () ->
                     supportingText = { Text("Adresse eines OpenAI-kompatiblen Dienstes, endet meist auf /v1") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
                 )
-                if (provider == AiProvider.FAKI) Text(
+                if (provider == AiProvider.NANO) {
+                    Text(
+                        "Antworten kommen von Gemini Nano, der KI, die in Android auf diesem Handy eingebaut ist – " +
+                            "kein Schlüssel, kein Internet, Dokumente verlassen das Handy nicht. Gut für kurze Dokumente " +
+                            "(etwa 3–4 Seiten) und Zusammenfassungen.",
+                        color = FaColors.SecondaryLabel, modifier = Modifier.padding(vertical = 4.dp),
+                    )
+                    var nanoState by remember { mutableStateOf<String?>(null) }
+                    TextButton(onClick = { nanoState = "Wird geprüft …"; scope.launch { nanoState = de.fapdf.ai.GeminiNano.statusText() } }) { Text("Gemini Nano prüfen") }
+                    nanoState?.let { Text(it, color = FaColors.SecondaryLabel) }
+                } else if (provider == AiProvider.FAKI) Text(
                     "Antworten kommen von der App FA KI auf diesem Handy. Dort ein Modell herunterladen und einschalten – " +
                         "kein Schlüssel und kein Internet nötig. Dokumente verlassen das Handy nicht.",
                     color = FaColors.SecondaryLabel, modifier = Modifier.padding(vertical = 4.dp),

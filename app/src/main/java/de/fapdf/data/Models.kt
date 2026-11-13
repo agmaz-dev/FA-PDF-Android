@@ -29,9 +29,13 @@ enum class AiProvider(val title: String, val endpointHost: String, val pricingUr
     ANTHROPIC("Anthropic (Claude)", "api.anthropic.com", "https://www.anthropic.com/pricing", "claude-haiku-5-5"),
     OPENAI("OpenAI", "api.openai.com", "https://openai.com/api/pricing/", ""),
     GROQ("Groq – Internet, kostenlos", "api.groq.com", "https://console.groq.com/keys", "openai/gpt-oss-120b"),
+    NANO("Gemini Nano – auf diesem Handy, privat", "ohne Internet · in Android eingebaut", "", "gemini-nano"),
     FAKI("FA KI – auf diesem Handy, privat", "ohne Internet · App FA KI muss laufen", "", "lokal"),
     /** Beliebiger OpenAI-kompatibler Dienst mit eigener Adresse, z. B. Groq (kostenloser Zugang). */
-    CUSTOM("Eigene Adresse", "andere OpenAI-kompatible Dienste", "https://console.groq.com/keys", "openai/gpt-oss-120b"),
+    CUSTOM("Eigene Adresse", "andere OpenAI-kompatible Dienste", "https://console.groq.com/keys", "openai/gpt-oss-120b");
+
+    /** Läuft auf dem Handy – kein Schlüssel, keine Zustimmung zur Übertragung nötig. */
+    val isLocal: Boolean get() = this == FAKI || this == NANO
 }
 
 enum class ThemeMode(val title: String) { SYSTEM("Wie System"), LIGHT("Hell"), DARK("Dunkel") }

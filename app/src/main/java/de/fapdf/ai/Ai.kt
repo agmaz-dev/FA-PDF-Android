@@ -37,6 +37,7 @@ class AiClient(private val provider: AiProvider, private val apiKey: String, pri
             AiProvider.ANTHROPIC -> anthropic(system, messages, maxTokens)
             AiProvider.OPENAI -> openai(system, messages, maxTokens)
             AiProvider.GROQ -> openai(system, messages, maxTokens, "https://api.groq.com/openai/v1")
+            AiProvider.NANO -> GeminiNano.complete(system, messages, maxTokens)
             AiProvider.FAKI -> openai(system, messages, maxTokens, "http://127.0.0.1:8080/v1")
             AiProvider.CUSTOM -> openai(system, messages, maxTokens, baseUrl.trimEnd('/').ifBlank { throw AiException("Bitte in den Einstellungen die Adresse eintragen.") })
         }
