@@ -278,7 +278,7 @@ private fun ComputeCard() {
                 valueRange = 0f..100f, steps = 3,
                 colors = androidx.compose.material3.SliderDefaults.colors(thumbColor = Lime, activeTrackColor = Lime, inactiveTrackColor = Line),
             )
-            Text("Tipp: Für die Grafik am besten „Qwen 3.5 – 4B (für Grafik)“ einschalten.", color = Grey, fontSize = 12.sp)
+            Text("Auf dem Fold 7 gemessen: 25 % war am schnellsten.", color = Grey, fontSize = 12.sp)
         }
         Text(devices, color = Grey, fontSize = 11.sp, modifier = Modifier.padding(top = 8.dp))
     }

@@ -81,11 +81,17 @@ class KiServer(private val context: Context) : NanoHTTPD("127.0.0.1", PORT) {
             req.has("max_tokens") -> req.optInt("max_tokens")
             req.has("max_completion_tokens") -> req.optInt("max_completion_tokens")
             else -> 1024
-        }.coerceIn(16, 2048)
+        }.coerceIn(16, MAX_ANSWER_TOKENS)
         val temp = req.optDouble("temperature", 0.3).toFloat().coerceIn(0f, 2f)
         val stream = req.optBoolean("stream", false)
 
-        val answer = Engine.complete(context, msgs, maxTokens, temp)
+        // Anfragen anderer Apps mit hoher Priorität rechnen, auch wenn FA KI im Hintergrund ist
+        android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_URGENT_AUDIO)
+        val hint = "Antworte knapp und auf den Punkt."
+        // Systemtext muss am Anfang stehen (sonst lehnen manche Chat-Vorlagen die Anfrage ab)
+        val withHint = if (msgs.firstOrNull()?.role == "system") listOf(msgs[0].copy(content = msgs[0].content + "\n\n" + hint)) + msgs.drop(1)
+            else listOf(Msg("system", hint)) + msgs
+        val answer = Engine.complete(context, withHint, maxTokens, temp)
         val model = Settings.active(context)?.id ?: "lokal"
         val id = "faki-" + System.currentTimeMillis()
         val created = System.currentTimeMillis() / 1000
@@ -132,6 +138,8 @@ class KiServer(private val context: Context) : NanoHTTPD("127.0.0.1", PORT) {
 
     companion object {
         const val PORT = 8080
+        /** Obergrenze für eine Antwort auf dem Handy: reicht für eine ausführliche Zusammenfassung, ohne minutenlang zu rechnen. */
+        const val MAX_ANSWER_TOKENS = 700
         const val BASE_URL = "http://127.0.0.1:8080/v1"
     }
 }
