@@ -136,6 +136,7 @@ class PdfEngineIntegrationTest {
                 body = "Sehr geehrte Frau Block,\n\nmit Ihrem Schreiben vom 19.10.2026 weisen Sie eine offene Forderung von 57,00 € aus. " +
                     "Diesen Betrag habe ich am 21.10.2026 überwiesen. Ich bitte Sie, den Zahlungseingang zu prüfen und von weiteren Säumniszuschlägen abzusehen.\n\nMit freundlichen Grüßen",
                 signerName = "Emine Agmaz",
+                attachments = listOf("Ihr Schreiben vom 19.10.2026 (Kopie)", "Zahlungsbeleg 21.10.2026"),
             ), null, fonts, f,
         )
         assertAllFontsEmbedded(f)
