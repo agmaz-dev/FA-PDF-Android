@@ -176,15 +176,16 @@ fun ToolScaffold(
     actionEnabled: Boolean = true,
     onAction: () -> Unit = {},
     title: String = tool.title,
+    scroll: Boolean = true,
     content: @Composable () -> Unit,
 ) {
     ScreenScaffold(title, onBack, actionText = actionText, actionEnabled = actionEnabled, onAction = onAction) { mod ->
-        Column(mod.fillMaxSize().verticalScroll(rememberScrollState())) {
+        Column(mod.fillMaxSize().let { if (scroll) it.verticalScroll(rememberScrollState()) else it }) {
             tool.limitedNote?.let { de.fapdf.ui.components.InfoCard("Hinweis: $it") }
             if (runner.results.isNotEmpty()) ResultCard(runner, onOpenDoc, replaceTarget)
             runner.doneMessage?.let { msg -> InPlaceCard(msg, runner, onOpenDoc) }
             content()
-            Spacer(Modifier.height(40.dp))
+            if (scroll) Spacer(Modifier.height(40.dp))
         }
     }
     runner.busy?.let { BusyDialog(it) }

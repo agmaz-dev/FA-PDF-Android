@@ -52,6 +52,9 @@ data class WatermarkSpec(
 data class PageRef(val source: Long, val page: Int, val extraRotation: Int = 0)
 
 object PdfOps {
+    /** Quelle für eine leere A4-Seite. */
+    const val BLANK = -1L
+
     /** Baut eine neue PDF aus Seiten mehrerer Dokumente in beliebiger Reihenfolge. */
     fun compose(sources: Map<Long, File>, refs: List<PageRef>, output: File, passwords: Map<Long, String?> = emptyMap()) {
         if (refs.isEmpty()) throw PdfUserException("Es muss mindestens eine Seite erhalten bleiben.")
@@ -64,6 +67,12 @@ object PdfOps {
             }
             PDDocument().use { out ->
                 refs.forEach { r ->
+                    if (r.source == BLANK) {
+                        val blank = com.tom_roush.pdfbox.pdmodel.PDPage(com.tom_roush.pdfbox.pdmodel.common.PDRectangle.A4)
+                        blank.rotation = (((r.extraRotation) % 360) + 360) % 360
+                        out.addPage(blank)
+                        return@forEach
+                    }
                     val src = opened[r.source] ?: throw PdfUserException("Quelldokument fehlt.")
                     val p = out.importPage(src.getPage(r.page))
                     p.rotation = (((p.rotation + r.extraRotation) % 360) + 360) % 360

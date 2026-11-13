@@ -37,9 +37,11 @@ fun ToolScreen(tool: Tool, docId: Long?, appVm: AppViewModel, onBack: () -> Unit
         val actionText = when (tool) {
             Tool.PAGE_NUMBERS -> "Anwenden"
             Tool.CROP -> "Zuschneiden"
+            Tool.ORGANIZE -> "Speichern"
             else -> null
         }
-        ToolScaffold(tool, runner, onBack, onOpenDoc, replaceTarget, actionText = actionText, onAction = { actionHolder[0]?.invoke() }) {
+        ToolScaffold(tool, runner, onBack, onOpenDoc, replaceTarget, actionText = actionText, onAction = { actionHolder[0]?.invoke() },
+            title = if (tool == Tool.ORGANIZE) "Seiten" else tool.title, scroll = tool != Tool.ORGANIZE) {
             val change = { choose = true }
             when (tool) {
                 Tool.MERGE -> MergeToolV2(appVm, runner, docs, docId)
@@ -47,7 +49,7 @@ fun ToolScreen(tool: Tool, docId: Long?, appVm: AppViewModel, onBack: () -> Unit
                 Tool.ROTATE -> RotateToolV2(doc!!, runner, change)
                 Tool.DELETE_PAGES -> DeletePagesTool(doc!!, runner, change)
                 Tool.EXTRACT_PAGES -> ExtractPagesTool(doc!!, runner, change)
-                Tool.ORGANIZE -> OrganizeToolV2(appVm, doc!!, runner, docs, change)
+                Tool.ORGANIZE -> PagesTool(appVm, doc!!, runner, docs, register)
                 Tool.PAGE_NUMBERS -> PageNumberToolV2(doc!!, runner, change, register)
                 Tool.CROP -> CropToolV2(doc!!, runner, change, register)
                 Tool.WATERMARK -> WatermarkToolV2(doc!!, runner, change, register)

@@ -66,7 +66,7 @@ enum class Tool(
     ROTATE("PDF drehen", ToolCategory.ORGANIZE, Icons.Outlined.Refresh),
     DELETE_PAGES("PDF-Seiten löschen", ToolCategory.ORGANIZE, Icons.Outlined.DeleteOutline),
     EXTRACT_PAGES("PDF-Seiten extrahieren", ToolCategory.ORGANIZE, Icons.Outlined.Description),
-    ORGANIZE("PDF organisieren", ToolCategory.ORGANIZE, Icons.Outlined.Layers),
+    ORGANIZE("Seiten verwalten", ToolCategory.ORGANIZE, Icons.Outlined.Layers),
 
     EDIT("PDF bearbeiten", ToolCategory.EDIT, Icons.Outlined.Edit, WorkspaceMode.EDIT),
     ANNOTATE("PDF kommentieren", ToolCategory.EDIT, Icons.Outlined.ChatBubbleOutline, WorkspaceMode.ANNOTATE),

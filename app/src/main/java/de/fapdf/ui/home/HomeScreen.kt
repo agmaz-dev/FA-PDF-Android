@@ -3,6 +3,10 @@ package de.fapdf.ui.home
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.material.icons.outlined.Add
 import de.fapdf.data.DocumentRepository
+import androidx.compose.material.icons.outlined.MenuBook
+import androidx.compose.material.icons.outlined.Gesture
+import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.Share
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateColorAsState
@@ -251,11 +255,12 @@ private fun ToolsHome(onOpen: () -> Unit, onScan: () -> Unit, onProfile: () -> U
                 // Scannen ist bereits oben als eigene Schaltfläche erreichbar – kein doppelter Scanner-Bereich
                 ToolCategory.entries.filter { it != ToolCategory.SCAN }.forEach { cat ->
                     Row(Modifier.padding(top = 22.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(cat.headerIcon, null, tint = cat.color, modifier = Modifier.size(26.dp))
+                        Icon(cat.headerIcon, null, tint = FaColors.Accent, modifier = Modifier.size(26.dp))
                         Spacer(Modifier.width(10.dp))
                         Text(cat.title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                     }
-                    val tools = Tool.byCategory(cat)
+                    // Drehen, Löschen, Herauslösen stecken jetzt in „Seiten verwalten“ (über die Suche weiter erreichbar)
+                    val tools = Tool.byCategory(cat).filter { it !in setOf(Tool.ROTATE, Tool.DELETE_PAGES, Tool.EXTRACT_PAGES) }
                     when (cat) {
                         ToolCategory.SIGN -> TileGrid(tools, ((cols + 1) / 2).coerceAtLeast(2), onTool)
                         else -> TileGrid(tools, cols, onTool)
@@ -422,62 +427,50 @@ private fun RecentDocuments(vm: AppViewModel, docs: List<DocumentEntity>) {
     }
 }
 
-private data class DocAction(val title: String, val tool: Tool?, val mode: WorkspaceMode?, val special: String? = null)
-
-private val docActions = listOf(
-    DocAction("PDF öffnen / Reader", Tool.READER, WorkspaceMode.READ),
-    DocAction("PDF bearbeiten", Tool.EDIT, WorkspaceMode.EDIT),
-    DocAction("PDF kommentieren", Tool.ANNOTATE, WorkspaceMode.ANNOTATE),
-    DocAction("PDF ausfüllen", Tool.FORM, WorkspaceMode.FORM),
-    DocAction("PDF unterschreiben", Tool.SIGN, WorkspaceMode.SIGN),
-    DocAction("PDF teilen (Seiten aufteilen)", Tool.SPLIT, null),
-    DocAction("PDF drehen", Tool.ROTATE, null),
-    DocAction("PDF organisieren", Tool.ORGANIZE, null),
-    DocAction("PDF verschlüsseln", Tool.ENCRYPT, null),
-    DocAction("PDF mit KI analysieren", Tool.AI_SUMMARY, null),
-    DocAction("PDF drucken", null, null, "print"),
-    DocAction("PDF weitergeben", Tool.SHARE, null, "share"),
-    DocAction("PDF löschen", null, null, "delete"),
-)
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ActionSheet(vm: AppViewModel, d: DocumentEntity, nav: HomeNav, onDismiss: () -> Unit) {
     val context = LocalContext.current
     var confirmDelete by remember { mutableStateOf(false) }
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
-        Column(Modifier.padding(horizontal = 20.dp).navigationBarsPadding().verticalScroll(rememberScrollState())) {
+    var expanded by remember { mutableStateOf<String?>(null) }
+    fun go(mode: WorkspaceMode) { onDismiss(); nav.workspace(d.id, mode) }
+    fun tool(t: Tool) { onDismiss(); nav.tool(t, d.id) }
+    ModalBottomSheet(
+        onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = FaColors.Surface,
+    ) {
+        Column(Modifier.padding(horizontal = 16.dp).navigationBarsPadding().verticalScroll(rememberScrollState())) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Thumbnail(d.thumbnailPath, 40.dp, 52.dp, d.modifiedAt)
-                Spacer(Modifier.width(12.dp))
+                Thumbnail(d.thumbnailPath, 44.dp, 58.dp, d.modifiedAt)
+                Spacer(Modifier.width(14.dp))
                 Column {
-                    Text("Was möchten Sie mit diesem Dokument machen?", style = MaterialTheme.typography.titleMedium)
-                    Text(d.displayName, style = MaterialTheme.typography.bodySmall, color = FaColors.SecondaryLabel, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(DocumentRepository.baseName(d.displayName), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Text("${d.pageCount} Seiten · ${Format.size(d.sizeBytes)}", style = MaterialTheme.typography.bodySmall, color = FaColors.SecondaryLabel)
                 }
             }
-            Spacer(Modifier.height(8.dp))
-            docActions.forEach { a ->
-                val icon = a.tool
-                Row(
-                    Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable {
-                        when {
-                            a.special == "print" -> { onDismiss(); FileActions.print(context, d.file(), d.displayName) }
-                            a.special == "share" -> { onDismiss(); FileActions.share(context, d.file(), d.displayName) }
-                            a.special == "delete" -> confirmDelete = true
-                            a.mode != null -> { onDismiss(); nav.workspace(d.id, a.mode) }
-                            a.tool != null -> { onDismiss(); nav.tool(a.tool, d.id) }
-                        }
-                    }.padding(vertical = 9.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    if (icon != null) ToolIconBox(icon.icon, icon.iconColor, icon.iconTint, size = 32.dp)
-                    else ToolIconBox(
-                        if (a.special == "delete") Icons.Outlined.Delete else Icons.Outlined.Print,
-                        if (a.special == "delete") FaColors.Destructive else Color(0xFF8E8E93), size = 32.dp,
-                    )
-                    Spacer(Modifier.width(12.dp))
-                    Text(a.title, color = if (a.special == "delete") FaColors.Destructive else FaColors.Label, style = MaterialTheme.typography.bodyLarge)
-                }
+            Spacer(Modifier.height(16.dp))
+            // Zwei große Hauptaktionen
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                BigAction(Icons.Outlined.MenuBook, "Öffnen", true, Modifier.weight(1f)) { go(WorkspaceMode.READ) }
+                BigAction(Icons.Outlined.Gesture, "Unterschreiben", false, Modifier.weight(1f)) { go(WorkspaceMode.SIGN) }
+            }
+            Spacer(Modifier.height(12.dp))
+            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(FaColors.Card)) {
+                MenuRow(Icons.Outlined.Edit, "Bearbeiten", "Text · Kommentieren · Ausfüllen", expanded == "edit") { expanded = if (expanded == "edit") null else "edit" }
+                if (expanded == "edit") SubChips(listOf("Text" to { go(WorkspaceMode.EDIT) }, "Kommentieren" to { go(WorkspaceMode.ANNOTATE) }, "Ausfüllen" to { go(WorkspaceMode.FORM) }))
+                HorizontalDivider(color = FaColors.Separator)
+                MenuRow(Icons.Outlined.GridView, "Seiten", "Sortieren · Drehen · Herauslösen · Löschen", false) { tool(Tool.ORGANIZE) }
+                HorizontalDivider(color = FaColors.Separator)
+                MenuRow(Icons.Outlined.Share, "Teilen & Export", "Weitergeben · Drucken · Verschlüsseln", expanded == "share") { expanded = if (expanded == "share") null else "share" }
+                if (expanded == "share") SubChips(listOf(
+                    "Weitergeben" to { onDismiss(); FileActions.share(context, d.file(), d.displayName) },
+                    "Drucken" to { onDismiss(); FileActions.print(context, d.file(), d.displayName) },
+                    "Verschlüsseln" to { tool(Tool.ENCRYPT) },
+                ))
+            }
+            Spacer(Modifier.height(10.dp))
+            Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(FaColors.Card)) {
+                MenuRow(Icons.Outlined.Delete, "Löschen", null, false, FaColors.Destructive) { confirmDelete = true }
             }
             Spacer(Modifier.height(16.dp))
         }
@@ -487,4 +480,50 @@ private fun ActionSheet(vm: AppViewModel, d: DocumentEntity, nav: HomeNav, onDis
         onConfirm = { confirmDelete = false; onDismiss(); vm.deleteCompletely(d.id) {} },
         onDismiss = { confirmDelete = false },
     )
+}
+
+
+@Composable
+private fun BigAction(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, primary: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    Column(
+        modifier.height(84.dp).clip(RoundedCornerShape(18.dp)).background(if (primary) FaColors.Accent else FaColors.Card)
+            .clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Icon(icon, null, tint = if (primary) FaColors.OnAccent else FaColors.Accent, modifier = Modifier.size(24.dp))
+        Text(label, color = if (primary) FaColors.OnAccent else FaColors.Label, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+    }
+}
+
+@Composable
+private fun MenuRow(
+    icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, subtitle: String?, open: Boolean,
+    tint: Color = FaColors.Accent, onClick: () -> Unit,
+) {
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = 60.dp).clickable(onClick = onClick).padding(horizontal = 14.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.size(38.dp).clip(RoundedCornerShape(11.dp)).background(if (tint == FaColors.Destructive) FaColors.DestructiveLight else FaColors.AccentLight), contentAlignment = Alignment.Center) {
+            Icon(icon, null, tint = tint, modifier = Modifier.size(22.dp))
+        }
+        Spacer(Modifier.width(14.dp))
+        Column(Modifier.weight(1f)) {
+            Text(title, color = if (tint == FaColors.Destructive) tint else FaColors.Label, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+            if (subtitle != null) Text(subtitle, color = FaColors.SecondaryLabel, fontSize = 12.sp)
+        }
+        if (subtitle != null && title != "Seiten") Text(if (open) "▴" else "▾", color = FaColors.SecondaryLabel)
+    }
+}
+
+@Composable
+private fun SubChips(items: List<Pair<String, () -> Unit>>) {
+    Row(Modifier.fillMaxWidth().padding(start = 66.dp, end = 14.dp, bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        items.forEach { (label, action) ->
+            Box(
+                Modifier.clip(RoundedCornerShape(16.dp)).background(FaColors.AccentLight).clickable(onClick = action)
+                    .padding(horizontal = 12.dp, vertical = 9.dp),
+            ) { Text(label, color = FaColors.Accent, fontSize = 14.sp, fontWeight = FontWeight.SemiBold) }
+        }
+    }
 }
