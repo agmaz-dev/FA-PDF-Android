@@ -96,12 +96,11 @@ object ScanStore {
 
     /** Alle Seiten neu aufbereiten und als PDF schreiben. */
     fun build(d: File, mode: Int, rot: List<Int>, out: File) {
-        val pages = pages(d).mapIndexedNotNull { i, f ->
-            loadPage(f, 2400, rot.getOrElse(i) { 0 })?.let { b -> ScanEnhancer.process(b, mode).also { if (it !== b) b.recycle() } }
-        }
-        require(pages.isNotEmpty()) { "Keine Scan-Seiten gefunden" }
-        ScanEnhancer.buildPdf(pages, out)
-        pages.forEach { it.recycle() }
+        val files = pages(d)
+        val n = ScanEnhancer.buildPdfStreaming(files.size, { i ->
+            loadPage(files[i], 2400, rot.getOrElse(i) { 0 })?.let { b -> ScanEnhancer.process(b, mode).also { if (it !== b) b.recycle() } }
+        }, out)
+        require(n > 0) { "Keine Scan-Seiten gefunden" }
     }
 }
 

@@ -182,7 +182,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun rename(id: Long, name: String) = viewModelScope.launch { container.documents.rename(id, name) }
     fun setFavorite(id: Long, fav: Boolean) = viewModelScope.launch { container.documents.setFavorite(id, fav) }
-    fun removeFromHistory(id: Long) = viewModelScope.launch { container.documents.removeFromHistory(id) }
+    fun removeFromHistory(id: Long) = viewModelScope.launch { container.index.forget(id); container.documents.removeFromHistory(id) }
     fun deleteCompletely(id: Long, onResult: (Boolean) -> Unit) = viewModelScope.launch {
         container.index.forget(id)
         onResult(container.documents.deleteCompletely(id))

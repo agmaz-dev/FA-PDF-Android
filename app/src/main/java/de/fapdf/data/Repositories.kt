@@ -133,6 +133,7 @@ class DocumentRepository(private val context: Context, private val dao: Document
         val d = dao.get(id) ?: return@withContext
         File(d.filePath).parentFile?.deleteRecursively()
         d.thumbnailPath?.let { File(it).delete() }
+        File(context.filesDir, "scan_raw/$id").deleteRecursively() // Original-Fotos eines Scans
         dao.delete(id)
     }
 

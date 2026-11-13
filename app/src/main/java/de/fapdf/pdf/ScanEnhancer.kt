@@ -105,6 +105,25 @@ object ScanEnhancer {
     }
 
     /** Baut aus den verbesserten Seiten eine PDF (A4-Breite, Seitenverhältnis wie Scan). */
+    /** Seite für Seite erzeugen und gleich freigeben – auch lange Scans ohne Speicherüberlauf. */
+    fun buildPdfStreaming(count: Int, page: (Int) -> Bitmap?, out: File): Int {
+        var n = 0
+        PDDocument().use { doc ->
+            for (i in 0 until count) {
+                val b = page(i) ?: continue
+                val pw = PDRectangle.A4.width
+                val ph = pw * b.height / b.width
+                val pg = PDPage(PDRectangle(pw, ph))
+                doc.addPage(pg)
+                val img = JPEGFactory.createFromImage(doc, b, 0.85f)
+                PDPageContentStream(doc, pg).use { cs -> cs.drawImage(img, 0f, 0f, pw, ph) }
+                b.recycle(); n++
+            }
+            if (n > 0) doc.save(out)
+        }
+        return n
+    }
+
     fun buildPdf(pages: List<Bitmap>, out: File) {
         PDDocument().use { doc ->
             pages.forEach { b ->
