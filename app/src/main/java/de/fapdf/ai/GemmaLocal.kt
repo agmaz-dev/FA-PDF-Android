@@ -149,9 +149,17 @@ object GemmaLocal {
             if (onGpu) prefs(ctx).edit().putBoolean("gpu_starting", true).commit()
             try {
                 e.createConversation(config).use { conv ->
-                    conv.sendMessageAsync(last).collect { m ->
-                        sb.append(m.toString())
-                        onDelta?.invoke(sb.toString())
+                    // Rückruf-Variante statt Flow: die Flow-Variante braucht eine neuere Coroutines-Version
+                    kotlinx.coroutines.suspendCancellableCoroutine<Unit> { cont ->
+                        conv.sendMessageAsync(last, object : com.google.ai.edge.litertlm.MessageCallback {
+                            override fun onMessage(message: Message) {
+                                synchronized(sb) { sb.append(message.toString()) }
+                                onDelta?.invoke(synchronized(sb) { sb.toString() })
+                            }
+                            override fun onDone() { if (cont.isActive) cont.resumeWith(Result.success(Unit)) }
+                            override fun onError(throwable: Throwable) { if (cont.isActive) cont.resumeWith(Result.failure(throwable)) }
+                        })
+                        cont.invokeOnCancellation { runCatching { conv.cancelProcess() } }
                     }
                 }
             } catch (t: Throwable) {
