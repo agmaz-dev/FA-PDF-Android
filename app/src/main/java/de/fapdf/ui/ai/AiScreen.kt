@@ -449,7 +449,7 @@ fun AiScreen(tool: Tool, docId: Long?, appVm: AppViewModel, onBack: () -> Unit, 
         text = { PageChips(doc.pageCount, chatPages) { chatPages = it } },
         confirmButton = { TextButton(onClick = { pagePicker = false }) { Text("Fertig") } },
     )
-    busy?.let { BusyDialog(it) }
+    busy?.let { de.fapdf.ui.components.AiWorkingDialog(it) }
     error?.let { MessageDialog("Hinweis", it) { error = null } }
     consentFor?.let { action ->
         val chars = extracted?.text?.length ?: 0

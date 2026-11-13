@@ -79,6 +79,11 @@ class ReplyViewModel(app: Application, private val docId: Long) : AndroidViewMod
     private val c = (app as FaPdfApp).container
 
     var busy by mutableStateOf<String?>(null)
+    // Fortschritt für die bunte Anzeige: Schritt X von Y, Teilfortschritt innerhalb des Schritts
+    var step by mutableStateOf(1)
+    var steps by mutableStateOf(1)
+    var sub by mutableStateOf<Float?>(null)
+    var stepTitle by mutableStateOf("")
     var error by mutableStateOf<String?>(null)
     var note by mutableStateOf<String?>(null)
     var docText: String? = null
@@ -117,12 +122,14 @@ class ReplyViewModel(app: Application, private val docId: Long) : AndroidViewMod
                 docName = c.documents.get(docId)?.displayName?.let { DocumentRepository.baseName(it) } ?: ""
                 profiles = runCatching { c.profiles.loadAll() }.getOrDefault(emptyList())
                 profiles.firstOrNull()?.let { useProfile(it) }
-                busy = "Schreiben wird gelesen …"
+                steps = 2; step = 1; sub = 0f; stepTitle = "Schreiben wird gelesen …"
+                busy = "Text wird erkannt"
                 val tmp = File(getApplication<Application>().cacheDir, "reply").apply { mkdirs() }
-                val text = DocumentText.extract(file, tmp, maxChars = 40_000) { p, n -> busy = "Seite $p von $n wird gelesen …" }.text
+                val text = DocumentText.extract(file, tmp, maxChars = 40_000) { p, n -> busy = "Seite $p von $n wird gelesen"; sub = (p - 1f) / n }.text
                 docText = text
                 if (text.replace(Regex("\\[Seite \\d+]"), "").isBlank()) throw IllegalStateException("Im Dokument wurde kein Text gefunden.")
-                busy = "KI liest das Schreiben …"
+                step = 2; sub = null; stepTitle = "KI liest das Schreiben …"
+                busy = "Fristen, Beträge und Antworten suchen"
                 val ans = AiRouter.complete(c.settings, ANALYZE, listOf(ChatMessage("user", Prompts.withDocument("Analysiere dieses Schreiben.", text))), 1200)
                 if (ans.fallback) note = "Groq nicht erreichbar – Gemini Nano hat geantwortet"
                 parseAnalysis(ans.text)
@@ -172,7 +179,8 @@ class ReplyViewModel(app: Application, private val docId: Long) : AndroidViewMod
         val text = docText ?: return
         viewModelScope.launch {
             error = null; note = null
-            busy = "KI schreibt den Brief …"
+            steps = 1; step = 1; sub = null; stepTitle = "KI schreibt den Brief …"
+            busy = "Anrede, Text und Gruß"
             try {
                 if (placeDate.isBlank()) placeDate = SimpleDateFormat("dd.MM.yyyy", Locale.GERMANY).format(Date())
                 val name = signerName.ifBlank { "dem Absender" }
@@ -217,7 +225,8 @@ class ReplyViewModel(app: Application, private val docId: Long) : AndroidViewMod
         if (current.isBlank()) return
         viewModelScope.launch {
             error = null
-            busy = "Brief wird überarbeitet …"
+            steps = 1; step = 1; sub = null; stepTitle = "Brief wird überarbeitet …"
+            busy = "Ton und Länge anpassen"
             try {
                 val instr = when (kind) {
                     "höflich" -> "freundlicher und höflicher formulieren"
@@ -241,7 +250,8 @@ class ReplyViewModel(app: Application, private val docId: Long) : AndroidViewMod
     fun createPdf() {
         viewModelScope.launch {
             error = null
-            busy = "PDF wird erstellt …"
+            steps = 1; step = 1; sub = null; stepTitle = "PDF wird erstellt …"
+            busy = "Briefbogen, Text und Unterschrift"
             try {
                 val sig: Bitmap? = signatures.firstOrNull { it.id == signatureId }?.let { c.signatures.loadBitmap(it) }
                 val name = "Antwort – ${docName.ifBlank { "Schreiben" }}.pdf"
@@ -332,11 +342,13 @@ fun ReplyPanel(
                 if (vm.summary == null) TextButton(onClick = { if (file != null) withConsent { vm.start(file) } }) { Text("Erneut versuchen") }
             }
             vm.busy?.let {
-                Row(Modifier.padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp, color = FaColors.Accent)
-                    Spacer(Modifier.width(10.dp))
-                    Text(it, color = FaColors.SecondaryLabel)
-                }
+                val frac = de.fapdf.ui.components.rememberStepProgress(vm.step, vm.steps, vm.sub)
+                de.fapdf.ui.components.AiWorkingPanel(
+                    vm.stepTitle.ifBlank { "KI arbeitet …" },
+                    (if (vm.steps > 1) "Schritt ${vm.step} von ${vm.steps} · " else "") + it,
+                    frac,
+                    Modifier.fillMaxWidth().height(230.dp).padding(vertical = 6.dp).clip(RoundedCornerShape(20.dp)).background(FaColors.Background),
+                )
             }
             if (vm.stage == 0) Overview(vm) { withConsent { vm.write() } }
             else LetterEditor(vm, onManageProfiles, onRestyle = { k -> withConsent { vm.restyle(k) } },
