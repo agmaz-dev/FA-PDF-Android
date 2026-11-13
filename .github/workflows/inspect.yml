@@ -1,0 +1,39 @@
+name: Bibliothek pruefen
+on:
+  workflow_dispatch:
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - name: Untersuchen
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -x
+          B=https://dl.google.com/android/maven2/com/google/ai/edge/litertlm/litertlm-android
+          curl -sSL $B/maven-metadata.xml > meta.xml; cat meta.xml > out.txt
+          V=$(grep -o '<release>[^<]*' meta.xml | sed 's/<release>//')
+          echo "VERSION $V" >> out.txt
+          curl -sSL $B/$V/litertlm-android-$V.aar -o l.aar
+          curl -sSL $B/$V/litertlm-android-$V.pom >> out.txt
+          mkdir a && cd a && unzip -q ../l.aar && ls -la >> ../out.txt && cat AndroidManifest.xml >> ../out.txt; ls jni/* >> ../out.txt 2>&1
+          mkdir c && cd c && unzip -q ../classes.jar && cd ..
+          for c in Engine EngineConfig Backend 'Backend$GPU' 'Backend$CPU' Conversation ConversationConfig SamplerConfig Message Contents Content 'Content$Text' MessageCallback; do
+            f="c/com/google/ai/edge/litertlm/$c.class"; [ -f "$f" ] && javap -cp c "com.google.ai.edge.litertlm.$c" >> ../out.txt 2>&1
+          done
+          ls c/com/google/ai/edge/litertlm/ >> ../out.txt
+          cd ..
+          for m in gemma-4-E2B-it-litert-lm gemma-4-E4B-it-litert-lm; do
+            echo "== $m" >> out.txt
+            curl -sSL "https://huggingface.co/api/models/litert-community/$m?blobs=true" | python3 -c "import sys,json;d=json.load(sys.stdin);print('gated',d.get('gated'));[print(s['rfilename'],s.get('size')) for s in d['siblings']]" >> out.txt 2>&1
+          done
+          curl -sSI "https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm/resolve/main/gemma-4-E2B-it.litertlm" | head -20 >> out.txt
+          gh release delete inspect-out -R ${{ github.repository }} --yes --cleanup-tag || true
+          sleep 3
+          gh release create inspect-out out.txt -R ${{ github.repository }} --title inspect --notes x --prerelease
