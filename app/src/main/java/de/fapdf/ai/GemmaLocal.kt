@@ -17,6 +17,7 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.launch
 import java.io.File
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
@@ -53,6 +54,11 @@ object GemmaLocal {
     /** Gemma rechnet gerade (die Oberfläche verzichtet dann auf aufwendige Animationen). */
     var running by androidx.compose.runtime.mutableStateOf(false)
         private set
+    /** Was gerade passiert (für die Anzeige): „Modell wird geladen …“ usw. */
+    var phase by androidx.compose.runtime.mutableStateOf("")
+        private set
+    private var used = false
+    private val warmScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + Dispatchers.Default)
 
     /** Kontextfenster: Eingabe + Antwort. 16k Bausteine ≈ 10–12 dichte Seiten. */
     private const val MAX_TOKENS = 16_384
@@ -153,8 +159,9 @@ object GemmaLocal {
     }
 
     private fun engine(ctx: Context, v: Variant): Engine {
-        if (loaded == v && !v.freshEngine) engine?.let { return it }
+        if (loaded == v && (!v.freshEngine || !used)) engine?.let { used = true; return it }
         release()
+        phase = "Modell wird geladen …"
         val path = file(ctx, v).absolutePath
         val p = prefs(ctx)
         if (!p.getBoolean("gpu_reset_v2", false)) p.edit().remove("gpu_bad").remove("gpu_starting").putBoolean("gpu_reset_v2", true).commit()
@@ -171,7 +178,7 @@ object GemmaLocal {
             Engine(EngineConfig(modelPath = path, backend = Backend.CPU(), maxNumTokens = MAX_TOKENS, cacheDir = ctx.cacheDir.path))
                 .also { it.initialize(); backendName = "Prozessor" }
         }
-        engine = e; loaded = v
+        engine = e; loaded = v; used = true
         return e
     }
 
@@ -186,6 +193,7 @@ object GemmaLocal {
             val e = try { engine(ctx, v) } catch (t: Throwable) {
                 release(); throw AiException("${v.title} konnte nicht gestartet werden: ${t.message}")
             }
+            phase = "Dokument wird eingelesen …"
             val history = messages.dropLast(1).map { if (it.role == "assistant") Message.model(it.content) else Message.user(it.content) }
             var last = messages.lastOrNull()?.content.orEmpty()
             if (last.length > MAX_INPUT_CHARS) last = last.take(MAX_INPUT_CHARS) + "\n</dokument>"
@@ -207,6 +215,7 @@ object GemmaLocal {
                         var lastUi = 0L
                         conv.sendMessageAsync(last, object : MessageCallback {
                             override fun onMessage(message: Message) {
+                                if (sb.isEmpty()) phase = "${v.title} schreibt …"
                                 val now = synchronized(sb) { sb.append(message.toString()); sb.toString() }
                                 // Nur echte Endlosschleifen („0000…“) abbrechen – sonst nichts am Text verändern
                                 if (degenerate(now)) { looped = true; runCatching { conv.cancelProcess() }; if (cont.isActive) cont.resumeWith(Result.success(Unit)); return }
@@ -228,7 +237,17 @@ object GemmaLocal {
             lastInfo = "${v.title} · $backendName · ${(System.currentTimeMillis() - started) / 1000} s"
             onDelta?.invoke(sb.toString())
             AiText.clean(sb.toString()).ifEmpty { throw AiException("${v.title} hat keine Antwort geliefert.") }
-        } } finally { running = false }
+        } } finally {
+            running = false; phase = ""
+            // Qwen braucht pro Anfrage eine frische Engine: die nächste gleich im Hintergrund vorbereiten
+            if (v.freshEngine) {
+                release()
+                warmScope.launch {
+                    kotlinx.coroutines.delay(500)
+                    lock.withLock { if (engine == null) runCatching { engine(ctx, v); used = false; phase = "" } }
+                }
+            }
+        }
     }
 
     /** Text endet mit sinnlosen Wiederholungen (z. B. 80 Zeichen aus höchstens 3 verschiedenen Zeichen). */

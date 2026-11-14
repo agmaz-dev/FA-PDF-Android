@@ -558,7 +558,7 @@ fun ReplyPanel(
                 val frac = de.fapdf.ui.components.rememberStepProgress(vm.step, vm.steps, vm.sub)
                 de.fapdf.ui.components.AiWorkingPanel(
                     vm.stepTitle.ifBlank { "KI arbeitet …" },
-                    (if (vm.steps > 1) "Schritt ${vm.step} von ${vm.steps} · " else "") + it,
+                    (if (vm.steps > 1) "Schritt ${vm.step} von ${vm.steps} · " else "") + (de.fapdf.ai.GemmaLocal.phase.takeIf { de.fapdf.ai.GemmaLocal.running && it.isNotBlank() } ?: it),
                     frac,
                     Modifier.fillMaxWidth().height(if (vm.partial.isNullOrBlank()) 230.dp else 360.dp).padding(vertical = 6.dp).clip(RoundedCornerShape(20.dp)).background(FaColors.Background),
                     partial = vm.partial,
