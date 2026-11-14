@@ -1,0 +1,40 @@
+name: TaxiL150 Datenprobe
+on:
+  push:
+    branches: [taxil150-probe]
+permissions:
+  contents: write
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Messe-Kalender abrufen
+        run: |
+          mkdir -p /tmp/out/messe
+          i=0
+          for u in \
+            "https://www.messe-berlin.asia/en/events/calendar-of-events/" \
+            "https://www.messe-berlin.de/de/veranstaltungen/veranstaltungskalender/" \
+            "https://www.messe-berlin.de/en/events/calendar-of-events/" \
+            "https://www.messe-berlin.de/de/" \
+            "https://www.berlin.de/messen/kalender/" \
+            "https://www.visitberlin.de/de/events-kongresskalender-berlin" ; do
+            i=$((i+1))
+            code=$(curl -sSL -m 30 -A "Mozilla/5.0 (Linux; Android 14) TaxiMonitor" -o /tmp/out/messe/$i.html -w '%{http_code} %{url_effective}' "$u" || echo "ERR")
+            echo "$i $u -> $code $(wc -c < /tmp/out/messe/$i.html 2>/dev/null)" >> /tmp/out/messe/index.txt
+          done
+      - name: APCOA 10 Minuten mitschreiben
+        run: |
+          mkdir -p /tmp/out/apcoa
+          for n in $(seq -w 1 60); do
+            curl -sS -m 20 -A "TaxiMonitor/1.7.0" -o /tmp/out/apcoa/$n.html "https://tms-info.apcoa.de/external/display/98AD0D50-A726-11E2-9E96-0800200C9A66/zones/139A83F0-B534-4832-ADC0-9C1717820849" || true
+            date -u +%FT%TZ > /tmp/out/apcoa/$n.time
+            sleep 10
+          done
+      - name: Ergebnis ablegen
+        run: |
+          cd /tmp/out
+          git init -q -b taxil150-probe-out
+          git config user.name "github-actions"; git config user.email "github-actions@users.noreply.github.com"
+          git add -A && git commit -q -m "Probe ${GITHUB_SHA}"
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git" taxil150-probe-out
