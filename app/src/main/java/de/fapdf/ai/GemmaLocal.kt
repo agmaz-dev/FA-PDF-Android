@@ -153,6 +153,13 @@ object GemmaLocal {
     var lastInfo: String = ""
         private set
 
+    /** App geht in den Hintergrund: Modell freigeben (sonst beendet Android die App wegen Speichermangel). */
+    @Volatile var inForeground = true
+
+    fun releaseIdle() {
+        warmScope.launch { lock.withLock { if (!running) release() } }
+    }
+
     private fun release() {
         runCatching { engine?.close() }
         engine = null; loaded = null
@@ -244,7 +251,7 @@ object GemmaLocal {
                 release()
                 warmScope.launch {
                     kotlinx.coroutines.delay(500)
-                    lock.withLock { if (engine == null) runCatching { engine(ctx, v); used = false; phase = "" } }
+                    lock.withLock { if (engine == null && inForeground) runCatching { engine(ctx, v); used = false; phase = "" } }
                 }
             }
         }

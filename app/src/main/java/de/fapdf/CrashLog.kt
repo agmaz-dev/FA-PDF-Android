@@ -29,6 +29,10 @@ object CrashLog {
             val info = am.getHistoricalProcessExitReasons(ctx.packageName, 0, 1).firstOrNull() ?: return@runCatching
             if (info.timestamp <= seen.getLong("seen", 0)) return@runCatching
             seen.edit().putLong("seen", info.timestamp).apply()
+            // Im Hintergrund von Android beendet (Speicher frei gemacht) – das ist kein Absturz
+            if (info.importance >= android.app.ActivityManager.RunningAppProcessInfo.IMPORTANCE_SERVICE &&
+                info.reason != ApplicationExitInfo.REASON_CRASH && info.reason != ApplicationExitInfo.REASON_CRASH_NATIVE
+            ) return@runCatching
             if (info.reason == ApplicationExitInfo.REASON_CRASH_NATIVE || info.reason == ApplicationExitInfo.REASON_CRASH ||
                 info.reason == ApplicationExitInfo.REASON_ANR || info.reason == ApplicationExitInfo.REASON_LOW_MEMORY
             ) {

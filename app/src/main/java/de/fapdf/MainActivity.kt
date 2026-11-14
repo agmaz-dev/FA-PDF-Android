@@ -65,6 +65,16 @@ class MainActivity : FragmentActivity() {
         }
     }
 
+    override fun onStart() {
+        super.onStart()
+        de.fapdf.ai.GemmaLocal.inForeground = true
+    }
+
+    override fun onStop() {
+        super.onStop()
+        if (!isChangingConfigurations) { de.fapdf.ai.GemmaLocal.inForeground = false; de.fapdf.ai.GemmaLocal.releaseIdle() }
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
