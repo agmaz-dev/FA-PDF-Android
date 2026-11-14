@@ -26,9 +26,25 @@ import androidx.compose.runtime.setValue
  * Lesen im Gegensatz zu Gemini Nano auch lange Dokumente auf einmal.
  */
 object GemmaLocal {
-    enum class Variant(val title: String, val fileName: String, val repo: String, val sizeBytes: Long, val sizeText: String) {
-        E2B("Gemma 4 E2B", "gemma-4-E2B-it.litertlm", "litert-community/gemma-4-E2B-it-litert-lm", 2_588_147_712L, "2,6 GB"),
-        E4B("Gemma 4 E4B", "gemma-4-E4B-it.litertlm", "litert-community/gemma-4-E4B-it-litert-lm", 3_659_530_240L, "3,7 GB");
+    /**
+     * [cpuOnly]: Qwen 3.5 läuft mit dieser Bibliotheksversion nur zuverlässig auf dem Prozessor (laut Modellkarte
+     * ist der Prozessor auf Samsung-Handys dafür ohnehin schneller). [freshEngine]: Qwen braucht pro Anfrage eine
+     * frische Engine, sonst „erinnert“ es sich an die vorige Unterhaltung.
+     */
+    enum class Variant(
+        val title: String, val fileName: String, val repo: String, val sizeBytes: Long, val sizeText: String,
+        val note: String, val cpuOnly: Boolean = false, val freshEngine: Boolean = false,
+    ) {
+        E2B("Gemma 4 E2B", "gemma-4-E2B-it.litertlm", "litert-community/gemma-4-E2B-it-litert-lm", 2_588_147_712L, "2,6 GB",
+            "Google · gutes Deutsch · Grafikeinheit"),
+        E4B("Gemma 4 E4B", "gemma-4-E4B-it.litertlm", "litert-community/gemma-4-E4B-it-litert-lm", 3_659_530_240L, "3,7 GB",
+            "Google · klüger, etwa halb so schnell"),
+        Q08("Qwen 3.5 0.8B", "Qwen3.5-0.8B_int8.litertlm", "litert-community/Qwen3.5-0.8B", 964_657_152L, "1,0 GB",
+            "Alibaba · sehr klein und schnell · Prozessor", cpuOnly = true, freshEngine = true),
+        Q2B("Qwen 3.5 2B", "Qwen3.5-2B_int8.litertlm", "litert-community/Qwen3.5-2B", 2_119_843_840L, "2,1 GB",
+            "Alibaba · Prozessor", cpuOnly = true, freshEngine = true),
+        Q4B("Qwen 3.5 4B", "Qwen3.5-4B_mixed_int4.litertlm", "litert-community/Qwen3.5-4B", 2_754_166_784L, "2,8 GB",
+            "Alibaba · klüger, langsam (ca. 9 Wörter/s) · Prozessor", cpuOnly = true, freshEngine = true);
 
         val url get() = "https://huggingface.co/$repo/resolve/main/$fileName"
     }
@@ -45,7 +61,13 @@ object GemmaLocal {
     private fun prefs(ctx: Context) = ctx.getSharedPreferences("gemma_local", Context.MODE_PRIVATE)
     private fun dir(ctx: Context) = File(ctx.getExternalFilesDir(null) ?: ctx.filesDir, "models").apply { mkdirs() }
     fun file(ctx: Context, v: Variant) = File(dir(ctx), v.fileName)
-    fun installed(ctx: Context, v: Variant) = file(ctx, v).let { it.exists() && it.length() == v.sizeBytes }
+    // Die Modell-Dateien werden auf Hugging Face gelegentlich erneuert – daher keine exakte Größenprüfung
+    fun installed(ctx: Context, v: Variant): Boolean {
+        if (prefs(ctx).getLong("dl_${v.name}", -1L) >= 0 || (v == Variant.E2B && prefs(ctx).contains("dl"))) {
+            if (downloadState(ctx, v).fraction != null) return false // läuft noch
+        }
+        return file(ctx, v).let { it.exists() && it.length() > v.sizeBytes * 0.8 }
+    }
     fun anyInstalled(ctx: Context) = Variant.entries.any { installed(ctx, it) }
 
     /** Gewählte Variante; ist nur die andere geladen, wird diese genommen. */
@@ -131,7 +153,7 @@ object GemmaLocal {
     }
 
     private fun engine(ctx: Context, v: Variant): Engine {
-        if (loaded == v) engine?.let { return it }
+        if (loaded == v && !v.freshEngine) engine?.let { return it }
         release()
         val path = file(ctx, v).absolutePath
         val p = prefs(ctx)
@@ -139,7 +161,7 @@ object GemmaLocal {
         // Ist die App beim letzten Start auf der Grafikeinheit abgestürzt, gleich den Prozessor nehmen
         if (p.getBoolean("gpu_starting", false)) p.edit().putBoolean("gpu_bad", true).putBoolean("gpu_starting", false).commit()
         val e = try {
-            if (p.getBoolean("gpu_bad", false)) throw IllegalStateException("GPU übersprungen")
+            if (v.cpuOnly || p.getBoolean("gpu_bad", false)) throw IllegalStateException("GPU übersprungen")
             p.edit().putBoolean("gpu_starting", true).commit()
             Engine(EngineConfig(modelPath = path, backend = Backend.GPU(), maxNumTokens = MAX_TOKENS, cacheDir = ctx.cacheDir.path))
                 .also { it.initialize(); backendName = "Grafikeinheit" }

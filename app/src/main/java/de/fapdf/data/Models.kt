@@ -31,7 +31,7 @@ enum class AiProvider(val title: String, val endpointHost: String, val pricingUr
     GROQ("Groq – Internet, kostenlos", "api.groq.com", "https://console.groq.com/keys", "openai/gpt-oss-120b"),
     PC("PC zu Hause – privat", "eigener Rechner mit Ollama · Adresse eintragen", "", "gpt-oss:20b"),
     NANO("Gemini Nano – auf diesem Handy, privat", "ohne Internet · in Android eingebaut", "", "gemini-nano"),
-    GEMMA("Gemma 4 – auf diesem Handy, lange Dokumente", "ohne Internet · einmal 2,6 oder 3,7 GB laden", "", "gemma-4"),
+    GEMMA("Eigene Modelle – auf diesem Handy (Gemma, Qwen)", "ohne Internet · lange Dokumente · einmal 1–3,7 GB laden", "", "gemma-4"),
     FAKI("FA KI – auf diesem Handy, privat", "ohne Internet · App FA KI muss laufen", "", "lokal"),
     /** Beliebiger OpenAI-kompatibler Dienst mit eigener Adresse, z. B. Groq (kostenloser Zugang). */
     CUSTOM("Eigene Adresse", "andere OpenAI-kompatible Dienste", "https://console.groq.com/keys", "openai/gpt-oss-120b");

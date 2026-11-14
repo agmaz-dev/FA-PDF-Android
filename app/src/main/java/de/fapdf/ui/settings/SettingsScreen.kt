@@ -181,7 +181,7 @@ fun SettingsScreen(appVm: AppViewModel, onBack: (() -> Unit)?, onProfiles: () ->
                     nanoState?.let { Text(it, color = FaColors.SecondaryLabel) }
                 } else if (provider == AiProvider.GEMMA) {
                     Text(
-                        "Gemma 4 sind frei verfügbare Google-Modelle, die komplett auf diesem Handy laufen – ohne Internet, " +
+                        "Gemma 4 (Google) und Qwen 3.5 (Alibaba) sind frei verfügbare Modelle, die komplett auf diesem Handy laufen – ohne Internet, " +
                             "Dokumente verlassen das Handy nicht. Anders als Gemini Nano lesen sie auch lange Dokumente (10–12 Seiten) auf einmal. " +
                             "Einmaliger Download, am besten im WLAN. Das ausgewählte Modell (Punkt links) wird verwendet.",
                         color = FaColors.SecondaryLabel, modifier = Modifier.padding(vertical = 4.dp),
@@ -274,8 +274,7 @@ private fun GemmaModelCard(onlyInstalled: Boolean = false) {
                     if (installed) androidx.compose.material3.RadioButton(selected = sel == v, onClick = { de.fapdf.ai.GemmaLocal.select(context, v); tick++ })
                     Column(Modifier.weight(1f)) {
                         Text(v.title + " · " + v.sizeText, fontWeight = FontWeight.SemiBold, color = FaColors.Label)
-                        Text(if (v == de.fapdf.ai.GemmaLocal.Variant.E2B) "Kleiner und schneller" else "Klüger, besseres Deutsch, etwa halb so schnell",
-                            color = FaColors.SecondaryLabel, fontSize = 12.sp)
+                        Text(v.note, color = FaColors.SecondaryLabel, fontSize = 12.sp)
                     }
                 }
                 when {
