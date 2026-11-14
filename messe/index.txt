@@ -1,0 +1,6 @@
+1 https://www.messe-berlin.asia/en/events/calendar-of-events/ -> 200 https://www.messe-berlin.asia/en/events/calendar-of-events 698895
+2 https://www.messe-berlin.de/de/veranstaltungen/veranstaltungskalender/ -> 200 https://www.messe-berlin.de/de/veranstaltungen/veranstaltungskalender 966490
+3 https://www.messe-berlin.de/en/events/calendar-of-events/ -> 404 https://www.messe-berlin.de/en/events/calendar-of-events 124461
+4 https://www.messe-berlin.de/de/ -> 200 https://www.messe-berlin.de/de 456718
+5 https://www.berlin.de/messen/kalender/ -> 410 https://www.berlin.de/messen/kalender/ 15378
+6 https://www.visitberlin.de/de/events-kongresskalender-berlin -> 200 https://www.visitberlin.de/de/events-kongresskalender-berlin 199067
