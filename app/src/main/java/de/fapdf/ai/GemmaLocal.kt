@@ -109,6 +109,8 @@ object GemmaLocal {
         // Zuerst Grafikeinheit (schnell), sonst Prozessor. Ist die App beim letzten GPU-Start abgestürzt
         // (Merker noch gesetzt), gleich den Prozessor nehmen.
         val p = prefs(ctx)
+        // Der Absturz in 1.16.1 lag nicht an der Grafikeinheit – Merker einmalig zurücksetzen
+        if (!p.getBoolean("gpu_reset_v1", false)) p.edit().remove("gpu_bad").remove("gpu_starting").putBoolean("gpu_reset_v1", true).commit()
         val gpuCrashed = p.getBoolean("gpu_starting", false) || p.getBoolean("gpu_bad", false)
         if (p.getBoolean("gpu_starting", false)) p.edit().putBoolean("gpu_bad", true).putBoolean("gpu_starting", false).commit()
         val e = try {
@@ -119,7 +121,7 @@ object GemmaLocal {
                 .also { p.edit().putBoolean("gpu_starting", false).commit() }
         } catch (t: Throwable) {
             p.edit().putBoolean("gpu_starting", false).commit()
-            Engine(EngineConfig(modelPath = path, backend = Backend.CPU(), maxNumTokens = MAX_TOKENS, cacheDir = ctx.cacheDir.path))
+            Engine(EngineConfig(modelPath = path, backend = Backend.CPU(threadCount = 4), maxNumTokens = MAX_TOKENS, cacheDir = ctx.cacheDir.path))
                 .also { it.initialize(); backendName = "Prozessor" }
         }
         engine = e
@@ -145,20 +147,31 @@ object GemmaLocal {
                 thinkingConfig = ThinkingConfig(enableThinking = false),
             )
             val sb = StringBuilder()
+            var looped = false
             val onGpu = backendName == "Grafikeinheit"
             if (onGpu) prefs(ctx).edit().putBoolean("gpu_starting", true).commit()
             try {
                 e.createConversation(config).use { conv ->
                     // Rückruf-Variante statt Flow: die Flow-Variante braucht eine neuere Coroutines-Version
                     kotlinx.coroutines.suspendCancellableCoroutine<Unit> { cont ->
-                        conv.sendMessageAsync(last, object : com.google.ai.edge.litertlm.MessageCallback {
+                        var lastUi = 0L
+                        val cb = object : com.google.ai.edge.litertlm.MessageCallback {
                             override fun onMessage(message: Message) {
-                                synchronized(sb) { sb.append(message.toString()) }
-                                onDelta?.invoke(synchronized(sb) { sb.toString() })
+                                val now = synchronized(sb) { sb.append(message.toString()); sb.toString() }
+                                // Endlosschleife erkennen („0000…“, „.0.0.0…“) und abbrechen
+                                if (degenerate(now)) { looped = true; runCatching { conv.cancelProcess() }; if (cont.isActive) cont.resumeWith(Result.success(Unit)); return }
+                                // Oberfläche höchstens ~4× pro Sekunde aktualisieren (sonst ruckelt es)
+                                val t = System.currentTimeMillis()
+                                if (t - lastUi > 250) { lastUi = t; onDelta?.invoke(now) }
                             }
                             override fun onDone() { if (cont.isActive) cont.resumeWith(Result.success(Unit)) }
                             override fun onError(throwable: Throwable) { if (cont.isActive) cont.resumeWith(Result.failure(throwable)) }
-                        })
+                        }
+                        conv.sendMessageAsync(
+                            last, cb, emptyMap(),
+                            com.google.ai.edge.litertlm.RepetitionPenaltyConfig(repetitionPenalty = 1.15f, windowSize = 256),
+                            com.google.ai.edge.litertlm.NoRepeatNgramConfig(noRepeatNgramSize = 10, windowSize = 1024),
+                        )
                         cont.invokeOnCancellation { runCatching { conv.cancelProcess() } }
                     }
                 }
@@ -167,7 +180,16 @@ object GemmaLocal {
                 if (sb.isEmpty()) throw AiException("$TITLE: ${t.message ?: "Fehler"}")
             }
             if (onGpu) prefs(ctx).edit().putBoolean("gpu_starting", false).commit()
+            if (looped) throw AiException("$TITLE ist in eine Wiederholungsschleife geraten.")
+            onDelta?.invoke(sb.toString())
             AiText.clean(sb.toString()).ifEmpty { throw AiException("$TITLE hat keine Antwort geliefert.") }
         }
+    }
+
+    /** Text endet mit sinnlosen Wiederholungen (z. B. 80 Zeichen aus höchstens 3 verschiedenen Zeichen). */
+    private fun degenerate(t: String): Boolean {
+        if (t.length < 120) return false
+        val tail = t.takeLast(80)
+        return tail.toSet().size <= 3 || Regex("(.{2,12})\\1{6,}$").containsMatchIn(tail)
     }
 }
