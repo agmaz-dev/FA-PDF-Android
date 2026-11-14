@@ -174,7 +174,11 @@ class ReplyViewModel(app: Application, private val docId: Long) : AndroidViewMod
                 steps = 2; step = 1; sub = 0f; stepTitle = "Schreiben wird gelesen …"
                 busy = "Text wird erkannt"
                 val tmp = File(getApplication<Application>().cacheDir, "reply").apply { mkdirs() }
-                val text = DocumentText.extract(file, tmp, maxChars = 40_000) { p, n -> busy = "Seite $p von $n wird gelesen"; sub = (p - 1f) / n }.text
+                // Einmal erkannten Text merken: beim nächsten Mal entfällt das Seitenlesen
+                val cache = File(getApplication<Application>().filesDir, "reply_text/${docId}_${file.length()}_${file.lastModified()}.txt")
+                val text = cache.takeIf { it.exists() }?.readText() ?: de.fapdf.ai.AiText.cleanOcr(
+                    DocumentText.extract(file, tmp, maxChars = 40_000) { p, n -> busy = "Seite $p von $n wird gelesen"; sub = (p - 1f) / n }.text
+                ).also { t -> runCatching { cache.parentFile?.let { d -> d.deleteRecursively(); d.mkdirs() }; cache.writeText(t) } }
                 docText = text
                 letterDate = findLetterDate(text)
                 if (text.replace(Regex("\\[Seite \\d+]"), "").isBlank()) throw IllegalStateException("Im Dokument wurde kein Text gefunden.")

@@ -87,7 +87,8 @@ fun AiProgressBar(fraction: Float?, modifier: Modifier = Modifier) {
 @Composable
 fun AiWorkingPanel(title: String, detail: String?, fraction: Float?, modifier: Modifier = Modifier, partial: String? = null) {
     Box(modifier) {
-        AiAurora(Modifier.fillMaxSize())
+        // Während Gemma auf der Grafikeinheit rechnet, keine Licht-Animation (sie würde mitrechnen und ruckeln)
+        if (!de.fapdf.ai.GemmaLocal.running) AiAurora(Modifier.fillMaxSize())
         Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp)) {
             Text(title, fontSize = 21.sp, fontWeight = FontWeight.Bold, color = FaColors.Label, lineHeight = 27.sp)
             if (!detail.isNullOrBlank()) Text(detail, fontSize = 14.sp, color = FaColors.SecondaryLabel, modifier = Modifier.padding(top = 6.dp))

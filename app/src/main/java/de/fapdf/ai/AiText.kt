@@ -27,6 +27,20 @@ object AiText {
         }.joinToString("\n\n").replace(Regex("\n{3,}"), "\n\n").trim()
     }
 
+    /**
+     * Erkannten Scan-Text säubern: Zeilen ohne Buchstaben, die nur Strichcode-/Randnummern oder Zeichenmüll
+     * sind (z. B. „110204“, „||||“, „8/N 45040“), sowie Druckvermerke entfernen. Zeilen mit Datum,
+     * Betrag oder Text bleiben erhalten.
+     */
+    fun cleanOcr(t: String): String = t.lines().filterNot { line ->
+        val s = line.trim()
+        if (s.isEmpty() || s.startsWith("[Seite")) return@filterNot false
+        val digitsOnly = s.all { it.isDigit() || it == ' ' }
+        val n = s.count { it.isDigit() }
+        // Seitenzahlen (1–3 Ziffern) und Strichcode-Nummern (5–7 Ziffern) allein in einer Zeile; Strich-Müll; Druckvermerk
+        (digitsOnly && (n in 1..3 || n in 5..7)) || Regex("^[|Il!\\s]{4,}$").matches(s) || s.equals("DATEV", true)
+    }.joinToString("\n")
+
     /** Erste Zeichen normalisiert – zum Erkennen, ob ein Stück von vorn wiederholt wurde. */
     fun head(s: String, n: Int = 40) = s.lowercase().replace(Regex("[^a-zäöüß0-9]"), "").take(n)
 }

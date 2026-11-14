@@ -18,6 +18,8 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.File
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 
 /**
  * Gemma 4 (E2B klein / E4B klüger) – frei herunterladbare Google-Modelle, laufen komplett auf dem Handy.
@@ -32,6 +34,9 @@ object GemmaLocal {
     }
 
     lateinit var app: Context
+    /** Gemma rechnet gerade (die Oberfläche verzichtet dann auf aufwendige Animationen). */
+    var running by androidx.compose.runtime.mutableStateOf(false)
+        private set
 
     /** Kontextfenster: Eingabe + Antwort. 16k Bausteine ≈ 10–12 dichte Seiten. */
     private const val MAX_TOKENS = 16_384
@@ -153,7 +158,8 @@ object GemmaLocal {
     ): String = lock.withLock {
         val v = selected(ctx)
         if (!installed(ctx, v)) throw AiException("Gemma 4 ist noch nicht heruntergeladen (Einstellungen → KI-Funktionen).")
-        withContext(Dispatchers.Default) {
+        running = true
+        try { withContext(Dispatchers.Default) {
             val started = System.currentTimeMillis()
             val e = try { engine(ctx, v) } catch (t: Throwable) {
                 release(); throw AiException("${v.title} konnte nicht gestartet werden: ${t.message}")
@@ -200,7 +206,7 @@ object GemmaLocal {
             lastInfo = "${v.title} · $backendName · ${(System.currentTimeMillis() - started) / 1000} s"
             onDelta?.invoke(sb.toString())
             AiText.clean(sb.toString()).ifEmpty { throw AiException("${v.title} hat keine Antwort geliefert.") }
-        }
+        } } finally { running = false }
     }
 
     /** Text endet mit sinnlosen Wiederholungen (z. B. 80 Zeichen aus höchstens 3 verschiedenen Zeichen). */
