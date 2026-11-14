@@ -16,12 +16,14 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -x
-          B=https://dl.google.com/android/maven2/com/google/ai/edge/litertlm/litertlm-android
-          curl -sSL $B/maven-metadata.xml > meta.xml
-          for V in $(grep -o '<version>[^<]*' meta.xml | sed 's/<version>//'); do
-            echo "== $V $(curl -sSL $B/$V/litertlm-android-$V.pom | tr -d '\n ' | grep -o 'kotlin-[a-z]*</artifactId><version>[^<]*' | head -2 | tr '\n' ' ')" >> out.txt
+          for q in "litert-community qwen" "qwen3.5 litertlm" "Qwen3.5-0.8B litert" "Qwen3.5-2B litert" "Qwen3.5-4B litert"; do
+            echo "== search: $q" >> out.txt
+            curl -sSL "https://huggingface.co/api/models?search=$(python3 -c "import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1]))" "$q")&limit=40" | python3 -c "import sys,json;[print(m['id'], m.get('downloads')) for m in json.load(sys.stdin)]" >> out.txt 2>&1
           done
-          curl -sSL "https://api.github.com/repos/google-ai-edge/LiteRT-LM/releases?per_page=40" | python3 -c "import sys,json;[print(r['tag_name'],r['published_at'],(r['body'] or '')[:300].replace(chr(10),' ')) for r in json.load(sys.stdin)]" >> out.txt 2>&1
+          for r in litert-community/Qwen3.5-0.8B litert-community/Qwen3.5-2B litert-community/Qwen3.5-4B; do
+            echo "== $r" >> out.txt
+            curl -sSL "https://huggingface.co/api/models/$r?blobs=true" | python3 -c "import sys,json;d=json.load(sys.stdin);print('gated',d.get('gated'));[print(s['rfilename'],s.get('size')) for s in d.get('siblings',[])]" >> out.txt 2>&1
+          done
           gh release delete inspect-out -R ${{ github.repository }} --yes --cleanup-tag || true
           sleep 3
           gh release create inspect-out out.txt -R ${{ github.repository }} --title inspect --notes x --prerelease
