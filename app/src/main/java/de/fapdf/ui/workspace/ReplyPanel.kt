@@ -182,6 +182,7 @@ class ReplyViewModel(app: Application, private val docId: Long) : AndroidViewMod
                 busy = "Fristen, Beträge und Antworten suchen"
                 val ans = AiRouter.complete(c.settings, ANALYZE, listOf(ChatMessage("user", Prompts.withDocument("Analysiere dieses Schreiben.", text))), 600)
                 if (ans.fallback) note = "Antwort von " + AiRouter.shortName(ans.provider) + " (gewählter Dienst nicht erreichbar)" + if (ans.provider == de.fapdf.data.AiProvider.NANO) " – bitte genau prüfen" else ""
+                if (ans.provider == de.fapdf.data.AiProvider.GEMMA) note = de.fapdf.ai.GemmaLocal.lastInfo
                 parseAnalysis(ans.text)
             } catch (e: Exception) {
                 error = e.message ?: "Fehler beim Lesen"
@@ -349,6 +350,7 @@ class ReplyViewModel(app: Application, private val docId: Long) : AndroidViewMod
                 val ans = AiRouter.complete(c.settings, system, listOf(ChatMessage("user", Prompts.withDocument("Schreibe jetzt den Antwortbrief.", text))), 2000) { partial = it }
                 partial = null
                 if (ans.fallback) note = "Antwort von " + AiRouter.shortName(ans.provider) + " (gewählter Dienst nicht erreichbar)" + if (ans.provider == de.fapdf.data.AiProvider.NANO) " – bitte genau prüfen" else ""
+                if (ans.provider == de.fapdf.data.AiProvider.GEMMA) note = de.fapdf.ai.GemmaLocal.lastInfo
                 applyLetter(ans.text)
                 stage = 1
                 createdDocId = null
@@ -374,7 +376,7 @@ class ReplyViewModel(app: Application, private val docId: Long) : AndroidViewMod
         // Name unter dem Gruß setzt die App selbst
         if (signerName.isNotBlank()) body = body.lines().dropLastWhile { it.isBlank() || it.trim() == signerName.trim() }.joinToString("\n")
         body = completeEnding(body)
-        if (raw.contains("(Hinweis: Gemini Nano")) note = "Gemini Nano hat nur den Anfang des Schreibens gelesen – für lange Dokumente in den Einstellungen „Gemma 4 E2B“ wählen."
+        if (raw.contains("(Hinweis: Gemini Nano")) note = "Gemini Nano hat nur den Anfang des Schreibens gelesen – für lange Dokumente in den Einstellungen „Gemma 4“ wählen."
     }
 
     /** Bricht der Text mitten im Satz ab (KI-Limit), bis zum letzten vollständigen Satz kürzen und den Gruß ergänzen. */
@@ -423,6 +425,7 @@ class ReplyViewModel(app: Application, private val docId: Long) : AndroidViewMod
                 val ans = AiRouter.complete(c.settings, system, listOf(ChatMessage("user", input)), if (kind == "ausführlich") 2500 else 1500) { partial = it }
                 partial = null
                 if (ans.fallback) note = "Antwort von " + AiRouter.shortName(ans.provider) + " (gewählter Dienst nicht erreichbar)" + if (ans.provider == de.fapdf.data.AiProvider.NANO) " – bitte genau prüfen" else ""
+                if (ans.provider == de.fapdf.data.AiProvider.GEMMA) note = de.fapdf.ai.GemmaLocal.lastInfo
                 body = completeEnding(fixPlaceholders(de.fapdf.ai.AiText.letter(ans.text)))
                 createdDocId = null
             } catch (e: Exception) {

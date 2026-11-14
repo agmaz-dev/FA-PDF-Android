@@ -13,8 +13,8 @@ android {
         applicationId = "de.fapdf"
         minSdk = 26
         targetSdk = 35
-        versionCode = 52
-        versionName = "1.16.3"
+        versionCode = 53
+        versionName = "1.17.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // Nur 64-Bit-ARM (Galaxy Z Fold 7): spart rund 75 MB gegenüber allen Prozessortypen
         ndk { abiFilters += "arm64-v8a" }
