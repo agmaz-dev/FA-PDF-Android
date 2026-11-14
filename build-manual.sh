@@ -14,15 +14,18 @@ mkdir -p build/generated build/classes build/dex
 "$bt/zipalign" -f 4 build/unsigned.apk build/aligned.apk
 if [ -n "${TAXI_SIGNING_KEYSTORE:-}" ]; then
  : "${TAXI_SIGNING_PASSWORD:?Passwort des Signierschlüssels erforderlich}"
- "$bt/apksigner" sign --ks "$TAXI_SIGNING_KEYSTORE" --ks-pass env:TAXI_SIGNING_PASSWORD --out build/TaxiL150_1.6.9_BER_Zertifikat.apk build/aligned.apk
- "$bt/apksigner" verify --verbose build/TaxiL150_1.6.9_BER_Zertifikat.apk
+ "$bt/apksigner" sign --ks "$TAXI_SIGNING_KEYSTORE" --ks-pass env:TAXI_SIGNING_PASSWORD --out build/TaxiL150_1.7.0_BER_Zertifikat.apk build/aligned.apk
+ "$bt/apksigner" verify --verbose build/TaxiL150_1.7.0_BER_Zertifikat.apk
 else
  echo "Unsignierte APK: build/aligned.apk. Für eine installierbare Update-APK den vorhandenen Signierschlüssel angeben."
 fi
-"$JAVA_HOME/bin/javac" -d build/test-classes app/src/main/java/de/taxil150/app/Parser.java app/src/main/java/de/taxil150/app/Config.java tests/ParserTest.java app/src/main/java/de/taxil150/app/FlightRefreshGate.java tests/FlightRefreshGateTest.java app/src/main/java/de/taxil150/app/CountdownState.java tests/CountdownStateTest.java
+"$JAVA_HOME/bin/javac" -d build/test-classes app/src/main/java/de/taxil150/app/Parser.java app/src/main/java/de/taxil150/app/Config.java tests/ParserTest.java app/src/main/java/de/taxil150/app/FlightRefreshGate.java tests/FlightRefreshGateTest.java app/src/main/java/de/taxil150/app/CountdownState.java tests/CountdownStateTest.java app/src/main/java/de/taxil150/app/Forecast.java tests/ForecastTest.java app/src/main/java/de/taxil150/app/MesseParser.java tests/MesseParserTest.java tests/ParserCallsTest.java
 "$JAVA_HOME/bin/java" -cp build/test-classes ParserTest
 "$JAVA_HOME/bin/java" -cp build/test-classes FlightRefreshGateTest
 "$JAVA_HOME/bin/java" -cp build/test-classes CountdownStateTest
+"$JAVA_HOME/bin/java" -cp build/test-classes ParserCallsTest
+"$JAVA_HOME/bin/java" -cp build/test-classes ForecastTest
+"$JAVA_HOME/bin/java" -cp build/test-classes MesseParserTest
 
 if [ -n "${JSON_TEST_JAR:-}" ]; then
  "$JAVA_HOME/bin/javac" -cp "$JSON_TEST_JAR" -d build/flight-tests app/src/main/java/de/taxil150/app/FlightParser.java tests/FlightParserTest.java app/src/main/java/de/taxil150/app/WeatherParser.java tests/WeatherParserTest.java app/src/main/java/de/taxil150/app/PrayerParser.java tests/PrayerParserTest.java
