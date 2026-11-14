@@ -2,7 +2,7 @@
   {
     "path": ".github/workflows/apk.yml",
     "bytes": 1491,
-    "sha256": "a13e8f835a6a72baa067030f46bfebba07ae71db5fca41effba3a02e4d92d2fa"
+    "sha256": "358ea78965fbdf2eccd1067d343e68de0011ef1f1c317e6b62026d83ad0fdbec"
   },
   {
     "path": ".gitignore",
@@ -20,6 +20,11 @@
     "sha256": "e1eb8dbb09777ecba5afcaeab87cc882b682b843a64366748b0fd52b8d55101c"
   },
   {
+    "path": "AENDERUNGEN_1.7.0.md",
+    "bytes": 3656,
+    "sha256": "fb39ae90378fed0f8a3cbc0487b941733a8f4d873bf1229408da96e3bf2d9133"
+  },
+  {
     "path": "Dokumentation/01_AUFBAU_UND_DESIGN.md",
     "bytes": 6258,
     "sha256": "f00f2c3e9f8d31540a869e8e35b89471878c5d56caaf9c1690897cf81ae3ab87"
@@ -27,7 +32,7 @@
   {
     "path": "Dokumentation/02_APK_ERSTELLEN.md",
     "bytes": 5157,
-    "sha256": "116b279806a3f2198c071bbb703bb25ba5a8097b9a09780b2c4199ba92a9bae8"
+    "sha256": "7eb2dfdd730cb278bad09da78a989a4adc6b8f56f819a056365d9b4ce08d92aa"
   },
   {
     "path": "Dokumentation/03_AUFTRAG_FUER_CLAUDE.md",
@@ -47,17 +52,17 @@
   {
     "path": "START_HIER.md",
     "bytes": 2218,
-    "sha256": "694718bd09f27a29201528e827f51ce49ce759549674615506b0312ae852b8eb"
+    "sha256": "3d344229bbdb0530d024642ca693a8e776a5cd7b905d7ce526029b5bb3b56843"
   },
   {
     "path": "app/src/main/AndroidManifest.xml",
     "bytes": 1222,
-    "sha256": "92bfcdf54adfb5c79cd20f5e756e09f55d7205b7852c4b6ec95edb6940b50d3d"
+    "sha256": "3e3dd9d5a11f1c5f81e4fbabc403f95ccfba51b7ae42ea850cf8377f5ab51607"
   },
   {
     "path": "app/src/main/assets/index.html",
-    "bytes": 92140,
-    "sha256": "79253c4b71c7983d883fc575d1242d6e49f41744947ca2e5a5dbb0cf4bbb47a3"
+    "bytes": 133130,
+    "sha256": "9908ccdb0b9ec1213821cf288a91980fd509b35a8b06dcb28e16f3c4a4d4b3a2"
   },
   {
     "path": "app/src/main/assets/prayer_berlin.json",
@@ -105,19 +110,34 @@
     "sha256": "2570d6a12306295ac8b8c48fcf91c9539af327efda490ebf59975a9c04a6bac9"
   },
   {
+    "path": "app/src/main/java/de/taxil150/app/Forecast.java",
+    "bytes": 4034,
+    "sha256": "9d4e3a148e36f5c68b06e347d743481c16da9f427054dd2041fdf04a955d5f9a"
+  },
+  {
     "path": "app/src/main/java/de/taxil150/app/MainActivity.java",
-    "bytes": 11012,
-    "sha256": "7b99fae7ce61df429535d546ab40d932fe9cb23bdc392216ffc088cdbdb7e042"
+    "bytes": 12012,
+    "sha256": "3ab5f2751a5686f136c83878e2e0946489ff8803ed3d66ae331f695331e71dad"
+  },
+  {
+    "path": "app/src/main/java/de/taxil150/app/MesseParser.java",
+    "bytes": 4671,
+    "sha256": "79b73f3dff9455b9e444d3f353c5fb533e01dabb9bc38c75aeb1ceea1fbc7bec"
+  },
+  {
+    "path": "app/src/main/java/de/taxil150/app/MesseRepository.java",
+    "bytes": 4491,
+    "sha256": "f55b320a302326d10d1f120a0d39cea9ad4bb2add3e4c1bf36756caf72ce49a2"
   },
   {
     "path": "app/src/main/java/de/taxil150/app/MonitorService.java",
-    "bytes": 5121,
-    "sha256": "131cdd2cbb0b2e91c40ce7e660a72ac977b145fd146659566b9bdd3f813416a4"
+    "bytes": 9370,
+    "sha256": "d3efe094007716c47b1f72253bfce06ff6b73966610d3b9186e6e5805147703f"
   },
   {
     "path": "app/src/main/java/de/taxil150/app/Parser.java",
-    "bytes": 2045,
-    "sha256": "9654140352b88e5ad16a0a1621f834f80a8e550f8f3aff10e07b8908a50821a7"
+    "bytes": 3525,
+    "sha256": "59e34ccdff89750bbe5d26aa74918122411b3b24ecb3fd7659b4dc49a0e23f63"
   },
   {
     "path": "app/src/main/java/de/taxil150/app/PrayerParser.java",
@@ -128,6 +148,11 @@
     "path": "app/src/main/java/de/taxil150/app/PrayerRepository.java",
     "bytes": 3034,
     "sha256": "57897fe80dae98b52b3c9b07f7a0014412bf3b8058d707e727d45b57b8fc6a61"
+  },
+  {
+    "path": "app/src/main/java/de/taxil150/app/QueueLog.java",
+    "bytes": 6625,
+    "sha256": "b0088c005e20ffe5ab16ce047dce4ae6a17192d0276879f0dfcf91a1bb3980a2"
   },
   {
     "path": "app/src/main/java/de/taxil150/app/WeatherParser.java",
@@ -201,8 +226,8 @@
   },
   {
     "path": "build-manual.sh",
-    "bytes": 2486,
-    "sha256": "6799f8bbe089f7c959e5c39cfb0c7abf3472235c3a4f9d2d3c078d854667f255"
+    "bytes": 2843,
+    "sha256": "7bb5bf3b2b5603cedc9c34009b52513cfeef62d985bced5011d80722bb1fe818"
   },
   {
     "path": "design/tesla_taxi_LN-IB-26E.png",
@@ -216,8 +241,8 @@
   },
   {
     "path": "tests/ArrivalUiTest.cjs",
-    "bytes": 8993,
-    "sha256": "d4027a164b403d3810882180031fc3490f39a42d86483210ccd6d8996d1021c1"
+    "bytes": 9195,
+    "sha256": "d0090e831417ab2580eec030d6c96c030fc3ca1a9d216086fa812cc08c7b571b"
   },
   {
     "path": "tests/CallHistorySqlTest.py",
@@ -236,8 +261,8 @@
   },
   {
     "path": "tests/CountdownUiTest.cjs",
-    "bytes": 3614,
-    "sha256": "299206de875301a8aa1f90f816703c8417573b09d4cda3c1661cc6851720bce3"
+    "bytes": 3616,
+    "sha256": "83d1f9af874bfafebc64975e3f391fe13bf65a451563cd1c7332ed473fadff1f"
   },
   {
     "path": "tests/FareCalculatorTest.cjs",
@@ -246,18 +271,8 @@
   },
   {
     "path": "tests/FareUiTest.cjs",
-    "bytes": 4293,
-    "sha256": "6b239bf5d39ccf7a9dee37185493b6a20651f3c514263f2ad098ce6f3e93337b"
-  },
-  {
-    "path": "tests/FirstTaxiPointsRenderTest.cjs",
-    "bytes": 2063,
-    "sha256": "7790d982b3dfc214c3e645d9537072311df7a2b3335073794616a6cdf6ba84d4"
-  },
-  {
-    "path": "tests/FirstTaxiPointsUiTest.cjs",
-    "bytes": 3571,
-    "sha256": "badebc6bbd0285832938cfd03abcd7f23c09946cdb0279054c7043868ac69d27"
+    "bytes": 4602,
+    "sha256": "8453f1e7a44e17816b61e4c96aa037af7233b397f442248addbc388759276269"
   },
   {
     "path": "tests/FlightParserTest.java",
@@ -275,14 +290,34 @@
     "sha256": "e50e1a4311ed2bc44766e9e34b4d10dc005c3dc8c00389e721ec62b101c84bb5"
   },
   {
+    "path": "tests/ForecastTest.java",
+    "bytes": 2540,
+    "sha256": "0d8977894797ee68f3d129b9fbcc9fec4eb4fbf9a1e443726d60349029eb0e68"
+  },
+  {
+    "path": "tests/MesseParserTest.java",
+    "bytes": 1984,
+    "sha256": "06112b9609dcc3111be988379b6348d7480e8d37f20dd3f676050d638265c811"
+  },
+  {
+    "path": "tests/OverviewV17UiTest.cjs",
+    "bytes": 8626,
+    "sha256": "26fbd0c7cc9c64e91bf4b42b0476ffbb6cb81d55bba4aa4377d55b005c4511f4"
+  },
+  {
+    "path": "tests/ParserCallsTest.java",
+    "bytes": 1344,
+    "sha256": "f75103635bca13b8a005637453bd68649156aae725c90daf8c50874880c5a53e"
+  },
+  {
     "path": "tests/ParserTest.java",
     "bytes": 3252,
     "sha256": "f2b0b66196862a4b59e6283bf97da2072266217718c5190091b7fc328a9608b7"
   },
   {
     "path": "tests/PrayerHistoryUiTest.cjs",
-    "bytes": 6205,
-    "sha256": "0498567d487f1c995d3a9500d7fce7b765c3ec8cfad561f35b8ae6c447c8a8d2"
+    "bytes": 6348,
+    "sha256": "486fd128496e215139ddfd5dddf7d4acf582d601b16e4c692ffa3a9e2a08ea2b"
   },
   {
     "path": "tests/PrayerParserTest.java",
@@ -291,13 +326,23 @@
   },
   {
     "path": "tests/UiScriptTest.cjs",
-    "bytes": 7103,
-    "sha256": "4dae1e6c928d8aa2248b2110aa6769ece0f91ea44b1b3ece3a3762a38484ccb5"
+    "bytes": 7348,
+    "sha256": "a765876c5f37fd21b38c8ad9c5c6927227ad912c187e2c4c8eea85b6b321aa1c"
   },
   {
     "path": "tests/WeatherParserTest.java",
     "bytes": 1649,
     "sha256": "6f2bb68a5bddda7b5ef4a687db4ed779785ccf6a5087db0e6315bb191b2837f4"
+  },
+  {
+    "path": "tests/fixtures/apcoa-2026-11-14.html",
+    "bytes": 47385,
+    "sha256": "556d8dd5974a05885acd8a34d73101e40521e96dbf428691d0c9376d749ddf13"
+  },
+  {
+    "path": "tests/fixtures/messe-kalender-auszug.html",
+    "bytes": 20019,
+    "sha256": "bb152f5e604e54b0eece091434ce47787925b310a1a255aae299a67f918e2536"
   },
   {
     "path": "tests/tls-fixtures/apcoa-leaf.pem",
